@@ -3,6 +3,8 @@ from flask_cors import CORS
 import requests
 import base64
 import os
+import swisseph as swe
+from datetime import datetime
 
 app = Flask(__name__)
 CORS(app)
@@ -23,6 +25,44 @@ def proxy():
             headers=headers
         )
         return res.text, res.status_code, {'Content-Type': 'application/json'}
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/calculate', methods=['POST'])
+def calculate():
+    try:
+        data = request.get_json()
+        date_str = data.get("datetime")
+        latitude = float(data.get("latitude"))
+        longitude = float(data.get("longitude"))
+
+        dt = datetime.fromisoformat(date_str)
+        jd = swe.julday(dt.year, dt.month, dt.day, dt.hour + dt.minute / 60.0)
+
+        planets = {
+            "Sun": swe.SUN,
+            "Moon": swe.MOON,
+            "Mercury": swe.MERCURY,
+            "Venus": swe.VENUS,
+            "Mars": swe.MARS,
+            "Jupiter": swe.JUPITER,
+            "Saturn": swe.SATURN,
+            "Uranus": swe.URANUS,
+            "Neptune": swe.NEPTUNE,
+            "Pluto": swe.PLUTO
+        }
+
+        results = {}
+        for name, code in planets.items():
+            pos, _ = swe.calc_ut(jd, code)
+            results[name] = round(pos[0], 6)  # sólo grados
+
+        return jsonify({
+            "julian_day": jd,
+            "positions": results,
+            "location": {"latitude": latitude, "longitude": longitude},
+            "datetime": date_str
+        })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

@@ -39,7 +39,6 @@ def calculate():
         dt = datetime.fromisoformat(date_str)
         jd = swe.julday(dt.year, dt.month, dt.day, dt.hour + dt.minute / 60.0)
 
-        # Activar topocéntricas
         swe.set_topo(longitude, latitude, 0)
 
         planets = {
@@ -57,7 +56,7 @@ def calculate():
 
         results = {}
         for name, code in planets.items():
-            pos, _ = swe.calc_ut(jd, code)
+            pos, _ = swe.calc(jd, code, swe.FLG_TOPOCTR | swe.FLG_SWIEPH)
             results[name] = round(pos[0], 6)
 
         return jsonify({

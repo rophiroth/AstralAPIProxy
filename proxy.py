@@ -1,5 +1,3 @@
-# proxy.py - Backend en Python para AstronomyAPI en Render
-
 from flask import Flask, request, jsonify
 import requests
 import base64

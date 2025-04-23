@@ -1,7 +1,7 @@
 services:
   - type: web
     name: enoch-astro
-    env: python
+    runtime: python
     buildCommand: ""
     startCommand: "python proxy.py"
     plan: free

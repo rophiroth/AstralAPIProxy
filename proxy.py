@@ -39,6 +39,9 @@ def calculate():
         dt = datetime.fromisoformat(date_str)
         jd = swe.julday(dt.year, dt.month, dt.day, dt.hour + dt.minute / 60.0)
 
+        # Activar topocéntricas
+        swe.set_topo(longitude, latitude, 0)
+
         planets = {
             "Sun": swe.SUN,
             "Moon": swe.MOON,
@@ -55,7 +58,7 @@ def calculate():
         results = {}
         for name, code in planets.items():
             pos, _ = swe.calc_ut(jd, code)
-            results[name] = round(pos[0], 6)  # sólo grados
+            results[name] = round(pos[0], 6)
 
         return jsonify({
             "julian_day": jd,

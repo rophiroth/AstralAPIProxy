@@ -1,4 +1,5 @@
-flask
-requests
+Flask
 flask-cors
 pyswisseph
+astral
+pytz

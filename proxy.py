@@ -7,17 +7,16 @@ import os
 app = Flask(__name__)
 CORS(app)
 
-
-API_ID = "f8c0f8d7-70ab-44c6-b351-eb44ce62f44a"
-API_SECRET = "8db221b9aea2fbe23365b1d86dd94b5a44684947d12ddad2703c5a13b916106d90e8f20b266a79e63b0fa68c99fae09a726413f29ac370f83e9af96563646605492f52e490104f55f259ab51214102403576cd282fe0fac4bc859f9d72fc420026642f7c2cb6addbb47714e2e3a501d5"
+API_ID = "8d2774d4-9c34-4782-9d15-2fe1ee6bd447"
+API_SECRET = "8db221b9aea2fbe23365b1d86dd94b5a44684947d12ddad2703c5a13b916106d90e8f20b266a79e63b0fa68c99fae09a726413f29ac370f83e9af965636466057895e1fd6c8c718092a57792049023640b462742ac81b2707a364fa976f0a5b34fde5b6c289abd59fe37ecd5749aaf9b"
 
 @app.route('/proxy', methods=['POST'])
 def proxy():
     try:
         payload = request.get_json()
-        auth_string = f"{API_ID}:{API_SECRET}"
+        auth = base64.b64encode(f"{API_ID}:{API_SECRET}".encode()).decode()
         headers = {
-            "Authorization": "Basic " + base64.b64encode(auth_string.encode()).decode(),
+            "Authorization": f"Basic {auth}",
             "Content-Type": "application/json"
         }
         res = requests.post(
@@ -25,9 +24,9 @@ def proxy():
             headers=headers,
             json=payload
         )
-        return (res.text, res.status_code, {'Content-Type': 'application/json'})
+        return res.text, res.status_code, {'Content-Type': 'application/json'}
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+    app.run(host='0.0.0.0', port=5000)

@@ -39,7 +39,7 @@ def calculate():
             pos, _ = swe.calc(jd, code, swe.FLG_TOPOCTR | swe.FLG_SWIEPH)
             results[name] = round(pos[0], 6)
 
-        enoch_data = calculate_enoch_year(dt)
+        enoch_data = calculate_enoch_year(dt, latitude, longitude)
 
         return jsonify({
             "julian_day": jd,

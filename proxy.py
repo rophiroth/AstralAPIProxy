@@ -1,9 +1,12 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 import requests
 import base64
 import os
 
 app = Flask(__name__)
+CORS(app)
+
 
 API_ID = "11a6717c-63d2-4c36-a1e3-1955ce6a58d8"
 API_SECRET = "8db221b9aea2fbe23365b1d86dd94b5a44684947d12ddad2703c5a13b916106d90e8f20b266a79e63b0fa68c99fae09a726413f29ac370f83e9af96563646605301e7b4c4548eaf57bc2768c036a9ddceef04b38f562675f186706a9cbf3c4aa8811b450b33d0c0f1c046cd91d158c52"

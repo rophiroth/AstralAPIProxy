@@ -47,7 +47,14 @@ def calculate():
 
         results = {}
         for name, planet in planets.items():
-            lon, lat, dist = swe.calc_ut(jd, planet)[0:3]
+            try:
+                result, _ = swe.calc_ut(jd, planet)
+                lon = result[0]
+                lat = result[1] if len(result) > 1 else None
+                dist = result[2] if len(result) > 2 else None
+            except Exception as e:
+                lon, lat, dist = None, None, None
+                print(f"Calc error for {name}: {e}")
             results[name] = {"longitude": lon, "latitude": lat, "distance": dist}
 
         enoch_data = calculate_enoch_year(dt)

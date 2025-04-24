@@ -18,7 +18,8 @@ def calculate():
 
         dt = datetime.fromisoformat(date_str)
         from utils.sunset import adjust_by_sunset
-        dt = adjust_by_sunset(dt)
+        tz_str = data.get("timezone")
+        dt = adjust_by_sunset(dt, latitude, longitude, tz_str)
         jd = swe.julday(dt.year, dt.month, dt.day, dt.hour + dt.minute / 60.0)
 
         swe.set_topo(longitude, latitude, 0)

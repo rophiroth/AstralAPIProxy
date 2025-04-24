@@ -15,13 +15,20 @@ def calculate():
         date_str = data.get("datetime")
         latitude = float(data.get("latitude"))
         longitude = float(data.get("longitude"))
+        tz_str = data.get("timezone", "UTC")  # fallback to UTC
 
-        dt = datetime.fromisoformat(date_str)
-        from utils.sunset import adjust_by_sunset
-        tz_str = data.get("timezone")
-        dt = adjust_by_sunset(dt, latitude, longitude, tz_str)
+        try:
+            dt = datetime.fromisoformat(date_str)
+        except Exception as e:
+            return jsonify({"error": f"Invalid datetime format: {e}"}), 400
+
+        try:
+            from utils.sunset import adjust_by_sunset
+            dt = adjust_by_sunset(dt, latitude, longitude, tz_str)
+        except Exception as e:
+            return jsonify({"error": f"Sunset adjustment failed: {e}"}), 500
+
         jd = swe.julday(dt.year, dt.month, dt.day, dt.hour + dt.minute / 60.0)
-
         swe.set_topo(longitude, latitude, 0)
 
         planets = {
@@ -38,21 +45,20 @@ def calculate():
         }
 
         results = {}
-        for name, code in planets.items():
-            pos, _ = swe.calc(jd, code, swe.FLG_TOPOCTR | swe.FLG_SWIEPH)
-            results[name] = round(pos[0], 6)
+        for name, planet in planets.items():
+            lon, lat, dist = swe.calc_ut(jd, planet)[0:3]
+            results[name] = {"longitude": lon, "latitude": lat, "distance": dist}
 
-        enoch_data = calculate_enoch_year(dt, latitude, longitude)
+        enoch_data = calculate_enoch_year(dt)
 
         return jsonify({
             "julian_day": jd,
-            "positions": results,
-            "location": {"latitude": latitude, "longitude": longitude},
-            "datetime": date_str,
-            "enoch": enoch_data
+            "planets": results,
+            "enochian_date": enoch_data
         })
+
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": f"Unexpected error: {str(e)}"}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(debug=True)

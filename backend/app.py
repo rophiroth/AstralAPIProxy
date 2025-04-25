@@ -35,7 +35,7 @@ def calculate():
         enoch_date_dt = adjust_by_sunset(dt, latitude, longitude, tz_str)
         print(f"[DEBUG] Localized enoch_date_dt: {enoch_date_dt} (tz: {enoch_date_dt.tzinfo})", flush=True)
         jd = swe.julday(dt.year, dt.month, dt.day, dt.hour + dt.minute / 60.0)
-        print(f"[DEBUG] Localized jd: {jd} (jd: {jd.tzinfo})", flush=True)
+        print(f"[DEBUG] Localized jd: {jd}", flush=True)
         swe.set_topo(longitude, latitude, 0)
 
         planets = {

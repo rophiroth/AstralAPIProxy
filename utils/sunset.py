@@ -1,3 +1,6 @@
+import builtins
+builtins.print = lambda *args, **kwargs: __import__('builtins').print(*args, flush=True, **kwargs)
+
 from datetime import datetime, timedelta
 from astral import LocationInfo
 from astral.sun import sun
@@ -12,8 +15,7 @@ def adjust_by_sunset(dt: datetime, latitude: float, longitude: float, tz_str: st
     Este cálculo respeta el inicio del día enokiano al atardecer.
     """
 
-    # Definir la ubicación geográfica y la zona horaria
-    location = LocationInfo(name="Custom", region="Custom", timezone=tz_str,
+    location = LocationInfo(name="Debug", region="Debug", timezone=tz_str,
                             latitude=latitude, longitude=longitude)
 
     try:
@@ -22,19 +24,17 @@ def adjust_by_sunset(dt: datetime, latitude: float, longitude: float, tz_str: st
         print(f"[DEBUG] Zona horaria desconocida: {tz_str}. Usando UTC.")
         tz = pytz.UTC
 
-    # Convertir el datetime entregado a hora local
     local_dt = dt.astimezone(tz)
-
-    # Obtener hora del sunset del día actual y forzar que esté en la misma zona horaria
     sunset = sun(location.observer, date=local_dt.date(), tzinfo=tz)['sunset'].astimezone(tz)
 
-    # Debug opcional (puedes comentar si no quieres verbosidad)
-    print(f"[DEBUG] Local datetime: {local_dt}")
-    print(f"[DEBUG] Sunset time:    {sunset}")
+    print("\n[ENOK DEBUG] =====================")
+    print(f"Input UTC datetime        : {dt} (tz: {dt.tzinfo})")
+    print(f"Local datetime            : {local_dt} (tz: {tz_str})")
+    print(f"Sunset local time         : {sunset}")
+    print(f"SHOULD SUM 1 DAY?         : {'YES' if local_dt >= sunset else 'NO'}")
+    print("===============================\n")
 
-    # Si ya pasó el sunset → estamos en el nuevo día enokiano
     if local_dt >= sunset:
         return dt + timedelta(days=1)
 
-    # Si aún no ha ocurrido el sunset → seguimos en el día actual
     return dt

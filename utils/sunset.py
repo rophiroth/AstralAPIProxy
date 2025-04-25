@@ -1,6 +1,3 @@
-import builtins
-builtins.print = lambda *args, **kwargs: __import__('builtins').print(*args, **{**kwargs, 'flush': True})
-
 from datetime import datetime, timedelta
 from astral import LocationInfo
 from astral.sun import sun
@@ -21,18 +18,18 @@ def adjust_by_sunset(dt: datetime, latitude: float, longitude: float, tz_str: st
     try:
         tz = pytz.timezone(tz_str)
     except pytz.UnknownTimeZoneError:
-        print(f"[DEBUG] Zona horaria desconocida: {tz_str}. Usando UTC.")
+        print(f"[DEBUG] Zona horaria desconocida: {tz_str}. Usando UTC.", flush=True)
         tz = pytz.UTC
 
     local_dt = dt.astimezone(tz)
     sunset = sun(location.observer, date=local_dt.date(), tzinfo=tz)['sunset'].astimezone(tz)
 
-    print("\n[ENOK DEBUG] =====================")
-    print(f"Input UTC datetime        : {dt} (tz: {dt.tzinfo})")
-    print(f"Local datetime            : {local_dt} (tz: {tz_str})")
-    print(f"Sunset local time         : {sunset}")
-    print(f"SHOULD SUM 1 DAY?         : {'YES' if local_dt >= sunset else 'NO'}")
-    print("===============================\n")
+    print("\n[ENOK DEBUG] =====================", flush=True)
+    print(f"Input UTC datetime        : {dt} (tz: {dt.tzinfo})", flush=True)
+    print(f"Local datetime            : {local_dt} (tz: {tz_str})", flush=True)
+    print(f"Sunset local time         : {sunset}", flush=True)
+    print(f"SHOULD SUM 1 DAY?         : {'YES' if local_dt >= sunset else 'NO'}", flush=True)
+    print("===============================\n", flush=True)
 
     if local_dt >= sunset:
         return dt + timedelta(days=1)

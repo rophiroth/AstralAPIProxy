@@ -57,12 +57,25 @@ def calculate():
 
         results = {}
         for name, planet_id in planets.items():
-            lon, lat, dist = swe.calc_ut(jd, planet_id)
-            results[name] = {
-                "longitude": lon,
-                "latitude": lat,
-                "distance": dist
-            }
+            res = swe.calc_ut(jd, planet_id)
+
+            if isinstance(res, tuple) and len(res) == 2:
+                lonlat, _ = res
+                lon = lonlat[0] if len(lonlat) > 0 else None
+                lat = lonlat[1] if len(lonlat) > 1 else None
+                dist = lonlat[2] if len(lonlat) > 2 else None
+                results[name] = {
+                    "longitude": lon,
+                    "latitude": lat,
+                    "distance": dist
+                }
+            else:
+                results[name] = {
+                    "longitude": None,
+                    "latitude": None,
+                    "distance": None,
+                    "error": "Failed to calculate"
+                }
 
         enoch_data = calculate_enoch_year(dt, latitude, longitude, tz_str)
 

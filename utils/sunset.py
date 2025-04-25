@@ -20,6 +20,7 @@ def adjust_by_sunset(dt: datetime, latitude: float, longitude: float, tz_str: st
 
     local_dt = dt.astimezone(tz)
 
+    # Obtener el sunset, y asegurar que sea aware para evitar errores de comparación
     sunset_raw = sun(location.observer, date=local_dt.date(), tzinfo=tz)['sunset']
     sunset = tz.localize(sunset_raw.replace(tzinfo=None)) if sunset_raw.tzinfo is None else sunset_raw.astimezone(tz)
 

@@ -3,5 +3,5 @@ services:
     name: enoch-astro
     runtime: python
     buildCommand: ""
-    startCommand: "python proxy.py"
+    startCommand: PYTHONPATH=. python backend/app.py
     plan: free

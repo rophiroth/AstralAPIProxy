@@ -18,6 +18,10 @@ def adjust_by_sunset(dt: datetime, latitude: float, longitude: float, tz_str: st
         print(f"[DEBUG] Zona horaria desconocida: {tz_str}. Usando UTC.", flush=True)
         tz = pytz.UTC
 
+    # Asegurarse de que dt tenga tzinfo antes de cualquier operación
+    if dt.tzinfo is None:
+        dt = tz.localize(dt)
+
     local_dt = dt.astimezone(tz)
 
     # Obtener el sunset, y asegurar que sea aware para evitar errores de comparación

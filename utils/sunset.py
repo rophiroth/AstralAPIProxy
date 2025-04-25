@@ -46,6 +46,6 @@ def adjust_by_sunset(dt: datetime, latitude: float, longitude: float, tz_str: st
     print("===============================\n", flush=True)
 
     if should_sum:
-        return dt + timedelta(days=1)
+        return dt# + timedelta(days=1)
 
     return dt

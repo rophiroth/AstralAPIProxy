@@ -33,9 +33,13 @@ def calculate():
         print(f"[DEBUG] Localized datetime: {dt} (tz: {dt.tzinfo})", flush=True)
 
         enoch_date_dt = adjust_by_sunset(dt, latitude, longitude, tz_str)
-        print(f"[DEBUG] Localized enoch_date_dt: {enoch_date_dt} (tz: {enoch_date_dt.tzinfo})", flush=True)
+        print(f"[DEBUG] Adjusted Enok date: {enoch_date_dt}", flush=True)
+
+        if not isinstance(enoch_date_dt, datetime):
+            print(f"[ERROR] Unexpected enoch_date_dt type: {type(enoch_date_dt)}", flush=True)
+            raise ValueError("Enoch date calculation failed")
+
         jd = swe.julday(dt.year, dt.month, dt.day, dt.hour + dt.minute / 60.0)
-        print(f"[DEBUG] Localized jd: {jd}", flush=True)
         swe.set_topo(longitude, latitude, 0)
 
         planets = {
@@ -52,29 +56,25 @@ def calculate():
         }
 
         results = {}
-        for name, planet in planets.items():
-            try:
-                result, _ = swe.calc_ut(jd, planet)
-                lon = result[0]
-                lat = result[1] if len(result) > 1 else None
-                dist = result[2] if len(result) > 2 else None
-            except Exception as e:
-                lon, lat, dist = None, None, None
-                print(f"[ERROR] Failed to calculate {name}: {e}", flush=True)
-            results[name] = {"longitude": lon, "latitude": lat, "distance": dist}
+        for name, planet_id in planets.items():
+            lon, lat, dist = swe.calc_ut(jd, planet_id)
+            results[name] = {
+                "longitude": lon,
+                "latitude": lat,
+                "distance": dist
+            }
 
-        enoch_data = calculate_enoch_year(enoch_date_dt, latitude, longitude)
+        enoch_data = calculate_enoch_year(dt, latitude, longitude, tz_str)
 
         return jsonify({
             "julian_day": jd,
             "planets": results,
-            "enochian_date": enoch_data
+            "enoch": enoch_data
         })
 
     except Exception as e:
         print(f"[ERROR] Unexpected error: {e}", flush=True)
-        return jsonify({"error": f"Unexpected error: {str(e)}"}), 500
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port, debug=True)
+    app.run(debug=True)

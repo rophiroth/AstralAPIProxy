@@ -28,10 +28,17 @@ def adjust_by_sunset(dt: datetime, latitude: float, longitude: float, tz_str: st
     print(f"Input UTC datetime        : {dt} (tz: {dt.tzinfo})", flush=True)
     print(f"Local datetime            : {local_dt} (tz: {tz_str})", flush=True)
     print(f"Sunset local time         : {sunset}", flush=True)
-    print(f"SHOULD SUM 1 DAY?         : {'YES' if local_dt >= sunset else 'NO'}", flush=True)
+
+    try:
+        should_sum = local_dt >= sunset
+        print(f"SHOULD SUM 1 DAY?         : {'YES' if should_sum else 'NO'}", flush=True)
+    except Exception as e:
+        print(f"[ERROR] Comparison failed: {e}", flush=True)
+        should_sum = False
+
     print("===============================\n", flush=True)
 
-    if local_dt >= sunset:
+    if should_sum:
         return dt + timedelta(days=1)
 
     return dt

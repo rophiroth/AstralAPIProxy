@@ -57,7 +57,7 @@ def calculate():
                 print(f"Calc error for {name}: {e}")
             results[name] = {"longitude": lon, "latitude": lat, "distance": dist}
 
-        enoch_data = calculate_enoch_year(dt)
+        enoch_data = calculate_enoch_year(dt, latitude, longitude)
 
         return jsonify({
             "julian_day": jd,

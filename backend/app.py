@@ -5,6 +5,7 @@ import swisseph as swe
 from datetime import datetime
 import os
 from utils.enoch import calculate_enoch_year
+from utils.sunset import adjust_by_sunset
 
 app = Flask(__name__)
 CORS(app)
@@ -16,18 +17,10 @@ def calculate():
         date_str = data.get("datetime")
         latitude = float(data.get("latitude"))
         longitude = float(data.get("longitude"))
-        tz_str = data.get("timezone", "UTC")  # fallback to UTC
+        tz_str = data.get("timezone", "UTC")
 
-        try:
-            dt = datetime.fromisoformat(date_str)
-        except Exception as e:
-            return jsonify({"error": f"Invalid datetime format: {e}"}), 400
-
-        try:
-            from utils.sunset import adjust_by_sunset
-            dt = adjust_by_sunset(dt, latitude, longitude, tz_str)
-        except Exception as e:
-            return jsonify({"error": f"Sunset adjustment failed: {e}"}), 500
+        dt = datetime.fromisoformat(date_str)
+        dt = adjust_by_sunset(dt, latitude, longitude, tz_str)
 
         jd = swe.julday(dt.year, dt.month, dt.day, dt.hour + dt.minute / 60.0)
         swe.set_topo(longitude, latitude, 0)
@@ -54,7 +47,6 @@ def calculate():
                 dist = result[2] if len(result) > 2 else None
             except Exception as e:
                 lon, lat, dist = None, None, None
-                print(f"Calc error for {name}: {e}")
             results[name] = {"longitude": lon, "latitude": lat, "distance": dist}
 
         enoch_data = calculate_enoch_year(dt, latitude, longitude)

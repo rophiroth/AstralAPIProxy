@@ -19,8 +19,11 @@ def adjust_by_sunset(dt: datetime, latitude: float, longitude: float, tz_str: st
         tz = pytz.UTC
 
     # Asegurarse de que dt tenga tzinfo antes de cualquier operación
-    if dt.tzinfo is None:
-        dt = tz.localize(dt)
+    if dt.tzinfo is None or dt.tzinfo.utcoffset(dt) is None:
+        print("[FIX] Forzando tzinfo a dt (estaba naive o inválido)", flush=True)
+        dt = tz.localize(dt.replace(tzinfo=None))
+    else:
+        print("[CHECK] dt ya era aware", flush=True)
 
     local_dt = dt.astimezone(tz)
 

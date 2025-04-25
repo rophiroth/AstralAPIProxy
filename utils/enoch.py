@@ -4,14 +4,15 @@ import pytz
 
 # Referencias para calcular los años de Enoj
 REFERENCE_YEAR_ENOCH = 5996
-REFERENCE_GREGORIAN = adjust_by_sunset(datetime(2025, 3, 18), latitude, longitude, tz_str)  # Miércoles cercano al equinoccio, al atardecer
+REFERENCE_GREGORIAN = datetime(2025, 3, 18, 0, 0, 0, tzinfo=pytz.UTC)  # Miércoles cercano al equinoccio, sin ajuste por atardecer
 
 def calculate_enoch_year(target_date: datetime, latitude: float, longitude: float, tz_str: str):
     # Asegurar que target_date esté en formato aware
     if target_date.tzinfo is None:
         target_date = pytz.timezone(tz_str).localize(target_date)
 
-    current = REFERENCE_GREGORIAN
+    # Ajuste dinámico por atardecer
+    current = adjust_by_sunset(REFERENCE_GREGORIAN, latitude, longitude, tz_str)
     enoch_year = REFERENCE_YEAR_ENOCH
 
     def get_next_enoch_start(base_date):
@@ -37,15 +38,4 @@ def calculate_enoch_year(target_date: datetime, latitude: float, longitude: floa
         current = next_start
         enoch_year += 1
 
-    # Ajuste por atardecer: si el target_date es después del sunset, cuenta como el siguiente día
-    adjusted_dt = adjust_by_sunset(target_date, latitude, longitude, tz_str)
-    day_of_year = (adjusted_dt - current).days
-
-    return {
-        "enoch_year": enoch_year,
-        "enoch_start": current.strftime("%Y-%m-%d"),
-        "enoch_day_of_year": day_of_year,
-        "enoch_month": (day_of_year) // 30 + 1,
-        "enoch_day": (day_of_year) % 30 + 1,
-        "added_week": added_week
-    }
+    # Ajuste por atardecer: si el target_date es después del sunset, cuenta como el_

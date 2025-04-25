@@ -19,7 +19,9 @@ def adjust_by_sunset(dt: datetime, latitude: float, longitude: float, tz_str: st
         tz = pytz.UTC
 
     local_dt = dt.astimezone(tz)
-    sunset = sun(location.observer, date=local_dt.date(), tzinfo=tz)['sunset'].astimezone(tz)
+
+    sunset_raw = sun(location.observer, date=local_dt.date(), tzinfo=tz)['sunset']
+    sunset = tz.localize(sunset_raw.replace(tzinfo=None)) if sunset_raw.tzinfo is None else sunset_raw.astimezone(tz)
 
     print("\n[ENOK DEBUG] =====================", flush=True)
     print(f"Input UTC datetime        : {dt} (tz: {dt.tzinfo})", flush=True)

@@ -1,5 +1,5 @@
 import builtins
-builtins.print = lambda *args, **kwargs: __import__('builtins').print(*args, flush=True, **kwargs)
+builtins.print = lambda *args, **kwargs: __import__('builtins').print(*args, **{**kwargs, 'flush': True})
 
 from datetime import datetime, timedelta
 from astral import LocationInfo

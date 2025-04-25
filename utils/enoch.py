@@ -2,15 +2,17 @@ from datetime import datetime, timedelta
 from utils.sunset import adjust_by_sunset
 import pytz
 
-START_YEAR_ENOCH = 5996
-START_GREGORIAN = datetime(2024, 3, 20, 18, 0, 0, tzinfo=pytz.UTC)  # Miércoles cercano al equinoccio, al atardecer
+# Referencias para calcular los años de Enoj
+REFERENCE_YEAR_ENOCH = 5996
+REFERENCE_GREGORIAN = adjust_by_sunset(datetime(2025, 3, 18), latitude, longitude, tz_str)  # Miércoles cercano al equinoccio, al atardecer
 
 def calculate_enoch_year(target_date: datetime, latitude: float, longitude: float, tz_str: str):
+    # Asegurar que target_date esté en formato aware
     if target_date.tzinfo is None:
         target_date = pytz.timezone(tz_str).localize(target_date)
 
-    current = START_GREGORIAN
-    enoch_year = START_YEAR_ENOCH
+    current = REFERENCE_GREGORIAN
+    enoch_year = REFERENCE_YEAR_ENOCH
 
     def get_next_enoch_start(base_date):
         next_date = base_date + timedelta(days=364)

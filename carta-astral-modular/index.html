@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Carta Astral Modular</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="styles.css">
+  <script src="icons.js"></script>
+  <script src="astroUtils.js"></script>
+  <script src="renderOutput.js"></script>
+  <script src="tooltips.js"></script> 
+  <script src="debug.js"></script>
+  <script src="shemot.js"></script>
+  <script src="sefirotCoords.js"></script>
+	<script src="drawAscMcHouses.js"></script>
+	<script src="mapPlanetsToSefirot.js"></script>
+	<script src="drawTreeOfLife.js"></script>
+	
+	<script src="main.js"></script>
+
+
+</head>
+<body>
+  <h1>Carta Astral Modular</h1>
+  <form id="astroForm">
+    <label>Fecha y hora de nacimiento:
+      <input type="datetime-local" id="datetime" value="1986-10-13T01:00">
+    </label>
+    <label>Ubicación (Ciudad, País):
+      <input type="text" id="location" autocomplete="off" placeholder="Detectando ubicación...">
+      <div id="suggestions"></div>
+    </label>
+    <div id="coords"></div>
+    <button type="submit">Calcular Carta</button>
+  </form>
+  <div style='display: flex;'>
+    <div id="output"></div>
+    <div class="tree-wrapper">
+      <canvas id="treeOfLifeCanvas" width="600" height="1000"></canvas>
+    </div>
+  </div>
+</body>
+</html>

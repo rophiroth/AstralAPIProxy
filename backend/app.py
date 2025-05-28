@@ -4,9 +4,14 @@ import swisseph as swe
 from datetime import datetime
 import os
 import pytz
-from utils.enoch import calculate_enoch_year
+from utils.enoch import calculate_enoch_date
 from utils.sunset import adjust_by_sunset
 from utils.datetime_local import localize_datetime
+from utils.debug import *
+from utils.asc_mc_houses import calculate_asc_mc_and_houses  # << NUEVO IMPORT
+from utils.planet_positions import calculate_planets
+
+import traceback
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
@@ -31,62 +36,29 @@ def calculate():
 
         dt = localize_datetime(date_str, tz_str)
         print(f"[DEBUG] Localized datetime: {dt} (tz: {dt.tzinfo})", flush=True)
+        utc_dt = dt.astimezone(pytz.utc)
+        print(f"[DEBUG] UTC datetime: {utc_dt} (tz: {utc_dt.tzinfo})", flush=True)
 
-        enoch_date_dt = adjust_by_sunset(dt, latitude, longitude, tz_str)
-        print(f"[DEBUG] Adjusted Enok date: {enoch_date_dt}", flush=True)
-
-        if not isinstance(enoch_date_dt, datetime):
-            print(f"[ERROR] Unexpected enoch_date_dt type: {type(enoch_date_dt)}", flush=True)
-            raise ValueError("Enoch date calculation failed")
-
-        jd = swe.julday(dt.year, dt.month, dt.day, dt.hour + dt.minute / 60.0)
-        swe.set_topo(longitude, latitude, 0)
-
-        planets = {
-            "Sun": swe.SUN,
-            "Moon": swe.MOON,
-            "Mercury": swe.MERCURY,
-            "Venus": swe.VENUS,
-            "Mars": swe.MARS,
-            "Jupiter": swe.JUPITER,
-            "Saturn": swe.SATURN,
-            "Uranus": swe.URANUS,
-            "Neptune": swe.NEPTUNE,
-            "Pluto": swe.PLUTO
-        }
-
-        results = {}
-        for name, planet_id in planets.items():
-            res = swe.calc_ut(jd, planet_id)
-
-            if isinstance(res, tuple) and len(res) == 2:
-                lonlat, _ = res
-                lon = lonlat[0] if len(lonlat) > 0 else None
-                lat = lonlat[1] if len(lonlat) > 1 else None
-                dist = lonlat[2] if len(lonlat) > 2 else None
-                results[name] = {
-                    "longitude": lon,
-                    "latitude": lat,
-                    "distance": dist
-                }
-            else:
-                results[name] = {
-                    "longitude": None,
-                    "latitude": None,
-                    "distance": None,
-                    "error": "Failed to calculate"
-                }
-
-        enoch_data = calculate_enoch_year(dt, latitude, longitude, tz_str)
-
+        jd = swe.julday(
+            utc_dt.year, utc_dt.month, utc_dt.day,
+            utc_dt.hour + utc_dt.minute / 60 + utc_dt.second / 3600 + utc_dt.microsecond / 3600000000
+        )
+        
+        results = calculate_planets(jd, latitude, longitude)
+        #debug_any(results,"results calculate_planets")
+        enoch_data = calculate_enoch_date(jd, latitude, longitude, tz_str)
+        houses_data = calculate_asc_mc_and_houses(jd, latitude, longitude)
+        debug_any(houses_data,"Datos de ASC MC & HOUSES")
         return jsonify({
             "julian_day": jd,
             "planets": results,
-            "enoch": enoch_data
+            "enoch": enoch_data,
+            "houses_data": houses_data
         })
 
     except Exception as e:
         print(f"[ERROR] Unexpected error: {e}", flush=True)
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':

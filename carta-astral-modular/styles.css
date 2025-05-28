@@ -1,0 +1,85 @@
+@font-face {
+  font-family: 'StamHebrew';
+  src: url('StamAshkenazCLM.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'MetatronHebrew';
+  src: url('Metatron-Regular.ttf') format('truetype');
+}
+body {
+  font-family: sans-serif;
+  padding: 2rem;
+  background: #f9f9f9;
+}
+label {
+  display: block;
+  margin-top: 1rem;
+}
+input, button {
+  padding: 0.5rem;
+  margin-top: 0.3rem;
+  width: 100%;
+  max-width: 400px;
+}
+button {
+  background: #5a2c83;
+  color: white;
+  border: none;
+  cursor: pointer;
+  margin-top: 1rem;
+}
+canvas {
+  margin-top: 2rem;
+  background: white;
+  border: 1px solid #ccc;
+  display: block;
+}
+#output, #coords {
+  margin-top: 1rem;
+  background: white;
+  padding: 1rem;
+  border: 1px solid #ccc;
+}
+#suggestions {
+  border: 1px solid #ccc;
+  background: white;
+  max-width: 400px;
+  position: absolute;
+  z-index: 10;
+}
+#suggestions div {
+  padding: 0.5rem;
+  cursor: pointer;
+}
+#suggestions div:hover {
+  background-color: #eee;
+}
+.shemHebrew {
+  font-size: 24px;
+  margin-left: 10px;
+}
+.stam {
+  font-family: 'StamHebrew';
+}
+.metatron {
+  font-family: 'MetatronHebrew';
+}
+/* Contenedor fijo para el Árbol de la Vida */
+.tree-wrapper {
+  width: 900px;        /* mismo ancho que el canvas */
+  overflow-x: auto;    /* si el viewport es más angosto, aparece scroll */
+  margin: 0;      /* centrado horizontal */
+  padding: 0; 
+}
+
+/* Evita espacios en blanco extra alrededor del canvas */
+.tree-wrapper canvas {
+  display: block;
+  margin: 0;
+  padding: 0;          /* elimina padding interno */
+  overflow-x: auto;    /* scroll si es necesario */
+}
+
+.tooltip-box {
+  font-family: 'Segoe UI Symbol', 'Noto Sans Symbols', 'Arial Unicode MS', sans-serif;
+}

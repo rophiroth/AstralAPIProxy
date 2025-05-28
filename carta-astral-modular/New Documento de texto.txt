@@ -1,0 +1,56 @@
+// drawTreeOfLife.js
+
+function drawTreeOfLife(data, ctx) {
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  ctx.font = "12px sans-serif";
+
+  //const planets = data.planets;
+  //const houses = data.houses;
+	const { planets, enoch, houses_data } = data;          // ←  bloque nuevo
+	const { ascendant, midheaven, houses } = houses_data;  // ←  lo que necesitaba el front
+  drawAscMc(ascendant, midheaven, ctx);
+  drawHouses(houses, ctx);
+
+  const sefirot = {
+    "Yesod": "Moon",
+    "Hod": "Mercury",
+    "Netzach": "Venus",
+    "Tiferet": "Sun",
+    "Gevurah": "Mars",
+    "Chesed": "Jupiter",
+    "Binah": "Saturn",
+    "Chokhmah": "Uranus",
+    "Keter": "Neptune"
+  };
+
+  for (const [sefirah, planet] of Object.entries(sefirot)) {
+    const value = planets?.[planet];
+    const [x, y] = sefirotCoords[sefirah];
+    if (!value || typeof value.longitude !== "number") {
+      console.warn(`⚠️ No se puede dibujar ${sefirah} ↔ ${planet}: dato inválido.`, value);
+      continue;
+    }
+    try {
+      const sign = getZodiacSign(value.longitude);
+      const degInSign = (value.longitude % 30).toFixed(4);
+      const emoji = window.getPlanetEmoji(planet);
+      const emojiSign = window.getZodiacEmoji(sign);
+      ctx.beginPath();
+      ctx.arc(x, y, 35, 0, 2 * Math.PI);
+      ctx.fillStyle = "lightblue";
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "black";
+      ctx.fillText(`${sefirah}`, x - 20, y - 35);
+      ctx.fillText(`${emoji} ${planet}: ${value.longitude.toFixed(4)}°`, x - 50, y + 40);
+      ctx.fillText(`(${emojiSign} ${sign} ${degInSign}°)`, x - 50, y + 55);
+    } catch (error) {
+      console.error(`💥 Error al dibujar ${sefirah} ↔ ${planet}:`, error);
+    }
+  }
+}
+
+function getZodiacSign(degree) {
+  const signs = ["Aries", "Tauro", "Géminis", "Cáncer", "Leo", "Virgo", "Libra", "Escorpio", "Sagitario", "Capricornio", "Acuario", "Piscis"];
+  return signs[Math.floor(degree / 30) % 12];
+}

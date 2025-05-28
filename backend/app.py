@@ -14,7 +14,7 @@ from utils.planet_positions import calculate_planets
 import traceback
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}})
+CORS(app, origins=["https://chart.psyhackers.org"], supports_credentials=True)
 
 @app.route('/calculate', methods=['POST'])
 def calculate():

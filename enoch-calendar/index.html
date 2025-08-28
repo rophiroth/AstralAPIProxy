@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Enoch Calendar</title>
+  <meta name="api-url" content="https://astralapiproxy.onrender.com/calculate" />
+  <style>
+    body { font-family: Arial, sans-serif; margin: 1rem; }
+    .controls { margin-bottom: 1rem; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+    #calendar { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; }
+    table.month { border-collapse: collapse; width: 100%; }
+    table.month caption { font-weight: bold; background: #f0f0f0; padding: 4px; }
+    table.month th, table.month td { border: 1px solid #ccc; padding: 2px; text-align: center; }
+    .day { font-size: 0.8rem; }
+    .day .num { font-weight: bold; }
+    .today { background: #ffe0e0; }
+    .day.shabbat { background: #00f; color: #fff; }
+    .day.festival.pesach { background: #800080; color: #fff; }
+    .day.festival.sukkot { background: #9b30ff; color: #fff; }
+  </style>
+  <link rel="icon" href="data:," />
+  <!-- inline empty favicon to avoid 404 noise -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+</head>
+<body>
+  <h1>Enoch Calendar</h1>
+  <div class="controls">
+    <button id="prevYear">Previous Year</button>
+    <span id="yearLabel"></span>
+    <button id="nextYear">Next Year</button>
+    <button id="downloadCsv">Download CSV</button>
+  </div>
+  <div id="status">Loading...</div>
+  <div id="calendar"></div>
+  <script>
+      document.write('<script src="shemot.js?v=' + Date.now() + '" defer><\\/script>');
+      document.write('<script src="csv.js?v=' + Date.now() + '" defer><\\/script>');
+      document.write('<script src="export.js?v=' + Date.now() + '" defer><\\/script>');
+      document.write('<script src="main.js?v=' + Date.now() + '" defer><\\/script>');
+  </script>
+  <!-- fallback if document.write blocked -->
+  <noscript>
+    <script src="shemot.js" defer></script>
+    <script src="csv.js" defer></script>
+    <script src="export.js" defer></script>
+    <script src="main.js" defer></script>
+  </noscript>
+  
+</body>
+</html>
+

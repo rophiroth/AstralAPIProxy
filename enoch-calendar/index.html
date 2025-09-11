@@ -31,8 +31,15 @@
     <span id="yearLabel"></span>
     <button id="nextYear">Next Year</button>
     <button id="downloadCsv">Download CSV</button>
+    <!-- Jump to Enoch year -->
+    <input id="jumpYearInput" type="number" placeholder="Enoch year" style="width:120px" />
+    <button id="jumpYearBtn">Go</button>
+    <!-- Map Gregorian date to Enoch -->
+    <input id="gregDate" type="date" />
+    <button id="mapDateBtn">Map Date</button>
   </div>
   <div id="status">Loading...</div>
+  <div id="pickedInfo" style="margin-top:8px; font-size:0.9rem; color:#333;"></div>
   <div id="calendar"></div>
   <script>
       document.write('<script src="shemot.js?v=' + Date.now() + '" defer><\\/script>');

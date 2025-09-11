@@ -14,7 +14,22 @@ from utils.planet_positions import calculate_planets
 import traceback
 
 app = Flask(__name__)
-CORS(app, origins=["https://chart.psyhackers.org"], supports_credentials=True)
+
+# Flexible CORS: allow same-origin by default; enable cross-origin via env
+# - Set env CORS_ORIGINS to a comma-separated list of origins (e.g. "https://calendar.psyhackers.org,https://chart.psyhackers.org,http://localhost:5173")
+# - If not set, use "*" (no credentials) which is fine for our JSON POST without cookies.
+origins_env = os.environ.get("CORS_ORIGINS", "").strip()
+if origins_env:
+    allowed_origins = [o.strip() for o in origins_env.split(",") if o.strip()]
+else:
+    # Default explicit allowlist for deployed apps under psyhackers.org
+    allowed_origins = [
+        "https://chart.psyhackers.org",
+        "https://calendar.psyhackers.org",
+    ]
+
+# Apply CORS to our API routes; credentials not needed for bearer-less JSON calls
+CORS(app, resources={r"/calculate": {"origins": allowed_origins}}, supports_credentials=False)
 
 @app.route('/calculate', methods=['POST'])
 def calculate():

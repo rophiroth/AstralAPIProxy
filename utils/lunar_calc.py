@@ -61,7 +61,7 @@ def refine_root_for_phase(t0: datetime, t1: datetime, target_deg: float, max_ite
             a, fa = mid, fm
     return a + (b - a)/2
 
-def scan_phase_events(start: datetime, end: datetime, step_hours=6):
+def scan_phase_events(start: datetime, end: datetime, step_hours=6, guard_deg=30.0):
     events = []  # list of {type, time}
     targets = [(0.0, 'new'), (90.0, 'first_quarter'), (180.0, 'full'), (270.0, 'last_quarter')]
     t = start
@@ -77,9 +77,11 @@ def scan_phase_events(start: datetime, end: datetime, step_hours=6):
                 if v_prev == 0:
                     events.append({'type': name, 'time': t_prev})
                 elif val == 0 or (v_prev < 0 and val > 0) or (v_prev > 0 and val < 0):
-                    # refine in [t_prev, t]
-                    root = refine_root_for_phase(t_prev, t, tgt)
-                    events.append({'type': name, 'time': root})
+                    # Guard against false sign change at wrap discontinuity (|diff| ~ 180°)
+                    if min(abs(v_prev), abs(val)) <= guard_deg:
+                        # refine in [t_prev, t]
+                        root = refine_root_for_phase(t_prev, t, tgt)
+                        events.append({'type': name, 'time': root})
             prev_vals[name] = (t, val)
         t += timedelta(hours=step_hours)
     return events
@@ -140,4 +142,3 @@ def lunar_sign_from_longitude(lon_deg: float, mode='tropical') -> str:
     lon = _norm360(lon_deg)
     idx = int(lon // 30) % 12
     return ZODIAC_TROPICAL[idx]
-

@@ -30,6 +30,183 @@ function resolveApiUrl() {
 }
 
 const API_URL = resolveApiUrl();
+
+function resolveCalcYearUrl() {
+  try {
+    const u = new URL(API_URL, window.location.origin);
+    // If API_URL already ends with /calculate, reuse same origin/path root
+    if (u.pathname.endsWith('/calculate')) {
+      u.pathname = u.pathname.replace(/\/calculate$/,'/calcYear');
+      return u.toString();
+    }
+    // Otherwise append /calcYear
+    if (!u.pathname.endsWith('/')) u.pathname += '/';
+    u.pathname += 'calcYear';
+    return u.toString();
+  } catch(_) {
+    // Fallback: assume same-host /calcYear
+    return (API_URL || '').replace(/\/calculate$/, '/calcYear') || '/calcYear';
+  }
+}
+
+// --- CSV cache/upload config helpers ---
+function getQS() {
+  try { return new URLSearchParams(window.location.search || ''); } catch(_) { return new URLSearchParams(''); }
+}
+
+function resolveUploadUrl() {
+  try {
+    const qs = getQS();
+    const q = (qs.get('uploadUrl') || qs.get('upload_url') || '').trim();
+    if (q) return q;
+    if (typeof window.UPLOAD_CSV_URL === 'string' && window.UPLOAD_CSV_URL) return window.UPLOAD_CSV_URL;
+    const meta = document.querySelector('meta[name="upload-csv-url"]')?.content;
+    if (meta) return meta;
+    // Default to same-origin helper if running on http(s)
+    const loc = window.location || {};
+    if (loc.protocol && loc.protocol.startsWith('http')) {
+      // place uploader alongside index.html inside enoch-calendar/
+      // relative path works regardless of base href
+      return 'upload_csv.php';
+    }
+  } catch(_) {}
+  return '';
+}
+
+function shouldUploadCsv() {
+  try {
+    const qs = getQS();
+    const q = (qs.get('upload') || '').toLowerCase();
+    if (q && ['1','true','yes','on'].includes(q)) return true;
+    if (typeof window.UPLOAD_CSV === 'boolean') return window.UPLOAD_CSV;
+    const meta = (document.querySelector('meta[name="upload-csv"]')?.content || '').toLowerCase();
+    if (meta && ['1','true','yes','on'].includes(meta)) return true;
+  } catch(_) {}
+  // Default: upload only when URL explicitly provided
+  return !!resolveUploadUrl();
+}
+
+function shouldCacheCsv() {
+  try {
+    const qs = getQS();
+    const q = (qs.get('cache') || '').toLowerCase();
+    if (q) return ['1','true','yes','on'].includes(q);
+    if (typeof window.CACHE_CSV === 'boolean') return window.CACHE_CSV;
+    const meta = (document.querySelector('meta[name="cache-csv"]')?.content || '').toLowerCase();
+    if (meta) return ['1','true','yes','on'].includes(meta);
+  } catch(_) {}
+  return true; // default: cache enabled
+}
+
+function csvStorageKey(year) { return `enochCSV:${year}`; }
+function csvMetaStorageKey(year) { return `enochCSVmeta:${year}`; }
+
+function getCsvFromLocal(year) {
+  try {
+    const raw = localStorage.getItem(csvStorageKey(year));
+    if (!raw) return '';
+    // Optional TTL handling
+    const metaRaw = localStorage.getItem(csvMetaStorageKey(year));
+    if (metaRaw) {
+      try {
+        const meta = JSON.parse(metaRaw);
+        if (meta.ttlMs && meta.savedAt && (Date.now() - meta.savedAt > meta.ttlMs)) {
+          localStorage.removeItem(csvStorageKey(year));
+          localStorage.removeItem(csvMetaStorageKey(year));
+          return '';
+        }
+      } catch(_) {}
+    }
+    return raw;
+  } catch(_) { return ''; }
+}
+
+function saveCsvToLocal(year, csv, ttlDays = 365) {
+  try {
+    localStorage.setItem(csvStorageKey(year), csv);
+    const ttlMs = (ttlDays && Number.isFinite(ttlDays)) ? ttlDays * 24 * 3600 * 1000 : 0;
+    const meta = { savedAt: Date.now(), ttlMs };
+    localStorage.setItem(csvMetaStorageKey(year), JSON.stringify(meta));
+    console.log('[csvCache] saved to localStorage for year', year);
+  } catch(e) {
+    console.warn('[csvCache] save failed', e?.message || e);
+  }
+}
+
+function buildCsvText(rows) {
+  if (!rows || !rows.length) return '';
+  const hasLunar = typeof rows[0].moon_phase_angle_deg !== 'undefined';
+  const hasHebrew = typeof rows[0].he_year !== 'undefined';
+  const baseHeader = ['gregorian','enoch_year','enoch_month','enoch_day','day_of_year','added_week','name','start_utc','end_utc'];
+  const lunarHeader = hasLunar ? ['moon_phase_angle_deg','moon_illum','moon_icon','moon_event','moon_event_utc','moon_sign','moon_zodiac_mode','moon_distance_km','perigee','perigee_utc','apogee','apogee_utc'] : [];
+  const hebrewHeader = hasHebrew ? ['he_year','he_month','he_day','he_month_name','is_rosh_chodesh','he_holiday_code','he_holiday_name'] : [];
+  const header = [...baseHeader, ...lunarHeader, ...hebrewHeader].join(',');
+  const lines = rows.map(d => {
+    const base = [
+      d.gregorian,
+      d.enoch_year ?? '',
+      d.enoch_month,
+      d.enoch_day,
+      d.day_of_year ?? '',
+      d.added_week,
+      (d.name ?? '').toString().replace(/,/g,' '),
+      d.start_utc ?? '',
+      d.end_utc ?? ''
+    ];
+    const lunar = hasLunar ? [
+      (d.moon_phase_angle_deg ?? ''),
+      (d.moon_illum ?? ''),
+      (d.moon_icon ?? ''),
+      (d.moon_event ?? ''),
+      (d.moon_event_utc ?? ''),
+      (d.moon_sign ?? ''),
+      (d.moon_zodiac_mode ?? ''),
+      (d.moon_distance_km ?? ''),
+      (d.perigee ? '1' : ''),
+      (d.perigee_utc ?? ''),
+      (d.apogee ? '1' : ''),
+      (d.apogee_utc ?? '')
+    ] : [];
+    const heb = hasHebrew ? [
+      (d.he_year ?? ''),
+      (d.he_month ?? ''),
+      (d.he_day ?? ''),
+      (d.he_month_name ?? ''),
+      (d.is_rosh_chodesh ? '1' : ''),
+      (d.he_holiday_code ?? ''),
+      (d.he_holiday_name ?? '')
+    ] : [];
+    return [...base, ...lunar, ...heb].join(',');
+  });
+  return [header, ...lines].join('\n');
+}
+
+async function uploadCsvToServer(year, csv) {
+  const url = resolveUploadUrl();
+  if (!url) return { ok: false, reason: 'no-url' };
+  try {
+    const fileName = `enoch-calendar-${year}.csv`;
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const fd = new FormData();
+    fd.append('file', blob, fileName);
+    fd.append('year', String(year));
+    fd.append('filename', fileName);
+    // Optional token/header
+    const token = (document.querySelector('meta[name="upload-csv-token"]')?.content || window.UPLOAD_CSV_TOKEN || '').trim();
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(url, { method: 'POST', body: fd, headers });
+    if (!res.ok) {
+      console.warn('[csvUpload] failed', res.status, res.statusText);
+      return { ok: false, status: res.status };
+    }
+    console.log('[csvUpload] uploaded', fileName, 'to', url);
+    return { ok: true };
+  } catch (e) {
+    console.warn('[csvUpload] error', e?.message || e);
+    return { ok: false, error: e?.message || String(e) };
+  }
+}
 const LATITUDE = -33.45;
 const LONGITUDE = -70.6667;
 
@@ -235,6 +412,35 @@ function fmtLocal(dt) {
 async function loadYearFromCSV(year) {
   console.log('[loadYearFromCSV] trying year', year);
   try {
+    // 0) Try local cache first
+    if (shouldCacheCsv()) {
+      const cached = getCsvFromLocal(year);
+      if (cached) {
+        console.log('[loadYearFromCSV] found in local cache');
+        const rows = parseCSV(cached);
+        currentData = rows.map((r, i) => ({
+          gregorian: r.gregorian,
+          enoch_year: year,
+          enoch_month: r.enoch_month,
+          enoch_day: r.enoch_day,
+          added_week: r.added_week,
+          name: r.name,
+          day_of_year: i + 1,
+          start_utc: r.start_utc || '',
+          end_utc: r.end_utc || ''
+        }));
+        currentYear = year;
+        currentStartDate = parseYMDToUTC(currentData[0].gregorian) || new Date(currentData[0].gregorian);
+        currentYearLength = currentData.length;
+        try { window.currentData = currentData; window.currentYear = currentYear; } catch(_){ }
+        renderCalendar(currentData);
+        setYearLabel(year);
+        setStatus('statusLoadedCsv');
+        console.log('[loadYearFromCSV] loaded from cache', currentYearLength, 'days');
+        return true;
+      }
+    }
+    // 1) Try network file on same-origin
     const res = await fetch(`./enoch-calendar-${year}.csv`, { cache: 'no-store' });
     if (!res.ok) throw new Error('not found');
     const text = await res.text();
@@ -267,6 +473,10 @@ async function loadYearFromCSV(year) {
     setYearLabel(year);
     setStatus('statusLoadedCsv');
     console.log('[loadYearFromCSV] loaded', currentYearLength, 'days');
+    // Save to local cache for next time
+    if (shouldCacheCsv()) {
+      try { saveCsvToLocal(year, text); } catch(_) {}
+    }
     return true;
   } catch (e) {
     console.warn('[loadYearFromCSV] failed for year', year, e);
@@ -300,6 +510,42 @@ async function buildCalendar(referenceDate = new Date(), tryCSV = true, base = n
     currentYear = enoch_year;
     try { window.currentYear = currentYear; } catch(_){ }
     console.log('[buildCalendar] startDate', startDate.toISOString());
+
+    // Try new annual endpoint for precise lunar data and day bounds
+    try {
+      const tz = (Intl.DateTimeFormat().resolvedOptions().timeZone) || 'UTC';
+      const calcYearUrl = resolveCalcYearUrl();
+      const body = {
+        datetime: referenceDate.toISOString().slice(0,19),
+        latitude: LATITUDE,
+        longitude: LONGITUDE,
+        timezone: tz,
+        zodiac_mode: 'tropical'
+      };
+      console.log('[buildCalendar] calling /calcYear', calcYearUrl, body);
+      const res = await fetch(calcYearUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (res.ok) {
+        const j = await res.json();
+        if (j && j.ok && Array.isArray(j.days)) {
+          currentData = j.days;
+          currentYearLength = currentData.length;
+          try { window.currentData = currentData; } catch(_){ }
+          renderCalendar(currentData);
+          setYearLabel(j.enoch_year || enoch_year);
+          status.textContent = '';
+          try {
+            const csv = buildCsvText(currentData);
+            if (csv && shouldCacheCsv()) saveCsvToLocal(j.enoch_year || enoch_year, csv);
+            if (csv && shouldUploadCsv()) uploadCsvToServer(j.enoch_year || enoch_year, csv);
+          } catch(e){ console.warn('[buildCalendar] cache/upload skipped', e?.message || e); }
+          isBuilding = false;
+          return;
+        }
+      }
+      console.warn('[buildCalendar] /calcYear failed or returned invalid, falling back');
+    } catch(e) {
+      console.warn('[buildCalendar] /calcYear error, fallback to daily batches', e?.message || e);
+    }
 
     const dates = [];
     for (let i = 0; i < 364; i++) dates.push(addDays(startDate, i));
@@ -335,6 +581,14 @@ async function buildCalendar(referenceDate = new Date(), tryCSV = true, base = n
     renderCalendar(currentData);
     setYearLabel(enoch_year);
     status.textContent = '';
+    // Cache and optionally upload CSV representation
+    try {
+      const csv = buildCsvText(currentData);
+      if (csv && shouldCacheCsv()) saveCsvToLocal(enoch_year, csv);
+      if (csv && shouldUploadCsv()) uploadCsvToServer(enoch_year, csv);
+    } catch (e) {
+      console.warn('[buildCalendar] cache/upload skipped', e?.message || e);
+    }
   } catch (err) {
     console.error('[buildCalendar] error', err);
     setStatus('statusBuildError');
@@ -480,6 +734,92 @@ function buildFestivalMap(data) {
   return map;
 }
 
+// --- Lunar phase helpers (synodic approximation) ---
+// Reference new moon: 2000-01-06 18:14:00 UTC, synodic month length ~29.530588853 days
+const SYNODIC_DAYS = 29.530588853;
+const REF_NEW_MOON_MS = Date.UTC(2000, 0, 6, 18, 14, 0);
+
+function moonPhaseInfoForYMD(ymd) {
+  try {
+    const dt = parseYMDToUTC(ymd) || new Date(ymd + 'T12:00:00Z');
+    const ms = dt.getTime();
+    const days = (ms - REF_NEW_MOON_MS) / 86400000;
+    let age = days % SYNODIC_DAYS;
+    if (age < 0) age += SYNODIC_DAYS;
+    const phase = age / SYNODIC_DAYS; // 0..1 (0=new, 0.5=full)
+    const illum = 0.5 * (1 - Math.cos(2 * Math.PI * phase));
+    const near = (p, target, eps = 0.03) => {
+      const d = Math.abs(p - target);
+      return d < eps || Math.abs(d - 1) < eps;
+    };
+    const isNew = near(phase, 0.0);
+    const isFirstQuarter = near(phase, 0.25);
+    const isFull = near(phase, 0.5);
+    const isLastQuarter = near(phase, 0.75);
+    let icon = '';
+    let label = '';
+    if (isNew) { icon = '🌑'; label = 'Luna nueva'; }
+    else if (isFirstQuarter) { icon = '🌓'; label = 'Cuarto creciente'; }
+    else if (isFull) { icon = '🌕'; label = 'Luna llena'; }
+    else if (isLastQuarter) { icon = '🌗'; label = 'Cuarto menguante'; }
+    else {
+      if (illum < 0.25) icon = '🌒';
+      else if (illum < 0.5) icon = '🌓';
+      else if (illum < 0.75) icon = '🌔';
+      else icon = '🌖';
+      label = 'Fase lunar';
+    }
+    return { phase, age, illum, isNew, isFirstQuarter, isFull, isLastQuarter, icon, label, date: dt };
+  } catch(_) { return null; }
+}
+
+function approximateSeptemberEquinoxUTC(year) {
+  // Simple approximation around Sep 22 ~ 18:30 UTC
+  if (year >= 0 && year < 100) {
+    const y4 = String(year).padStart(4, '0');
+    return new Date(`${y4}-09-22T18:30:00.000Z`);
+  }
+  return new Date(Date.UTC(year, 8, 22, 18, 30, 0));
+}
+
+function buildLunarMap(data) {
+  // Map day_of_year -> lunar info, plus mark first new moon after Sep equinox as Lunar Rosh Hashanah
+  const map = new Map();
+  const detailed = [];
+  for (const d of data) {
+    const info = moonPhaseInfoForYMD(d.gregorian);
+    if (!info) continue;
+    const item = {
+      icon: info.icon,
+      label: info.label,
+      isNew: info.isNew,
+      isFull: info.isFull,
+      isFirstQuarter: info.isFirstQuarter,
+      isLastQuarter: info.isLastQuarter,
+      date: info.date
+    };
+    map.set(d.day_of_year, item);
+    detailed.push({ doY: d.day_of_year, ...item });
+  }
+  try {
+    const first = data[0];
+    if (first) {
+      const y = parseInt(first.gregorian.slice(0,4), 10);
+      const eqx = approximateSeptemberEquinoxUTC(y);
+      const newMoons = detailed.filter(x => x.isNew && x.date >= eqx).sort((a,b) => a.date - b.date);
+      if (newMoons.length) {
+        const tag = newMoons[0];
+        const rec = map.get(tag.doY) || {};
+        rec.lunarRosh = true;
+        rec.label = 'Rosh Hashanah (lunar)';
+        rec.icon = '🟡';
+        map.set(tag.doY, rec);
+      }
+    }
+  } catch(_) {}
+  return map;
+}
+
 function renderCalendar(data) {
   try {
     var wds = (function(){ try { return (window.getWeekdays && window.getWeekdays()) || []; } catch(_){ return []; } })();
@@ -487,6 +827,7 @@ function renderCalendar(data) {
     try { window.uiLog && window.uiLog('renderCalendar lang=' + (window.lang||'') + ' days=' + (data?data.length:0)); } catch(_){ }
   } catch(_){}
   const festivalMap = buildFestivalMap(data);
+  const lunarMap = buildLunarMap(data);
   const calendarDiv = document.getElementById('calendar');
   calendarDiv.innerHTML = '';
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -555,11 +896,48 @@ function renderCalendar(data) {
       const lblDate = window.t ? window.t('labelDate') : 'Date';
       const lblStart = window.t ? window.t('labelStart') : 'Starts';
       const lblEnd = window.t ? window.t('labelEnd') : 'Ends';
-      div.title = `${lblDate}: ${d.gregorian}\n${lblStart}: ${startLocal}\n${lblEnd}: ${endLocal}${festLine}${sefLine}`;
+      let moonLine = '';
+      if (typeof d.moon_phase_angle_deg !== 'undefined') {
+        const evt = d.moon_event ? `, evento: ${d.moon_event}${d.moon_event_utc?(' @ '+d.moon_event_utc):''}` : '';
+        const sign = d.moon_sign ? `, signo: ${d.moon_sign}` : '';
+        const dist = (typeof d.moon_distance_km !== 'undefined') ? `, dist: ${d.moon_distance_km} km` : '';
+        moonLine = `\nLuna: fase ${d.moon_phase_angle_deg}° (illum ${Math.round((d.moon_illum||0)*100)}%)${evt}${sign}${dist}`;
+      } else {
+        const lmForTitle = lunarMap.get(d.day_of_year);
+        if (lmForTitle) {
+          const l = lmForTitle.label || 'Fase lunar';
+          moonLine = `\nLuna: ${l}` + (lmForTitle.lunarRosh ? ' (Año Nuevo lunar)' : '');
+        }
+      }
+      div.title = `${lblDate}: ${d.gregorian}\n${lblStart}: ${startLocal}\n${lblEnd}: ${endLocal}${festLine}${sefLine}${moonLine}`;
 
       const num = document.createElement('div');
       num.className = 'num';
       num.textContent = d.enoch_day;
+      // Moon icon next to the day number (prefer backend precise data if present)
+      let lm = null;
+      if (typeof d.moon_icon !== 'undefined') {
+        lm = { icon: d.moon_icon, label: d.moon_event ? `Evento: ${d.moon_event}` : 'Fase lunar', isNew: d.moon_event === 'new', isFull: d.moon_event === 'full', lunarRosh: false };
+      } else {
+        lm = lunarMap.get(d.day_of_year);
+      }
+      if (lm && lm.icon) {
+        const m = document.createElement('span');
+        m.className = 'moon';
+        m.textContent = lm.icon;
+        m.title = lm.label || 'Fase lunar';
+        num.appendChild(m);
+        if (lm.isNew) div.classList.add('moon-new');
+        if (lm.isFull) div.classList.add('moon-full');
+        if (lm.lunarRosh) div.classList.add('lunar-rosh');
+        // Perigee/Apogee small badges
+        if (d.perigee) {
+          const b = document.createElement('span'); b.textContent = '↓'; b.title = `Perigeo ${d.perigee_utc||''}`; b.style.marginLeft = '2px'; num.appendChild(b);
+        }
+        if (d.apogee) {
+          const b = document.createElement('span'); b.textContent = '↑'; b.title = `Apogeo ${d.apogee_utc||''}`; b.style.marginLeft = '2px'; num.appendChild(b);
+        }
+      }
       const shem = document.createElement('div');
       shem.className = 'shem';
       shem.textContent = d.name;
@@ -607,10 +985,34 @@ function renderCalendar(data) {
       const lblDate2 = window.t ? window.t('labelDate') : 'Date';
       const lblStart2 = window.t ? window.t('labelStart') : 'Starts';
       const lblEnd2 = window.t ? window.t('labelEnd') : 'Ends';
-      div.title = `${lblDate2}: ${d.gregorian}\n${lblStart2}: ${fmtLocal(pair2.startUTC)}\n${lblEnd2}: ${fmtLocal(pair2.endUTC)}${f2Line}`;
+      let moonLine2 = '';
+      if (typeof d.moon_phase_angle_deg !== 'undefined') {
+        const evt2 = d.moon_event ? `, evento: ${d.moon_event}${d.moon_event_utc?(' @ '+d.moon_event_utc):''}` : '';
+        const sign2 = d.moon_sign ? `, signo: ${d.moon_sign}` : '';
+        const dist2 = (typeof d.moon_distance_km !== 'undefined') ? `, dist: ${d.moon_distance_km} km` : '';
+        moonLine2 = `\nLuna: fase ${d.moon_phase_angle_deg}° (illum ${Math.round((d.moon_illum||0)*100)}%)${evt2}${sign2}${dist2}`;
+      } else {
+        const lm2 = lunarMap.get(d.day_of_year);
+        if (lm2) {
+          const l2 = lm2.label || 'Fase lunar';
+          moonLine2 = `\nLuna: ${l2}` + (lm2.lunarRosh ? ' (Año Nuevo lunar)' : '');
+        }
+      }
+      div.title = `${lblDate2}: ${d.gregorian}\n${lblStart2}: ${fmtLocal(pair2.startUTC)}\n${lblEnd2}: ${fmtLocal(pair2.endUTC)}${f2Line}${moonLine2}`;
       const num = document.createElement('div');
       num.className = 'num';
       num.textContent = d.enoch_day;
+      // Moon icon next to the day number in intercalary week
+      if (lm2 && lm2.icon) {
+        const m2 = document.createElement('span');
+        m2.className = 'moon';
+        m2.textContent = lm2.icon;
+        m2.title = lm2.label || 'Fase lunar';
+        num.appendChild(m2);
+        if (lm2.isNew) div.classList.add('moon-new');
+        if (lm2.isFull) div.classList.add('moon-full');
+        if (lm2.lunarRosh) div.classList.add('lunar-rosh');
+      }
       const shem = document.createElement('div');
       shem.className = 'shem';
       shem.textContent = d.name;

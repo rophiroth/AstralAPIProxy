@@ -12,11 +12,16 @@
     table.month caption { font-weight: bold; background: #f0f0f0; padding: 4px; }
     table.month th, table.month td { border: 1px solid #ccc; padding: 2px; text-align: center; }
     .day { font-size: 0.8rem; }
-    .day .num { font-weight: bold; }
+    .day .num { font-weight: bold; display: inline-flex; align-items: center; gap: 4px; justify-content: center; }
     .today { background: #ffe0e0; }
     .day.shabbat { background: #00f; color: #fff; }
     .day.festival.pesach { background: #800080; color: #fff; }
     .day.festival.sukkot { background: #9b30ff; color: #fff; }
+    /* Moon indicator */
+    .day .moon { font-size: 0.9rem; line-height: 1; opacity: 0.9; }
+    .day.moon-new { box-shadow: inset 0 0 0 2px rgba(0,0,0,0.08); }
+    .day.moon-full { box-shadow: inset 0 0 0 2px rgba(255,215,0,0.2); }
+    .day.lunar-rosh { outline: 2px dashed #555; outline-offset: -2px; }
   </style>
   <link rel="icon" href="data:," />
   <!-- inline empty favicon to avoid 404 noise -->
@@ -57,4 +62,3 @@
   
 </body>
 </html>
-

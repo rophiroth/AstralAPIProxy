@@ -167,29 +167,37 @@ def calc_year():
             dist_events = scan_perigee_apogee(span_start, span_end, step_hours=6)
             # Map events to containing day bucket
             def bucket_index(t):
+                # Assign to half-open interval [start, end) to avoid double-assigning events on exact sunset
                 for idx, d in enumerate(days):
                     st = datetime.fromisoformat(d['start_utc'].replace('Z','+00:00'))
                     en = datetime.fromisoformat(d['end_utc'].replace('Z','+00:00'))
-                    if st <= t <= en:
-                        return idx
+                    # For last day, include end boundary
+                    if idx == len(days) - 1:
+                        if st <= t <= en:
+                            return idx
+                    else:
+                        if st <= t < en:
+                            return idx
                 return None
-            for ev in phase_events:
+            for ev in sorted(phase_events, key=lambda e: e['time']):
                 bi = bucket_index(ev['time'])
                 if bi is not None:
                     d = days[bi]
-                    # Pick icon mapping
-                    icon = ''
-                    if ev['type'] == 'new':
-                        icon = '🌚'
-                    elif ev['type'] == 'full':
-                        icon = '🌝'
-                    elif ev['type'] == 'first_quarter':
-                        icon = '🌓'
-                    elif ev['type'] == 'last_quarter':
-                        icon = '🌗'
-                    d['moon_event'] = ev['type']
-                    d['moon_event_utc'] = ev['time'].astimezone(timezone.utc).isoformat()
-                    d['moon_icon'] = icon
+                    # If a bucket already has an event, keep the earliest-set one to avoid overwriting
+                    if 'moon_event' not in d:
+                        # Pick icon mapping
+                        icon = ''
+                        if ev['type'] == 'new':
+                            icon = '🌚'
+                        elif ev['type'] == 'full':
+                            icon = '🌝'
+                        elif ev['type'] == 'first_quarter':
+                            icon = '🌓'
+                        elif ev['type'] == 'last_quarter':
+                            icon = '🌗'
+                        d['moon_event'] = ev['type']
+                        d['moon_event_utc'] = ev['time'].astimezone(timezone.utc).isoformat()
+                        d['moon_icon'] = icon
             for ev in dist_events:
                 bi = bucket_index(ev['time'])
                 if bi is not None:

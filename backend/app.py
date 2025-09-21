@@ -101,14 +101,15 @@ def calc_year():
         for i in range(total_days):
             day_dt_utc = start_utc + timedelta(days=i)
             greg = day_dt_utc.date().isoformat()
-            # Midday sample for positions
+            # Sunset bounds for local day (previous sunset -> today's sunset)
             midday = datetime(day_dt_utc.year, day_dt_utc.month, day_dt_utc.day, 12, 0, 0, tzinfo=timezone.utc)
-            jd_mid = swe.julday(midday.year, midday.month, midday.day, 12.0)
-            lon_sun, lon_moon, phase, illum, dist_km = sun_moon_state(jd_mid)
-            # Enoch day
-            e_day = calculate_enoch_date(jd_mid, latitude, longitude, tz_str)
-            # Sunset bounds
             s_prev, s_today = day_bounds_utc(midday, latitude, longitude, tz_str)
+            # Sample lunar state at the midpoint of the local day window
+            mid_utc = s_prev + (s_today - s_prev) / 2
+            jd_mid = jd_utc(mid_utc)
+            lon_sun, lon_moon, phase, illum, dist_km = sun_moon_state(jd_mid)
+            # Enoch day at same sample time
+            e_day = calculate_enoch_date(jd_mid, latitude, longitude, tz_str)
             # Lunar sign (tropical default)
             moon_sign = lunar_sign_from_longitude(lon_moon, zodiac_mode)
             days.append({
@@ -135,10 +136,11 @@ def calc_year():
                 day_dt_utc = start_utc + timedelta(days=i)
                 greg = day_dt_utc.date().isoformat()
                 midday = datetime(day_dt_utc.year, day_dt_utc.month, day_dt_utc.day, 12, 0, 0, tzinfo=timezone.utc)
-                jd_mid = swe.julday(midday.year, midday.month, midday.day, 12.0)
+                s_prev, s_today = day_bounds_utc(midday, latitude, longitude, tz_str)
+                mid_utc = s_prev + (s_today - s_prev) / 2
+                jd_mid = jd_utc(mid_utc)
                 lon_sun, lon_moon, phase, illum, dist_km = sun_moon_state(jd_mid)
                 e_day = calculate_enoch_date(jd_mid, latitude, longitude, tz_str)
-                s_prev, s_today = day_bounds_utc(midday, latitude, longitude, tz_str)
                 moon_sign = lunar_sign_from_longitude(lon_moon, zodiac_mode)
                 days.append({
                     'gregorian': greg,

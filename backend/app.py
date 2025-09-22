@@ -98,6 +98,35 @@ def calc_year():
         days = []
         # First compute a baseline 364 days; we will extend by 7 if added week is flagged on last day
         total_days = 364
+        def sign_fractions(s_prev, s_today, zodiac_mode, step_hours=2):
+            try:
+                counts = {}
+                t = s_prev
+                total = 0
+                while t <= s_today:
+                    jd_s = jd_utc(t)
+                    lon_sun, lon_moon, phase, illum, dist_km = sun_moon_state(jd_s)
+                    sign = lunar_sign_from_longitude(lon_moon, zodiac_mode)
+                    counts[sign] = counts.get(sign, 0) + 1
+                    total += 1
+                    t += timedelta(hours=step_hours)
+                if total <= 0:
+                    return None
+                # Normalize to fractions
+                fracs = {k: v/total for k, v in counts.items()}
+                # Primary and optional secondary
+                items = sorted(fracs.items(), key=lambda kv: kv[1], reverse=True)
+                primary = items[0] if items else (None, 0)
+                secondary = items[1] if len(items) > 1 else (None, 0)
+                return {
+                    'primary': primary[0],
+                    'primary_pct': primary[1],
+                    'secondary': secondary[0],
+                    'secondary_pct': secondary[1]
+                }
+            except Exception:
+                return None
+
         for i in range(total_days):
             day_dt_utc = start_utc + timedelta(days=i)
             greg = day_dt_utc.date().isoformat()
@@ -112,6 +141,7 @@ def calc_year():
             e_day = calculate_enoch_date(jd_mid, latitude, longitude, tz_str)
             # Lunar sign (tropical default)
             moon_sign = lunar_sign_from_longitude(lon_moon, zodiac_mode)
+            sign_mix = sign_fractions(s_prev, s_today, zodiac_mode)
             days.append({
                 'gregorian': greg,
                 'enoch_year': e_day.get('enoch_year'),
@@ -125,7 +155,11 @@ def calc_year():
                 'moon_phase_angle_deg': round(phase, 3),
                 'moon_illum': round(illum, 6),
                 'moon_distance_km': round(dist_km, 1),
-                'moon_sign': moon_sign,
+                'moon_sign': sign_mix['primary'] if sign_mix and sign_mix.get('primary') else moon_sign,
+                'moon_sign_primary': sign_mix['primary'] if sign_mix else moon_sign,
+                'moon_sign_primary_pct': round(sign_mix['primary_pct'], 6) if sign_mix else 1.0,
+                'moon_sign_secondary': sign_mix['secondary'] if sign_mix else None,
+                'moon_sign_secondary_pct': round(sign_mix['secondary_pct'], 6) if sign_mix else 0.0,
                 'moon_zodiac_mode': zodiac_mode
             })
 
@@ -142,6 +176,7 @@ def calc_year():
                 lon_sun, lon_moon, phase, illum, dist_km = sun_moon_state(jd_mid)
                 e_day = calculate_enoch_date(jd_mid, latitude, longitude, tz_str)
                 moon_sign = lunar_sign_from_longitude(lon_moon, zodiac_mode)
+                sign_mix = sign_fractions(s_prev, s_today, zodiac_mode)
                 days.append({
                     'gregorian': greg,
                     'enoch_year': e_day.get('enoch_year'),
@@ -155,7 +190,11 @@ def calc_year():
                     'moon_phase_angle_deg': round(phase, 3),
                     'moon_illum': round(illum, 6),
                     'moon_distance_km': round(dist_km, 1),
-                    'moon_sign': moon_sign,
+                    'moon_sign': sign_mix['primary'] if sign_mix and sign_mix.get('primary') else moon_sign,
+                    'moon_sign_primary': sign_mix['primary'] if sign_mix else moon_sign,
+                    'moon_sign_primary_pct': round(sign_mix['primary_pct'], 6) if sign_mix else 1.0,
+                    'moon_sign_secondary': sign_mix['secondary'] if sign_mix else None,
+                    'moon_sign_secondary_pct': round(sign_mix['secondary_pct'], 6) if sign_mix else 0.0,
                     'moon_zodiac_mode': zodiac_mode
                 })
 

@@ -48,12 +48,22 @@ function parseCSV(text) {
   const data = [];
 
   // Converters
+  function normalizeDecimal(str) {
+    // If string uses comma as decimal and no dot, replace comma with dot
+    if (/,/.test(str) && !/\./.test(str)) return str.replace(',', '.');
+    return str;
+  }
   const toNum = (v) => {
     if (v === null || typeof v === 'undefined') return undefined;
-    const s = String(v).trim().replace(/%$/, '');
+    let s = String(v).trim();
     if (s === '') return undefined;
+    const hadPct = /%$/.test(s);
+    s = s.replace(/%$/, '');
+    s = normalizeDecimal(s);
     const n = parseFloat(s);
-    return Number.isFinite(n) ? n : undefined;
+    if (!Number.isFinite(n)) return undefined;
+    // Generic numeric converter: do not auto-scale here; handled per-field below
+    return n;
   };
   const toInt = (v) => {
     if (v === null || typeof v === 'undefined') return undefined;
@@ -90,7 +100,16 @@ function parseCSV(text) {
       } else if (INT_FIELDS.has(key)) {
         obj[key] = toInt(val);
       } else if (NUM_FIELDS.has(key)) {
-        obj[key] = toNum(val);
+        let num = toNum(val);
+        // Field-specific normalization
+        if (typeof num !== 'undefined') {
+          if (key === 'moon_illum') {
+            // Ensure fraction 0..1. If value looks like percent (had % or >1), scale down
+            const raw = String(val || '');
+            if (/%$/.test(raw) || num > 1) num = num / 100;
+          }
+        }
+        obj[key] = num;
       } else {
         obj[key] = (val === undefined ? '' : String(val));
       }
@@ -104,6 +123,11 @@ function parseCSV(text) {
     if (Object.prototype.hasOwnProperty.call(obj, 'moon_sign_secondary_pct')) {
       const s = toNum(obj.moon_sign_secondary_pct);
       if (typeof s !== 'undefined') obj.moon_sign_secondary_pct = s;
+    }
+    // Ensure moon_illum remains in [0..1]
+    if (typeof obj.moon_illum === 'number') {
+      if (obj.moon_illum < 0) obj.moon_illum = 0;
+      if (obj.moon_illum > 1) obj.moon_illum = Math.min(1, obj.moon_illum / 100);
     }
     data.push(obj);
   });

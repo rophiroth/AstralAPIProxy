@@ -11,7 +11,7 @@ from utils.datetime_local import localize_datetime
 from utils.debug import *
 from utils.asc_mc_houses import calculate_asc_mc_and_houses
 from utils.planet_positions import calculate_planets
-from utils.lunar_calc import jd_utc, sun_moon_state, scan_phase_events, scan_perigee_apogee, lunar_sign_from_longitude
+from utils.lunar_calc import jd_utc, sun_moon_state, scan_phase_events, scan_perigee_apogee, lunar_sign_from_longitude, lunar_sign_mix_linear
 
 import traceback
 
@@ -96,6 +96,30 @@ def calc_year():
         start_utc = dt_utc - timedelta(days=int(enoch_day_of_year) - 1)
 
         days = []
+
+        def enrich_with_moon_mix(day_dict, start_dt, end_dt):
+            # Simple, deterministic split based on lunar longitudes at start/end
+            mix = lunar_sign_mix_linear(start_dt, end_dt, zodiac_mode)
+            if not mix:
+                return
+            primary = mix.get('primary_sign')
+            if primary:
+                day_dict['moon_sign_primary'] = primary
+                day_dict['moon_sign'] = primary
+            primary_pct = mix.get('primary_pct')
+            if primary_pct is not None:
+                day_dict['moon_sign_primary_pct'] = primary_pct
+            secondary = mix.get('secondary_sign')
+            secondary_pct = mix.get('secondary_pct')
+            if secondary:
+                day_dict['moon_sign_secondary'] = secondary
+                if secondary_pct is not None:
+                    day_dict['moon_sign_secondary_pct'] = secondary_pct
+            else:
+                day_dict.pop('moon_sign_secondary', None)
+                day_dict.pop('moon_sign_secondary_pct', None)
+            # Do not include segments in simple mode
+
         # First compute a baseline 364 days; we will extend by 7 if added week is flagged on last day
         total_days = 364
         for i in range(total_days):
@@ -111,7 +135,7 @@ def calc_year():
             s_prev, s_today = day_bounds_utc(midday, latitude, longitude, tz_str)
             # Lunar sign (tropical default)
             moon_sign = lunar_sign_from_longitude(lon_moon, zodiac_mode)
-            days.append({
+            day_record = {
                 'gregorian': greg,
                 'enoch_year': e_day.get('enoch_year'),
                 'enoch_month': e_day.get('enoch_month'),
@@ -126,7 +150,9 @@ def calc_year():
                 'moon_distance_km': round(dist_km, 1),
                 'moon_sign': moon_sign,
                 'moon_zodiac_mode': zodiac_mode
-            })
+            }
+            enrich_with_moon_mix(day_record, s_prev, s_today)
+            days.append(day_record)
 
         # If last day reports added week, extend 7 more days
         if days and days[-1].get('added_week'):
@@ -140,7 +166,7 @@ def calc_year():
                 e_day = calculate_enoch_date(jd_mid, latitude, longitude, tz_str)
                 s_prev, s_today = day_bounds_utc(midday, latitude, longitude, tz_str)
                 moon_sign = lunar_sign_from_longitude(lon_moon, zodiac_mode)
-                days.append({
+                day_record = {
                     'gregorian': greg,
                     'enoch_year': e_day.get('enoch_year'),
                     'enoch_month': e_day.get('enoch_month'),
@@ -155,7 +181,9 @@ def calc_year():
                     'moon_distance_km': round(dist_km, 1),
                     'moon_sign': moon_sign,
                     'moon_zodiac_mode': zodiac_mode
-                })
+                }
+                enrich_with_moon_mix(day_record, s_prev, s_today)
+                days.append(day_record)
 
         # Compute exact lunar events across the full span (from first start to last end)
         if days:

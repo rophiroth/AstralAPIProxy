@@ -388,25 +388,34 @@ function canonicalElongationDeg(rawDeg, illum, evt) {
   let a = Number(rawDeg);
   if (!Number.isFinite(a)) return NaN;
   a = ((a % 360) + 360) % 360;
-  const aflip = ((180 - a) + 360) % 360; // convert phase-angle to elongation (or vice versa)
-  const wantEvt = (typeof evt === 'string') ? evt : '';
-  if (wantEvt) {
-    const eRaw = nearestEventFromAngle(a);
-    const eFlip = nearestEventFromAngle(aflip);
-    if (eFlip === wantEvt && eRaw !== wantEvt) return aflip;
-    if (eRaw === wantEvt && eFlip !== wantEvt) return a;
+  const aflip = ((180 - a) + 360) % 360; // convert phase-angle <-> elongation
+
+  // 1) If illumination provided, choose convention that best fits physical model
+  const f = illumFrac(illum);
+  if (Number.isFinite(f)) {
+    const rad = a * Math.PI / 180;
+    const fElong = 0.5 * (1 - Math.cos(rad)); // model for elongation
+    const fPhase = 0.5 * (1 + Math.cos(rad)); // model for phase-angle
+    const de = Math.abs(f - fElong);
+    const dp = Math.abs(f - fPhase);
+    return (dp + 1e-6 < de) ? aflip : a;
   }
-  const illumNum = illumFrac(illum);
-  if (Number.isFinite(illumNum)) {
-    const want = (illumNum <= 0.1) ? 'new' : (illumNum >= 0.9 ? 'full' : '');
-    if (want) {
-      const eRaw = nearestEventFromAngle(a);
-      const eFlip = nearestEventFromAngle(aflip);
-      if (eFlip === want && eRaw !== want) return aflip;
-      if (eRaw === want && eFlip !== want) return a;
+
+  // 2) If no illumination, use event as hint only for new/full (quarters invariant)
+  const near = (x, target, lim=12) => {
+    let d = Math.abs(x - target); if (d > 180) d = 360 - d; return d <= lim;
+  };
+  if (typeof evt === 'string' && evt) {
+    if (evt === 'new') {
+      if (near(a, 0)) return a; // already elongation-style
+      if (near(a, 180)) return aflip; // phase-angle style
+    } else if (evt === 'full') {
+      if (near(a, 180)) return a; // elongation-style
+      if (near(a, 0)) return aflip; // phase-angle style
     }
   }
-  // Fallback: keep raw
+
+  // 3) Fallback: keep raw
   return a;
 }
 

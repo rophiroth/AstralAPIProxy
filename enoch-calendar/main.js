@@ -264,16 +264,6 @@ function formatIllumPercent(illum) {
   return Math.round(p) + '%';
 }
 
-// Normalize illumination values to a fraction [0..1] even if backend sends 0..100
-function illumFrac(val) {
-  let n = Number(val);
-  if (!Number.isFinite(n)) return NaN;
-  if (n < 0) n = 0;
-  if (n > 1) n = n / 100;
-  if (n > 1) n = 1;
-  return n;
-}
-
 function getMixThreshold() {
   try {
     const qs = getQS();
@@ -384,61 +374,6 @@ function snapIconFromAngle(deg) {
 
 // Some backends provide lunar "phase angle" (0=full, 180=new) instead of elongation (0=new, 180=full).
 // This helper converts to canonical elongation degrees, using illumination as a sanity check.
-function canonicalElongationDeg(rawDeg, illum, evt) {
-  let a = Number(rawDeg);
-  if (!Number.isFinite(a)) return NaN;
-  a = ((a % 360) + 360) % 360;
-  const aflip = ((180 - a) + 360) % 360; // convert phase-angle <-> elongation
-
-  // 1) If illumination provided, choose convention that best fits physical model
-  const f = illumFrac(illum);
-  if (Number.isFinite(f)) {
-    const rad = a * Math.PI / 180;
-    const fElong = 0.5 * (1 - Math.cos(rad)); // model for elongation
-    const fPhase = 0.5 * (1 + Math.cos(rad)); // model for phase-angle
-    const de = Math.abs(f - fElong);
-    const dp = Math.abs(f - fPhase);
-    return (dp + 1e-6 < de) ? aflip : a;
-  }
-
-  // 2) If no illumination, use event as hint only for new/full (quarters invariant)
-  const near = (x, target, lim=12) => {
-    let d = Math.abs(x - target); if (d > 180) d = 360 - d; return d <= lim;
-  };
-  if (typeof evt === 'string' && evt) {
-    if (evt === 'new') {
-      if (near(a, 0)) return a; // already elongation-style
-      if (near(a, 180)) return aflip; // phase-angle style
-    } else if (evt === 'full') {
-      if (near(a, 180)) return a; // elongation-style
-      if (near(a, 0)) return aflip; // phase-angle style
-    }
-  }
-
-  // 3) Fallback: keep raw
-  return a;
-}
-
-// Choose icon giving priority to illumination; use angle for waxing/waning and quarters
-function iconFromIllumAngle(angleDeg, illumVal, evt) {
-  const f = illumFrac(illumVal);
-  const a = canonicalElongationDeg(angleDeg, f, evt);
-  if (!Number.isFinite(a)) return '';
-  if (Number.isFinite(f)) {
-    if (f <= 0.02) return '🌑';
-    if (f >= 0.98) return '🌕';
-    const near = (x, target, lim=8) => {
-      let d = Math.abs(x - target); if (d > 180) d = 360 - d; return d <= lim;
-    };
-    if (near(a, 90)) return '🌓';
-    if (near(a, 270)) return '🌗';
-    const waxing = a < 180; // elongation 0..180 waxing, 180..360 waning
-    if (waxing) return (f < 0.5) ? '🌒' : '🌔';
-    return (f > 0.5) ? '🌖' : '🌘';
-  }
-  // No reliable illum: fallback to angle-only
-  return snapIconFromAngle(a);
-}
 
 function resolveCalcYearUrl() {
   try {
@@ -1504,7 +1439,7 @@ function renderCalendar(data) {
         const degText = formatStartEndLunar(d);
         const sign = (signText || degText) ? `, ${LblSign}: ${signText}${degText ? ' ('+degText+')' : ''}` : '';
         const dist = (Number.isFinite(d.moon_distance_km)) ? `, ${LblDist}: ${d.moon_distance_km} km` : '';
-        const illumVal = illumFrac(d.moon_illum);
+        const illumVal = Number(d.moon_illum);
         const pct = formatIllumPercent(illumVal);
         moonLine = `\n${LblMoon}: ${pct}${evt}${sign}${dist}`;
       } else {
@@ -1536,7 +1471,7 @@ function renderCalendar(data) {
         isNewEvt = d.moon_event === 'new';
         isFullEvt = d.moon_event === 'full';
       } else if (Number.isFinite(d.moon_phase_angle_deg)) {
-        dayIcon = iconFromIllumAngle(d.moon_phase_angle_deg, d.moon_illum, d.moon_event);
+        dayIcon = snapIconFromAngle(d.moon_phase_angle_deg);
       } else {
         const lm = lunarMap.get(d.day_of_year);
         if (lm) {
@@ -1627,7 +1562,7 @@ function renderCalendar(data) {
         const deg2Text = formatStartEndLunar(d);
         const sign2 = (sign2Text || deg2Text) ? `, ${LblSign}: ${sign2Text}${deg2Text ? ' ('+deg2Text+')' : ''}` : '';
         const dist2 = (Number.isFinite(d.moon_distance_km)) ? `, ${LblDist}: ${d.moon_distance_km} km` : '';
-        const illumVal2 = illumFrac(d.moon_illum);
+        const illumVal2 = Number(d.moon_illum);
         const pct2 = formatIllumPercent(illumVal2);
         moonLine2 = `\n${LblMoon}: ${pct2}${evt2}${sign2}${dist2}`;
       } else {
@@ -1657,7 +1592,7 @@ function renderCalendar(data) {
           newEvt2 = d.moon_event === 'new';
           fullEvt2 = d.moon_event === 'full';
         } else if (Number.isFinite(d.moon_phase_angle_deg)) {
-          icon2 = iconFromIllumAngle(d.moon_phase_angle_deg, d.moon_illum, d.moon_event);
+          icon2 = snapIconFromAngle(d.moon_phase_angle_deg);
         } else if (lm2) {
           // Fallback (approx) uses discs/half-discs; faces only on precise events
           if (lm2.isNew) icon2 = '🌑';

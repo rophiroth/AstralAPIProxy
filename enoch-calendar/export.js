@@ -3,7 +3,7 @@ function downloadCSV(data) {
   const hasLunar = typeof data[0].moon_phase_angle_deg !== 'undefined';
   const hasHebrew = typeof data[0].he_year !== 'undefined';
   const baseHeader = ['gregorian','enoch_year','enoch_month','enoch_day','day_of_year','added_week','name','start_utc','end_utc'];
-  const lunarHeader = hasLunar ? ['moon_phase_angle_deg','moon_illum','moon_icon','moon_event','moon_event_utc','moon_sign','moon_zodiac_mode','moon_distance_km','perigee','perigee_utc','apogee','apogee_utc'] : [];
+  const lunarHeader = hasLunar ? ['moon_phase_angle_deg','moon_illum','moon_icon','moon_event','moon_event_utc','moon_sign','moon_sign_primary','moon_sign_primary_pct','moon_sign_secondary','moon_sign_secondary_pct','moon_zodiac_mode','moon_distance_km','perigee','perigee_utc','apogee','apogee_utc'] : [];
   const hebrewHeader = hasHebrew ? ['he_year','he_month','he_day','he_month_name','is_rosh_chodesh','he_holiday_code','he_holiday_name'] : [];
   const header = [...baseHeader, ...lunarHeader, ...hebrewHeader].join(',');
   const rows = data.map(d => {
@@ -25,6 +25,10 @@ function downloadCSV(data) {
       (d.moon_event ?? ''),
       (d.moon_event_utc ?? ''),
       (d.moon_sign ?? ''),
+      (d.moon_sign_primary ?? ''),
+      (typeof d.moon_sign_primary_pct !== 'undefined' ? d.moon_sign_primary_pct : ''),
+      (d.moon_sign_secondary ?? ''),
+      (typeof d.moon_sign_secondary_pct !== 'undefined' ? d.moon_sign_secondary_pct : ''),
       (d.moon_zodiac_mode ?? ''),
       (d.moon_distance_km ?? ''),
       (d.perigee ? '1' : ''),

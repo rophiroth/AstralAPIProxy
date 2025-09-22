@@ -31,6 +31,322 @@ function resolveApiUrl() {
 
 const API_URL = resolveApiUrl();
 
+// --- User location (lat/lon/tz) resolution ---
+// Initialize with sane defaults (do not reference LATITUDE/LONGITUDE before they are declared)
+let USER_LAT = -33.45;
+let USER_LON = -70.6667;
+let USER_TZ = (Intl.DateTimeFormat().resolvedOptions().timeZone) || 'UTC';
+
+async function resolveUserLocation() {
+  try {
+    const qs = getQS();
+    const qlat = parseFloat(qs.get('lat'));
+    const qlon = parseFloat(qs.get('lon') || qs.get('lng'));
+    const qtz = (qs.get('tz') || '').trim();
+    if (isFinite(qlat) && Math.abs(qlat) <= 90) USER_LAT = qlat;
+    if (isFinite(qlon) && Math.abs(qlon) <= 180) USER_LON = qlon;
+    if (qtz) USER_TZ = qtz;
+    // Local storage fallback
+    const ls = localStorage;
+    if (ls) {
+      if (!isFinite(qlat)) { const v = parseFloat(ls.getItem('userLat')); if (isFinite(v)) USER_LAT = v; }
+      if (!isFinite(qlon)) { const v = parseFloat(ls.getItem('userLon')); if (isFinite(v)) USER_LON = v; }
+      const tzLS = ls.getItem('userTz'); if (!qtz && tzLS) USER_TZ = tzLS;
+    }
+    // Try browser Geolocation
+    if ((!isFinite(qlat) || !isFinite(qlon)) && navigator.geolocation) {
+      await new Promise((resolve) => {
+        navigator.geolocation.getCurrentPosition((pos) => {
+          try {
+            USER_LAT = pos.coords.latitude;
+            USER_LON = pos.coords.longitude;
+            localStorage.setItem('userLat', String(USER_LAT));
+            localStorage.setItem('userLon', String(USER_LON));
+          } catch(_){}
+          resolve();
+        }, () => resolve(), { enableHighAccuracy: false, timeout: 4000, maximumAge: 3600000 });
+      });
+    }
+    // If still missing, ask user
+    if (!isFinite(USER_LAT) || !isFinite(USER_LON)) {
+      const ans = prompt('Enter your location as lat,lon (e.g., 40.7,-74.0):');
+      if (ans && /-?\d/.test(ans)) {
+        const parts = ans.split(/[,\s]+/);
+        const la = parseFloat(parts[0]);
+        const lo = parseFloat(parts[1]);
+        if (isFinite(la) && Math.abs(la)<=90) USER_LAT = la;
+        if (isFinite(lo) && Math.abs(lo)<=180) USER_LON = lo;
+        try { localStorage.setItem('userLat', String(USER_LAT)); localStorage.setItem('userLon', String(USER_LON)); } catch(_){}
+      }
+    }
+    try { localStorage.setItem('userTz', USER_TZ); } catch(_){}
+  } catch(_) {}
+}
+
+function getUserLatLonTz() { return { lat: USER_LAT, lon: USER_LON, tz: USER_TZ }; }
+
+// Sanity: map phase angle to nearest canonical event
+function nearestEventFromAngle(deg) {
+  if (typeof deg !== 'number' || !isFinite(deg)) return '';
+  const a = ((deg % 360) + 360) % 360;
+  const targets = [0, 90, 180, 270];
+  const names = ['new','first_quarter','full','last_quarter'];
+  let bestIdx = 0, bestD = 1e9;
+  for (let i=0;i<targets.length;i++) {
+    let d = Math.abs(a - targets[i]);
+    if (d > 180) d = 360 - d;
+    if (d < bestD) { bestD = d; bestIdx = i; }
+  }
+  return names[bestIdx];
+}
+
+// --- Lunar UI helpers (icons + i18n labels) ---
+function getLang() {
+  try { return (window.lang || 'es'); } catch(_) { return 'es'; }
+}
+
+function moonEventIcon(evt) {
+  switch (evt) {
+    case 'new': return '🌚';
+    case 'full': return '🌝';
+    // Prefer face-style quarters for clearer distinction
+    case 'first_quarter': return '🌛';
+    case 'last_quarter': return '🌜';
+    default: return '';
+  }
+}
+
+function moonEventLabel(evt) {
+  const L = getLang();
+  const es = { new: 'Luna nueva', full: 'Luna llena', first_quarter: 'Cuarto creciente', last_quarter: 'Cuarto menguante' };
+  const en = { new: 'New Moon', full: 'Full Moon', first_quarter: 'First Quarter', last_quarter: 'Last Quarter' };
+  const map = (L === 'en') ? en : es;
+  return map[evt] || '';
+}
+
+function phaseAngleToIcon(deg) {
+  if (typeof deg !== 'number' || !isFinite(deg)) return '';
+  const a = ((deg % 360) + 360) % 360;
+  if (a < 45) return '🌑';
+  if (a < 90) return '🌒';
+  if (a < 135) return '🌓';
+  if (a < 180) return '🌔';
+  if (a < 225) return '🌕';
+  if (a < 270) return '🌖';
+  if (a < 315) return '🌗';
+  return '🌘';
+}
+
+function i18nWord(key) {
+  try {
+    if (window.t) {
+      const v = window.t(key);
+      if (v && v !== key) return v;
+    }
+  } catch(_){}
+  const L = getLang();
+  const es = { labelMoon: 'Luna', labelEvent: 'Evento', labelSign: 'Signo', labelDistance: 'Dist', perigee: 'Perigeo', apogee: 'Apogeo' };
+  const en = { labelMoon: 'Moon', labelEvent: 'Event', labelSign: 'Sign', labelDistance: 'Dist', perigee: 'Perigee', apogee: 'Apogee' };
+  const map = (L === 'en') ? en : es;
+  return map[key] || key;
+}
+
+// Normalize percent-like values to fraction [0..1]
+function pctToFrac(val) {
+  try {
+    if (val === null || typeof val === 'undefined') return NaN;
+    let s = val;
+    if (typeof s === 'string') {
+      s = s.trim().replace(/%$/, '');
+    }
+    let n = Number(s);
+    if (!Number.isFinite(n)) return NaN;
+    if (n > 1) n = n / 100; // accept 0..100 inputs
+    if (n < 0) n = 0;
+    if (n > 1) n = 1;
+    return n;
+  } catch(_) { return NaN; }
+}
+
+// Canonicalize sign names to compare/order zodiacally (tropical order Aries..Pisces)
+function canonicalSignName(sign) {
+  try {
+    if (!sign || typeof sign !== 'string') return '';
+    let s = sign.trim();
+    const strip = (x) => x.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+    const t = strip(s);
+    const map = {
+      'aries': 'Aries',
+      'tauro': 'Taurus', 'taurus': 'Taurus',
+      'geminis': 'Gemini', 'géminis': 'Gemini', 'gemini': 'Gemini',
+      'cancer': 'Cancer', 'cáncer': 'Cancer',
+      'leo': 'Leo',
+      'virgo': 'Virgo',
+      'libra': 'Libra',
+      'escorpio': 'Scorpio', 'scorpio': 'Scorpio',
+      'sagitario': 'Sagittarius', 'sagittarius': 'Sagittarius',
+      'capricornio': 'Capricorn', 'capricorn': 'Capricorn',
+      'acuario': 'Aquarius', 'aquarius': 'Aquarius',
+      'piscis': 'Pisces', 'pisces': 'Pisces'
+    };
+    return map[t] || s;
+  } catch(_) { return String(sign||''); }
+}
+
+function zodiacIndex(sign) {
+  const order = ['Aries','Taurus','Gemini','Cancer','Leo','Virgo','Libra','Scorpio','Sagittarius','Capricorn','Aquarius','Pisces'];
+  const c = canonicalSignName(sign);
+  const i = order.indexOf(c);
+  return (i >= 0) ? i : 99;
+}
+
+function getSignOrderMode() {
+  try {
+    const v = (getQS().get('order') || '').trim().toLowerCase();
+    if (!v) return 'zodiac';
+    if (['zodiac','astro','tropical'].includes(v)) return 'zodiac';
+    if (['percent','pct','p'].includes(v)) return 'percent';
+    if (['primary','raw','as-is'].includes(v)) return 'primary';
+  } catch(_) {}
+  return 'zodiac';
+}
+
+// Decide left/right order of two signs respecting zodiac cycle (Pisces → Aries wrap)
+function orderZodiacPair(a, b) {
+  const ia = zodiacIndex(a);
+  const ib = zodiacIndex(b);
+  if (ia === 99 || ib === 99) return { left: a, right: b };
+  const N = 12;
+  // If adjacent, put the preceding sign first (e.g., Pisces before Aries)
+  if ((ia + 1) % N === ib) return { left: a, right: b };
+  if ((ib + 1) % N === ia) return { left: b, right: a };
+  // Otherwise, fall back to zodiac index order with wrap considered minimal
+  // Prefer the sign that precedes the other along one-step-forward path
+  const dAB = (ib - ia + N) % N;
+  const dBA = (ia - ib + N) % N;
+  if (dAB < dBA) return { left: a, right: b };
+  if (dBA < dAB) return { left: b, right: a };
+  // Tie: keep incoming order
+  return { left: a, right: b };
+}
+
+// Pretty illumination: show decimals when small to avoid repeated 0%
+function formatIllumPercent(illum) {
+  const x = Number(illum);
+  if (!Number.isFinite(x) || x < 0) return '';
+  const p = x * 100;
+  if (p > 0 && p < 10) return p.toFixed(1) + '%';
+  return Math.round(p) + '%';
+}
+
+function getMixThreshold() {
+  try {
+    const qs = getQS();
+    const v = (qs.get('mix') || '').trim();
+    if (!v) return 0.0001; // default 0.01% (ultra-low)
+    let num = parseFloat(v);
+    if (!isFinite(num)) return 0.0001;
+    if (num > 1) num = num / 100; // allow ?mix=25 meaning 25%
+    if (num < 0) num = 0;
+    if (num > 0.5) num = 0.5; // sane upper bound
+    return num;
+  } catch(_) { return 0.0001; }
+}
+
+function getPureClamp() {
+  try {
+    const qs = getQS();
+    const raw = (qs.get('pure') || '').trim();
+    const v = raw.toLowerCase();
+    if (!v) return 0.95; // default: if primary >= 95%, show as pure
+    // Allow disabling pure gating entirely: ?pure=off
+    if (['off','none','no','disable'].includes(v)) return 2; // never reached by pPct (<=1)
+    let num = parseFloat(raw);
+    if (!isFinite(num)) return 0.95;
+    if (raw.includes('%') || num > 1) num = num / 100; // allow ?pure=95 or ?pure=95%
+    if (num < 0) num = 0;
+    if (num > 1) num = 1;
+    return num;
+  } catch(_) { return 0.95; }
+}
+
+function formatSignMix(d) {
+  try {
+    const thresh = getMixThreshold();
+    const pureClamp = getPureClamp();
+    const primary = d.moon_sign_primary || d.moon_sign || '';
+    const pPct = pctToFrac(d.moon_sign_primary_pct);
+    const secondary = d.moon_sign_secondary;
+    // Fallback: if secondary% missing but primary% present, derive as 1 - primary%
+    let sPct = pctToFrac(d.moon_sign_secondary_pct);
+    if (!Number.isFinite(sPct) && Number.isFinite(pPct)) {
+      sPct = Math.max(0, 1 - pPct);
+    }
+    // Only show percentages when the secondary share is significant
+    if (Number.isFinite(pPct) && pPct >= pureClamp) {
+      // Treat high-primary days as pure to emphasize one dominant day
+      return primary || '';
+    }
+    if (secondary && Number.isFinite(sPct) && Number.isFinite(pPct) && primary && primary !== secondary) {
+      // Decide if we should show mix using fractional threshold to support <1%
+      const edgeRoundingCase = (Math.round(pPct * 100) === 100 && Math.round((1 - pPct) * 100) === 0 && pPct < 1 && sPct > 0);
+      if (!(sPct >= thresh || edgeRoundingCase)) return primary || '';
+      // Round to integers and force two-term sum to 100
+      let p = Math.max(0, Math.min(100, Math.round(pPct * 100)));
+      let s = 100 - p;
+      // Avoid visually misleading 100/0 when not truly pure
+      if (edgeRoundingCase) { p = 99; s = 1; }
+      // Order signs according to zodiac (default), or keep by percent/primary
+      const mode = getSignOrderMode();
+      let leftName = primary, leftPct = p, rightName = secondary, rightPct = s;
+      if (mode === 'zodiac') {
+        const pair = orderZodiacPair(primary, secondary);
+        if (pair.left !== leftName) { leftPct = s; rightPct = p; }
+        leftName = pair.left; rightName = pair.right;
+      } else if (mode === 'percent') {
+        if (s > p) { leftName = secondary; leftPct = s; rightName = primary; rightPct = p; }
+      }
+      return `${leftName} ${leftPct}% / ${rightName} ${rightPct}%`;
+    }
+    // If we don't have a secondary label but we do have shares, still surface the mix numerically
+    if (Number.isFinite(sPct) && Number.isFinite(pPct) && primary) {
+      const edgeRoundingCase = (Math.round(pPct * 100) === 100 && Math.round((1 - pPct) * 100) === 0 && pPct < 1 && sPct > 0);
+      if (!(sPct >= thresh || edgeRoundingCase)) return primary || '';
+      let p = Math.max(0, Math.min(100, Math.round(pPct * 100)));
+      let s = 100 - p;
+      if (edgeRoundingCase) { p = 99; s = 1; }
+      // No secondary label: still respect order mode for the numeric part by swapping percentages if needed
+      const mode = getSignOrderMode();
+      if (mode === 'percent' && s > p) { const tmp = p; p = s; s = tmp; }
+      return `${primary} ${p}% / ${s}%`;
+    }
+    return primary || '';
+  } catch(_) { return d.moon_sign || ''; }
+}
+
+// Snap icons around canonical phases to visually center event days
+// Use wider snap for new/full, narrower for quarters to avoid overusing half icons
+// Tight snap to avoid duplicate event-days from angle-only CSV
+const SNAP_DEG_SYZIGY = 6;    // new/full
+const SNAP_DEG_QUARTER = 6;   // first/last quarter
+function snapIconFromAngle(deg) {
+  if (typeof deg !== 'number' || !isFinite(deg)) return '';
+  const a = ((deg % 360) + 360) % 360;
+  const targets = [0,90,180,270];
+  // For non-event days, use half icons only when very close; otherwise use crescents/gibbous
+  const iconsQuarter = ['🌑','🌓','🌕','🌗'];
+  let bestIdx = 0, bestD = 1e9;
+  for (let i=0;i<targets.length;i++) {
+    let d = Math.abs(a - targets[i]);
+    if (d > 180) d = 360 - d;
+    if (d < bestD) { bestD = d; bestIdx = i; }
+  }
+  const isQuarter = (bestIdx === 1 || bestIdx === 3);
+  const limit = isQuarter ? SNAP_DEG_QUARTER : SNAP_DEG_SYZIGY;
+  if (bestD <= limit) return iconsQuarter[bestIdx];
+  return phaseAngleToIcon(a);
+}
+
 function resolveCalcYearUrl() {
   try {
     const u = new URL(API_URL, window.location.origin);
@@ -73,6 +389,24 @@ function resolveUploadUrl() {
   return '';
 }
 
+// Build CSV URL with versioned cache-busting and optional no-cache toggle
+function csvFetchUrl(year) {
+  try {
+    const base = `./enoch-calendar-${year}.csv`;
+    const u = new URL(base, window.location.href);
+    const ver = (typeof APP_VERSION === 'string' && APP_VERSION) ? APP_VERSION : String(Date.now());
+    u.searchParams.set('v', ver);
+    const qs = getQS();
+    const force = (qs.get('nocache') || qs.get('no_cache') || qs.get('force') || '').toLowerCase();
+    if (['1','true','yes','on'].includes(force)) {
+      u.searchParams.set('_', String(Date.now()));
+    }
+    return u.toString();
+  } catch(_) {
+    return `./enoch-calendar-${year}.csv?v=${encodeURIComponent(APP_VERSION||'v0')}`;
+  }
+}
+
 function shouldUploadCsv() {
   try {
     const qs = getQS();
@@ -98,8 +432,28 @@ function shouldCacheCsv() {
   return true; // default: cache enabled
 }
 
-function csvStorageKey(year) { return `enochCSV:${year}`; }
-function csvMetaStorageKey(year) { return `enochCSVmeta:${year}`; }
+function csvStorageKey(year) {
+  try {
+    const ver = (typeof APP_VERSION === 'string' && APP_VERSION) ? APP_VERSION : 'v0';
+    return `enochCSV:${ver}:${year}`;
+  } catch(_) { return `enochCSV:v0:${year}`; }
+}
+function csvMetaStorageKey(year) {
+  try {
+    const ver = (typeof APP_VERSION === 'string' && APP_VERSION) ? APP_VERSION : 'v0';
+    return `enochCSVmeta:${ver}:${year}`;
+  } catch(_) { return `enochCSVmeta:v0:${year}`; }
+}
+
+function preferCsv() {
+  try {
+    const qs = getQS();
+    const q = (qs.get('csv') || qs.get('prefer') || '').toLowerCase();
+    if (q === '0' || q === 'false' || q === 'no' || q === 'api') return false;
+    if (q === '1' || q === 'true' || q === 'yes' || q === 'csv') return true;
+  } catch(_) {}
+  return true; // default prefer CSV when available
+}
 
 function getCsvFromLocal(year) {
   try {
@@ -138,7 +492,7 @@ function buildCsvText(rows) {
   const hasLunar = typeof rows[0].moon_phase_angle_deg !== 'undefined';
   const hasHebrew = typeof rows[0].he_year !== 'undefined';
   const baseHeader = ['gregorian','enoch_year','enoch_month','enoch_day','day_of_year','added_week','name','start_utc','end_utc'];
-  const lunarHeader = hasLunar ? ['moon_phase_angle_deg','moon_illum','moon_icon','moon_event','moon_event_utc','moon_sign','moon_zodiac_mode','moon_distance_km','perigee','perigee_utc','apogee','apogee_utc'] : [];
+  const lunarHeader = hasLunar ? ['moon_phase_angle_deg','moon_illum','moon_icon','moon_event','moon_event_utc','moon_sign','moon_sign_primary','moon_sign_primary_pct','moon_sign_secondary','moon_sign_secondary_pct','moon_zodiac_mode','moon_distance_km','perigee','perigee_utc','apogee','apogee_utc'] : [];
   const hebrewHeader = hasHebrew ? ['he_year','he_month','he_day','he_month_name','is_rosh_chodesh','he_holiday_code','he_holiday_name'] : [];
   const header = [...baseHeader, ...lunarHeader, ...hebrewHeader].join(',');
   const lines = rows.map(d => {
@@ -149,7 +503,12 @@ function buildCsvText(rows) {
       d.enoch_day,
       d.day_of_year ?? '',
       d.added_week,
-      (d.name ?? '').toString().replace(/,/g,' '),
+      (function(){
+        try {
+          const nm = (d.name && String(d.name).trim()) || getShemEnochiano(d.enoch_month, d.enoch_day, d.added_week) || '';
+          return String(nm).replace(/,/g,' ');
+        } catch(_) { return (d.name ?? ''); }
+      })(),
       d.start_utc ?? '',
       d.end_utc ?? ''
     ];
@@ -160,6 +519,10 @@ function buildCsvText(rows) {
       (d.moon_event ?? ''),
       (d.moon_event_utc ?? ''),
       (d.moon_sign ?? ''),
+      (d.moon_sign_primary ?? ''),
+      (typeof d.moon_sign_primary_pct !== 'undefined' ? d.moon_sign_primary_pct : ''),
+      (d.moon_sign_secondary ?? ''),
+      (typeof d.moon_sign_secondary_pct !== 'undefined' ? d.moon_sign_secondary_pct : ''),
       (d.moon_zodiac_mode ?? ''),
       (d.moon_distance_km ?? ''),
       (d.perigee ? '1' : ''),
@@ -217,6 +580,17 @@ let currentData = [];
 let isBuilding = false;
 
 console.log('[main] script loaded');
+
+// Lightweight debug helper: console.debug by default; console.log if ?debug=1
+function dbg() {
+  try {
+    const qs = getQS();
+    const force = (qs.get('debug') || '').toLowerCase();
+    const useLog = ['1','true','yes','on'].includes(force);
+    const logger = (useLog && console.log) ? console.log : (console.debug || console.log);
+    logger.apply(console, arguments);
+  } catch (_) {}
+}
 
 // i18n helpers (fallbacks if i18n.js is not present)
 const setStatus = (window.setStatus) ? window.setStatus : function(key){
@@ -297,10 +671,11 @@ function getApproxEnochYearForDate(dateUTC) {
 
 async function fetchEnoch(date) {
   console.log('[fetchEnoch] request', date.toISOString());
+  const { lat, lon } = getUserLatLonTz();
   const body = {
     datetime: date.toISOString().slice(0, 19),
-    latitude: LATITUDE,
-    longitude: LONGITUDE,
+    latitude: lat,
+    longitude: lon,
     timezone: 'UTC'
   };
   const res = await fetch(API_URL, {
@@ -313,7 +688,15 @@ async function fetchEnoch(date) {
     throw new Error('API error');
   }
   const json = await res.json();
-  console.log('[fetchEnoch] response', json);
+  dbg('[fetchEnoch] response (compact)', {
+    jd: json?.julian_day,
+    enoch: json?.enoch ? {
+      y: json.enoch.enoch_year,
+      m: json.enoch.enoch_month,
+      d: json.enoch.enoch_day,
+      doy: json.enoch.enoch_day_of_year
+    } : undefined
+  });
   return json;
 }
 
@@ -418,16 +801,38 @@ async function loadYearFromCSV(year) {
       if (cached) {
         console.log('[loadYearFromCSV] found in local cache');
         const rows = parseCSV(cached);
+        try {
+          const smp = rows.slice(0, 5).map(r => ({ g: r.gregorian, evt: r.moon_event, icon: r.moon_icon, ang: r.moon_phase_angle_deg, illum: r.moon_illum }));
+          dbg('[loadYearFromCSV] cache sample', smp);
+        } catch(_){ }
+        const { lat: uLat1, lon: uLon1 } = getUserLatLonTz();
         currentData = rows.map((r, i) => ({
           gregorian: r.gregorian,
-          enoch_year: year,
+          enoch_year: r.enoch_year || year,
           enoch_month: r.enoch_month,
           enoch_day: r.enoch_day,
-          added_week: r.added_week,
+          added_week: !!r.added_week,
           name: r.name,
-          day_of_year: i + 1,
-          start_utc: r.start_utc || '',
-          end_utc: r.end_utc || ''
+          day_of_year: r.day_of_year || (i + 1),
+          start_utc: r.start_utc || sunsetPairForYMD(r.gregorian, uLat1, uLon1).startUTC?.toISOString() || '',
+          end_utc: r.end_utc || sunsetPairForYMD(r.gregorian, uLat1, uLon1).endUTC?.toISOString() || '',
+          // Carry lunar fields from CSV if present
+          moon_phase_angle_deg: (Number.isFinite(r.moon_phase_angle_deg) ? r.moon_phase_angle_deg : undefined),
+          moon_illum: (Number.isFinite(r.moon_illum) ? r.moon_illum : undefined),
+          moon_icon: r.moon_icon,
+          moon_event: r.moon_event,
+          moon_event_utc: r.moon_event_utc,
+          moon_sign: r.moon_sign,
+          moon_sign_primary: r.moon_sign_primary,
+          moon_sign_primary_pct: (Number.isFinite(r.moon_sign_primary_pct) ? r.moon_sign_primary_pct : (r.moon_sign_primary_pct ? Number(r.moon_sign_primary_pct) : undefined)),
+          moon_sign_secondary: r.moon_sign_secondary,
+          moon_sign_secondary_pct: (Number.isFinite(r.moon_sign_secondary_pct) ? r.moon_sign_secondary_pct : (r.moon_sign_secondary_pct ? Number(r.moon_sign_secondary_pct) : undefined)),
+          moon_zodiac_mode: r.moon_zodiac_mode,
+          moon_distance_km: (Number.isFinite(r.moon_distance_km) ? r.moon_distance_km : undefined),
+          perigee: !!r.perigee,
+          perigee_utc: r.perigee_utc,
+          apogee: !!r.apogee,
+          apogee_utc: r.apogee_utc
         }));
         currentYear = year;
         currentStartDate = parseYMDToUTC(currentData[0].gregorian) || new Date(currentData[0].gregorian);
@@ -441,26 +846,50 @@ async function loadYearFromCSV(year) {
       }
     }
     // 1) Try network file on same-origin
-    const res = await fetch(`./enoch-calendar-${year}.csv`, { cache: 'no-store' });
+    const res = await fetch(csvFetchUrl(year), { cache: 'no-store' });
     if (!res.ok) throw new Error('not found');
     const text = await res.text();
     const rows = parseCSV(text);
+    try {
+      const smp2 = rows.slice(0, 5).map(r => ({ g: r.gregorian, evt: r.moon_event, icon: r.moon_icon, ang: r.moon_phase_angle_deg, illum: r.moon_illum }));
+      dbg('[loadYearFromCSV] net sample', smp2);
+    } catch(_){ }
     currentData = rows.map((r, i) => ({
       gregorian: r.gregorian,
-      enoch_year: year,
+      enoch_year: r.enoch_year || year,
       enoch_month: r.enoch_month,
       enoch_day: r.enoch_day,
-      added_week: r.added_week,
+      added_week: !!r.added_week,
       name: r.name,
-      day_of_year: i + 1
+      day_of_year: r.day_of_year || (i + 1),
+      // Carry lunar fields from CSV if present
+      start_utc: r.start_utc,
+      end_utc: r.end_utc,
+      moon_phase_angle_deg: (Number.isFinite(r.moon_phase_angle_deg) ? r.moon_phase_angle_deg : undefined),
+      moon_illum: (Number.isFinite(r.moon_illum) ? r.moon_illum : undefined),
+      moon_icon: r.moon_icon,
+      moon_event: r.moon_event,
+      moon_event_utc: r.moon_event_utc,
+      moon_sign: r.moon_sign,
+      moon_sign_primary: r.moon_sign_primary,
+      moon_sign_primary_pct: (Number.isFinite(r.moon_sign_primary_pct) ? r.moon_sign_primary_pct : (r.moon_sign_primary_pct ? Number(r.moon_sign_primary_pct) : undefined)),
+      moon_sign_secondary: r.moon_sign_secondary,
+      moon_sign_secondary_pct: (Number.isFinite(r.moon_sign_secondary_pct) ? r.moon_sign_secondary_pct : (r.moon_sign_secondary_pct ? Number(r.moon_sign_secondary_pct) : undefined)),
+      moon_zodiac_mode: r.moon_zodiac_mode,
+      moon_distance_km: (Number.isFinite(r.moon_distance_km) ? r.moon_distance_km : undefined),
+      perigee: !!r.perigee,
+      perigee_utc: r.perigee_utc,
+      apogee: !!r.apogee,
+      apogee_utc: r.apogee_utc
     }));
     currentYear = year;
     // Use safe parsing in case CSV uses non-ISO separators
     currentStartDate = parseYMDToUTC(currentData[0].gregorian) || new Date(currentData[0].gregorian);
     // Ensure start/end present for tooltip and export when loading CSV lacking them
+    const { lat: uLat2, lon: uLon2 } = getUserLatLonTz();
     currentData = currentData.map(d => {
       if (!d.start_utc || !d.end_utc) {
-        const { startUTC, endUTC } = sunsetPairForYMD(d.gregorian, LATITUDE, LONGITUDE);
+        const { startUTC, endUTC } = sunsetPairForYMD(d.gregorian, uLat2, uLon2);
         d.start_utc = startUTC ? startUTC.toISOString() : '';
         d.end_utc = endUTC ? endUTC.toISOString() : '';
       }
@@ -513,12 +942,12 @@ async function buildCalendar(referenceDate = new Date(), tryCSV = true, base = n
 
     // Try new annual endpoint for precise lunar data and day bounds
     try {
-      const tz = (Intl.DateTimeFormat().resolvedOptions().timeZone) || 'UTC';
+      const { lat: uLat, lon: uLon, tz } = getUserLatLonTz();
       const calcYearUrl = resolveCalcYearUrl();
       const body = {
         datetime: referenceDate.toISOString().slice(0,19),
-        latitude: LATITUDE,
-        longitude: LONGITUDE,
+        latitude: uLat,
+        longitude: uLon,
         timezone: tz,
         zodiac_mode: 'tropical'
       };
@@ -526,8 +955,31 @@ async function buildCalendar(referenceDate = new Date(), tryCSV = true, base = n
       const res = await fetch(calcYearUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (res.ok) {
         const j = await res.json();
+        dbg('[calcYear] header', { ok: j?.ok, enoch_year: j?.enoch_year, days: Array.isArray(j?.days) ? j.days.length : 0 });
+        try {
+          if (j && Array.isArray(j.days)) {
+            const sample = j.days.slice(0, 7).map(d => ({
+              g: d.gregorian,
+              evt: d.moon_event,
+              icon: d.moon_icon,
+              ang: d.moon_phase_angle_deg,
+              illum: d.moon_illum,
+              start: d.start_utc,
+              end: d.end_utc
+            }));
+            dbg('[calcYear] sample days', sample);
+          }
+        } catch(_){}
         if (j && j.ok && Array.isArray(j.days)) {
-          currentData = j.days;
+          // Ensure each day carries the Shemot name; fallback to local resolver if backend omitted it
+          currentData = j.days.map(d => ({
+            ...d,
+            name: (d && d.name) ? d.name : getShemEnochiano(d.enoch_month, d.enoch_day, d.added_week)
+          }));
+          try {
+            const evs = currentData.filter(d => d.moon_event).map(d => ({ g: d.gregorian, evt: d.moon_event, utc: d.moon_event_utc, icon: d.moon_icon }));
+            dbg('[calcYear] events received (first 12)', evs.slice(0,12));
+          } catch(_){ }
           currentYearLength = currentData.length;
           try { window.currentData = currentData; } catch(_){ }
           renderCalendar(currentData);
@@ -748,7 +1200,8 @@ function moonPhaseInfoForYMD(ymd) {
     if (age < 0) age += SYNODIC_DAYS;
     const phase = age / SYNODIC_DAYS; // 0..1 (0=new, 0.5=full)
     const illum = 0.5 * (1 - Math.cos(2 * Math.PI * phase));
-    const near = (p, target, eps = 0.03) => {
+    // Tighter epsilon to avoid multi-day "near" flags in fallback (approximate) mode
+    const near = (p, target, eps = 0.01) => {
       const d = Math.abs(p - target);
       return d < eps || Math.abs(d - 1) < eps;
     };
@@ -820,6 +1273,55 @@ function buildLunarMap(data) {
   return map;
 }
 
+// Build deterministic icon overrides around precise events so the cycle is symmetric
+// Rules (requested):
+// - new (🌚) day is surrounded by: ... 🌘🌘 🌑 🌚 🌑 🌒🌒 ...
+// - full (🌝) day is surrounded by: ... 🌖🌖 🌕 🌝 🌕 🌔🌔 ...
+// - quarters use face on event day (🌛/🌜) and half-discs around: ... 🌓🌓 🌛/🌜 🌓🌓 ...
+function buildIconOverrides(data) {
+  const map = new Map(); // day_of_year -> { icon, prio }
+  const setIcon = (idx, icon, prio) => {
+    const d = data[idx];
+    if (!d) return;
+    // Do not override a day that contains its own precise event icon
+    if (d.moon_event && prio < 3) return;
+    const key = d.day_of_year;
+    const prev = map.get(key);
+    if (!prev || (prev.prio || 0) < prio) map.set(key, { icon, prio });
+  };
+  for (let i = 0; i < data.length; i++) {
+    const d = data[i];
+    const evt = d.moon_event;
+    if (!evt) continue;
+    if (evt === 'new') {
+      setIcon(i, '🌚', 3);
+      setIcon(i-1, '🌑', 2);
+      setIcon(i+1, '🌑', 2);
+      setIcon(i-2, '🌘', 1);
+      setIcon(i+2, '🌒', 1);
+    } else if (evt === 'full') {
+      setIcon(i, '🌝', 3);
+      setIcon(i-1, '🌕', 2);
+      setIcon(i+1, '🌕', 2);
+      setIcon(i-2, '🌖', 1);
+      setIcon(i+2, '🌔', 1);
+    } else if (evt === 'first_quarter') {
+      setIcon(i, '🌛', 3);
+      setIcon(i-1, '🌓', 2);
+      setIcon(i+1, '🌓', 2);
+      setIcon(i-2, '🌓', 1);
+      setIcon(i+2, '🌓', 1);
+    } else if (evt === 'last_quarter') {
+      setIcon(i, '🌜', 3);
+      setIcon(i-1, '🌓', 2);
+      setIcon(i+1, '🌓', 2);
+      setIcon(i-2, '🌓', 1);
+      setIcon(i+2, '🌓', 1);
+    }
+  }
+  return map;
+}
+
 function renderCalendar(data) {
   try {
     var wds = (function(){ try { return (window.getWeekdays && window.getWeekdays()) || []; } catch(_){ return []; } })();
@@ -830,6 +1332,7 @@ function renderCalendar(data) {
   const lunarMap = buildLunarMap(data);
   const calendarDiv = document.getElementById('calendar');
   calendarDiv.innerHTML = '';
+  const iconOverrides = buildIconOverrides(data);
   const todayStr = new Date().toISOString().slice(0, 10);
 
   for (let m = 1; m <= 12; m++) {
@@ -883,7 +1386,8 @@ function renderCalendar(data) {
         div.classList.add('festival');
       }
       // Tooltip: include start/end at local sunset boundaries
-      const { startUTC, endUTC } = sunsetPairForYMD(d.gregorian, LATITUDE, LONGITUDE);
+      const { lat, lon } = getUserLatLonTz();
+      const { startUTC, endUTC } = sunsetPairForYMD(d.gregorian, lat, lon);
       const startLocal = fmtLocal(startUTC);
       const endLocal = fmtLocal(endUTC);
       const festLine = festInfo && festInfo.name ? `\n${window.t ? window.t('labelFestival') : 'Festival'}: ${festInfo.name}` : '';
@@ -897,16 +1401,24 @@ function renderCalendar(data) {
       const lblStart = window.t ? window.t('labelStart') : 'Starts';
       const lblEnd = window.t ? window.t('labelEnd') : 'Ends';
       let moonLine = '';
-      if (typeof d.moon_phase_angle_deg !== 'undefined') {
-        const evt = d.moon_event ? `, evento: ${d.moon_event}${d.moon_event_utc?(' @ '+d.moon_event_utc):''}` : '';
-        const sign = d.moon_sign ? `, signo: ${d.moon_sign}` : '';
-        const dist = (typeof d.moon_distance_km !== 'undefined') ? `, dist: ${d.moon_distance_km} km` : '';
-        moonLine = `\nLuna: fase ${d.moon_phase_angle_deg}° (illum ${Math.round((d.moon_illum||0)*100)}%)${evt}${sign}${dist}`;
+      if (Number.isFinite(d.moon_phase_angle_deg)) {
+        const LblMoon = i18nWord('labelMoon');
+        const LblEvent = i18nWord('labelEvent');
+        const LblSign = i18nWord('labelSign');
+        const LblDist = i18nWord('labelDistance');
+        const evt = d.moon_event ? `, ${LblEvent}: ${moonEventLabel(d.moon_event)}${d.moon_event_utc?(' @ '+d.moon_event_utc):''}` : '';
+        const signText = formatSignMix(d);
+        const sign = signText ? `, ${LblSign}: ${signText}` : '';
+        const dist = (Number.isFinite(d.moon_distance_km)) ? `, ${LblDist}: ${d.moon_distance_km} km` : '';
+        const illumVal = Number(d.moon_illum);
+        const pct = formatIllumPercent(illumVal);
+        moonLine = `\n${LblMoon}: ${pct}${evt}${sign}${dist}`;
       } else {
         const lmForTitle = lunarMap.get(d.day_of_year);
         if (lmForTitle) {
-          const l = lmForTitle.label || 'Fase lunar';
-          moonLine = `\nLuna: ${l}` + (lmForTitle.lunarRosh ? ' (Año Nuevo lunar)' : '');
+          const LblMoon = i18nWord('labelMoon');
+          const l = lmForTitle.label || (getLang()==='en'?'Lunar phase':'Fase lunar');
+          moonLine = `\n${LblMoon}: ${l}` + (lmForTitle.lunarRosh ? (getLang()==='en'?' (Lunar New Year)':' (Año Nuevo lunar)') : '');
         }
       }
       div.title = `${lblDate}: ${d.gregorian}\n${lblStart}: ${startLocal}\n${lblEnd}: ${endLocal}${festLine}${sefLine}${moonLine}`;
@@ -915,27 +1427,51 @@ function renderCalendar(data) {
       num.className = 'num';
       num.textContent = d.enoch_day;
       // Moon icon next to the day number (prefer backend precise data if present)
-      let lm = null;
-      if (typeof d.moon_icon !== 'undefined') {
-        lm = { icon: d.moon_icon, label: d.moon_event ? `Evento: ${d.moon_event}` : 'Fase lunar', isNew: d.moon_event === 'new', isFull: d.moon_event === 'full', lunarRosh: false };
+      let dayIcon = '';
+      let isNewEvt = false;
+      let isFullEvt = false;
+      // Check deterministic override first
+      const override = iconOverrides.get(d.day_of_year);
+      if (override && override.icon) {
+        dayIcon = override.icon;
+        isNewEvt = d.moon_event === 'new';
+        isFullEvt = d.moon_event === 'full';
+      } else if (d.moon_event) {
+        // Trust backend event; use caritas/icons accordingly
+        dayIcon = moonEventIcon(d.moon_event);
+        isNewEvt = d.moon_event === 'new';
+        isFullEvt = d.moon_event === 'full';
+      } else if (Number.isFinite(d.moon_phase_angle_deg)) {
+        dayIcon = snapIconFromAngle(d.moon_phase_angle_deg);
       } else {
-        lm = lunarMap.get(d.day_of_year);
+        const lm = lunarMap.get(d.day_of_year);
+        if (lm) {
+          // In fallback (CSV/approx), use discs/half-discs; reserve faces for precise backend events only
+          if (lm.isNew) dayIcon = '🌑';
+          else if (lm.isFull) dayIcon = '🌕';
+          else if (lm.isFirstQuarter) dayIcon = '🌓';
+          else if (lm.isLastQuarter) dayIcon = '🌗';
+          else dayIcon = lm.icon || '';
+          isNewEvt = !!lm.isNew;
+          isFullEvt = !!lm.isFull;
+          if (lm.lunarRosh) div.classList.add('lunar-rosh');
+        } else {
+          dayIcon = '';
+        }
       }
-      if (lm && lm.icon) {
+      if (dayIcon) {
         const m = document.createElement('span');
         m.className = 'moon';
-        m.textContent = lm.icon;
-        m.title = lm.label || 'Fase lunar';
+        m.textContent = dayIcon;
         num.appendChild(m);
-        if (lm.isNew) div.classList.add('moon-new');
-        if (lm.isFull) div.classList.add('moon-full');
-        if (lm.lunarRosh) div.classList.add('lunar-rosh');
+        if (isNewEvt) div.classList.add('moon-new');
+        if (isFullEvt) div.classList.add('moon-full');
         // Perigee/Apogee small badges
         if (d.perigee) {
-          const b = document.createElement('span'); b.textContent = '↓'; b.title = `Perigeo ${d.perigee_utc||''}`; b.style.marginLeft = '2px'; num.appendChild(b);
+          const b = document.createElement('span'); b.textContent = '↓'; b.title = `${i18nWord('perigee')} ${d.perigee_utc||''}`; b.style.marginLeft = '2px'; num.appendChild(b);
         }
         if (d.apogee) {
-          const b = document.createElement('span'); b.textContent = '↑'; b.title = `Apogeo ${d.apogee_utc||''}`; b.style.marginLeft = '2px'; num.appendChild(b);
+          const b = document.createElement('span'); b.textContent = '↑'; b.title = `${i18nWord('apogee')} ${d.apogee_utc||''}`; b.style.marginLeft = '2px'; num.appendChild(b);
         }
       }
       const shem = document.createElement('div');
@@ -979,39 +1515,73 @@ function renderCalendar(data) {
         div.classList.add('festival');
       }
       // Intercalary tooltip with sunset boundaries
-      const pair2 = sunsetPairForYMD(d.gregorian, LATITUDE, LONGITUDE);
+      const { lat: lat2, lon: lon2 } = getUserLatLonTz();
+      const pair2 = sunsetPairForYMD(d.gregorian, lat2, lon2);
       const f2 = festivalMap.get(d.day_of_year);
       const f2Line = f2 && f2.name ? `\n${window.t ? window.t('labelFestival') : 'Festival'}: ${f2.name}` : '';
       const lblDate2 = window.t ? window.t('labelDate') : 'Date';
       const lblStart2 = window.t ? window.t('labelStart') : 'Starts';
       const lblEnd2 = window.t ? window.t('labelEnd') : 'Ends';
       let moonLine2 = '';
-      if (typeof d.moon_phase_angle_deg !== 'undefined') {
-        const evt2 = d.moon_event ? `, evento: ${d.moon_event}${d.moon_event_utc?(' @ '+d.moon_event_utc):''}` : '';
-        const sign2 = d.moon_sign ? `, signo: ${d.moon_sign}` : '';
-        const dist2 = (typeof d.moon_distance_km !== 'undefined') ? `, dist: ${d.moon_distance_km} km` : '';
-        moonLine2 = `\nLuna: fase ${d.moon_phase_angle_deg}° (illum ${Math.round((d.moon_illum||0)*100)}%)${evt2}${sign2}${dist2}`;
+      if (Number.isFinite(d.moon_phase_angle_deg)) {
+        const LblMoon = i18nWord('labelMoon');
+        const LblEvent = i18nWord('labelEvent');
+        const LblSign = i18nWord('labelSign');
+        const LblDist = i18nWord('labelDistance');
+        const evt2 = d.moon_event ? `, ${LblEvent}: ${moonEventLabel(d.moon_event)}${d.moon_event_utc?(' @ '+d.moon_event_utc):''}` : '';
+        const sign2Text = formatSignMix(d);
+        const sign2 = sign2Text ? `, ${LblSign}: ${sign2Text}` : '';
+        const dist2 = (Number.isFinite(d.moon_distance_km)) ? `, ${LblDist}: ${d.moon_distance_km} km` : '';
+        const illumVal2 = Number(d.moon_illum);
+        const pct2 = formatIllumPercent(illumVal2);
+        moonLine2 = `\n${LblMoon}: ${pct2}${evt2}${sign2}${dist2}`;
       } else {
         const lm2 = lunarMap.get(d.day_of_year);
         if (lm2) {
-          const l2 = lm2.label || 'Fase lunar';
-          moonLine2 = `\nLuna: ${l2}` + (lm2.lunarRosh ? ' (Año Nuevo lunar)' : '');
+          const LblMoon = i18nWord('labelMoon');
+          const l2 = lm2.label || (getLang()==='en'?'Lunar phase':'Fase lunar');
+          moonLine2 = `\n${LblMoon}: ${l2}` + (lm2.lunarRosh ? (getLang()==='en'?' (Lunar New Year)':' (Año Nuevo lunar)') : '');
         }
       }
       div.title = `${lblDate2}: ${d.gregorian}\n${lblStart2}: ${fmtLocal(pair2.startUTC)}\n${lblEnd2}: ${fmtLocal(pair2.endUTC)}${f2Line}${moonLine2}`;
       const num = document.createElement('div');
       num.className = 'num';
       num.textContent = d.enoch_day;
-      // Moon icon next to the day number in intercalary week
-      if (lm2 && lm2.icon) {
-        const m2 = document.createElement('span');
-        m2.className = 'moon';
-        m2.textContent = lm2.icon;
-        m2.title = lm2.label || 'Fase lunar';
-        num.appendChild(m2);
-        if (lm2.isNew) div.classList.add('moon-new');
-        if (lm2.isFull) div.classList.add('moon-full');
-        if (lm2.lunarRosh) div.classList.add('lunar-rosh');
+      // Moon icon next to the day number in intercalary week (prefer backend)
+      {
+        let icon2 = '';
+        let newEvt2 = false;
+        let fullEvt2 = false;
+        const override = iconOverrides.get(d.day_of_year);
+        if (override && override.icon) {
+          icon2 = override.icon;
+          newEvt2 = d.moon_event === 'new';
+          fullEvt2 = d.moon_event === 'full';
+        } else if (d.moon_event) {
+          icon2 = moonEventIcon(d.moon_event);
+          newEvt2 = d.moon_event === 'new';
+          fullEvt2 = d.moon_event === 'full';
+        } else if (Number.isFinite(d.moon_phase_angle_deg)) {
+          icon2 = snapIconFromAngle(d.moon_phase_angle_deg);
+        } else if (lm2) {
+          // Fallback (approx) uses discs/half-discs; faces only on precise events
+          if (lm2.isNew) icon2 = '🌑';
+          else if (lm2.isFull) icon2 = '🌕';
+          else if (lm2.isFirstQuarter) icon2 = '🌓';
+          else if (lm2.isLastQuarter) icon2 = '🌗';
+          else icon2 = lm2.icon || '';
+          newEvt2 = !!lm2.isNew;
+          fullEvt2 = !!lm2.isFull;
+          if (lm2.lunarRosh) div.classList.add('lunar-rosh');
+        }
+        if (icon2) {
+          const m2 = document.createElement('span');
+          m2.className = 'moon';
+          m2.textContent = icon2;
+          num.appendChild(m2);
+          if (newEvt2) div.classList.add('moon-new');
+          if (fullEvt2) div.classList.add('moon-full');
+        }
       }
       const shem = document.createElement('div');
       shem.className = 'shem';
@@ -1150,7 +1720,7 @@ document.getElementById('prevYear').addEventListener('click', async () => {
   }
   const targetYear = currentYear - 1;
   console.log('[prevYear] target', targetYear);
-  if (!(await loadYearFromCSV(targetYear))) {
+  if (!(preferCsv() && await loadYearFromCSV(targetYear))) {
     await buildCalendar(addDays(currentStartDate, -7), false);
   }
 });
@@ -1162,7 +1732,7 @@ document.getElementById('nextYear').addEventListener('click', async () => {
   }
   const targetYear = currentYear + 1;
   console.log('[nextYear] target', targetYear);
-  if (!(await loadYearFromCSV(targetYear))) {
+  if (!(preferCsv() && await loadYearFromCSV(targetYear))) {
     await buildCalendar(addDays(currentStartDate, currentYearLength + 7), false);
   }
 });
@@ -1195,7 +1765,7 @@ onClick('jumpYearBtn', async () => {
     if (!y || isNaN(y)) { setStatus('inputEnterValidYear'); return; }
     if (isBuilding) { console.log('[jumpYear] build in progress'); return; }
     console.log('[jumpYear] requested', y);
-    if (await loadYearFromCSV(y)) {
+    if (preferCsv() && await loadYearFromCSV(y)) {
       console.log('[jumpYear] loaded from CSV year', y);
       // show approximate Gregorian anchor alongside the Enoch year for clarity
       const gY = 2025 + (y - REFERENCE_ENOCH_YEAR);
@@ -1260,7 +1830,7 @@ onClick('mapDateBtn', async () => {
     }
     // Load the calendar of that Enoch year (CSV-first), otherwise build from this date
     console.log('[mapDate] loading calendar for Enoch year', e.enoch_year);
-    if (await loadYearFromCSV(e.enoch_year)) {
+    if (preferCsv() && await loadYearFromCSV(e.enoch_year)) {
       console.log('[mapDate] calendar loaded from CSV for year', e.enoch_year);
       return;
     }
@@ -1275,11 +1845,16 @@ async function initCalendar() {
   console.log('[initCalendar] start');
   const today = new Date();
   try {
-    // 1) Try local approx to determine the Enoch year and prefer CSV
+    await resolveUserLocation();
+    // 1) Try local approx to determine the Enoch year and prefer CSV (unless disabled)
     const approxYear = getApproxEnochYearForDate(new Date(today.toISOString()));
     console.log('[initCalendar] approx enoch year', approxYear);
-    const csvOk = await loadYearFromCSV(approxYear);
-    if (csvOk) return;
+    if (preferCsv()) {
+      const csvOk = await loadYearFromCSV(approxYear);
+      if (csvOk) return;
+    } else {
+      console.log('[initCalendar] preferCsv disabled via query, skip CSV');
+    }
 
     // 2) Fallback to API to get precise base and build
     console.log('[initCalendar] CSV not found, falling back to API build');

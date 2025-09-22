@@ -1419,9 +1419,17 @@ function renderCalendar(data) {
   } catch(_){}
   const festivalMap = buildFestivalMap(data);
   const lunarMap = buildLunarMap(data);
+  function useIconOverrides() {
+    try {
+      const q = (getQS().get('icons') || '').toLowerCase();
+      if (['enhanced','override','overrides','faces','on','1','yes','true'].includes(q)) return true;
+      if (['raw','simple','off','0','no','false'].includes(q)) return false;
+    } catch(_) {}
+    return false; // default: keep it simple, no overrides
+  }
   const calendarDiv = document.getElementById('calendar');
   calendarDiv.innerHTML = '';
-  const iconOverrides = buildIconOverrides(data);
+  const iconOverrides = useIconOverrides() ? buildIconOverrides(data) : new Map();
   const todayStr = new Date().toISOString().slice(0, 10);
 
   for (let m = 1; m <= 12; m++) {

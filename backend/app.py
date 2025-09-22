@@ -11,7 +11,7 @@ from utils.datetime_local import localize_datetime
 from utils.debug import *
 from utils.asc_mc_houses import calculate_asc_mc_and_houses
 from utils.planet_positions import calculate_planets
-from utils.lunar_calc import jd_utc, sun_moon_state, scan_phase_events, scan_perigee_apogee, lunar_sign_from_longitude
+from utils.lunar_calc import jd_utc, sun_moon_state, scan_phase_events, scan_perigee_apogee, lunar_sign_from_longitude, lunar_sign_mix_linear
 
 import traceback
 
@@ -96,82 +96,46 @@ def calc_year():
         start_utc = dt_utc - timedelta(days=int(enoch_day_of_year) - 1)
 
         days = []
+
+        def enrich_with_moon_mix(day_dict, start_dt, end_dt):
+            # Simple, deterministic split based on lunar longitudes at start/end
+            mix = lunar_sign_mix_linear(start_dt, end_dt, zodiac_mode)
+            if not mix:
+                return
+            primary = mix.get('primary_sign')
+            if primary:
+                day_dict['moon_sign_primary'] = primary
+                day_dict['moon_sign'] = primary
+            primary_pct = mix.get('primary_pct')
+            if primary_pct is not None:
+                day_dict['moon_sign_primary_pct'] = primary_pct
+            secondary = mix.get('secondary_sign')
+            secondary_pct = mix.get('secondary_pct')
+            if secondary:
+                day_dict['moon_sign_secondary'] = secondary
+                if secondary_pct is not None:
+                    day_dict['moon_sign_secondary_pct'] = secondary_pct
+            else:
+                day_dict.pop('moon_sign_secondary', None)
+                day_dict.pop('moon_sign_secondary_pct', None)
+            # Do not include segments in simple mode
+
         # First compute a baseline 364 days; we will extend by 7 if added week is flagged on last day
         total_days = 364
-        def sign_fractions(s_prev, s_today, zodiac_mode, step_hours=2):
-            try:
-                # Accumulate actual durations per sign within [s_prev, s_today)
-                def sign_idx_for_time(tt):
-                    jd_s = jd_utc(tt)
-                    lon_sun, lon_moon, *_ = sun_moon_state(jd_s)
-                    idx = int(((lon_moon % 360.0) / 30.0)) % 12
-                    return idx
-
-                durations = {}
-                t0 = s_prev
-                while t0 < s_today:
-                    t1 = min(t0 + timedelta(hours=step_hours), s_today)
-                    i0 = sign_idx_for_time(t0)
-                    i1 = sign_idx_for_time(t1)
-                    if i0 == i1:
-                        dt = (t1 - t0).total_seconds()
-                        durations[i0] = durations.get(i0, 0.0) + dt
-                    else:
-                        # Refine boundary crossing within [t0, t1]
-                        a, b = t0, t1
-                        ia = i0
-                        for _ in range(25):
-                            mid = a + (b - a) / 2
-                            im = sign_idx_for_time(mid)
-                            if im == ia:
-                                a = mid
-                            else:
-                                b = mid
-                            if (b - a).total_seconds() <= 1:
-                                break
-                        tc = b  # crossing time approx
-                        dt1 = (tc - t0).total_seconds()
-                        dt2 = (t1 - tc).total_seconds()
-                        durations[i0] = durations.get(i0, 0.0) + max(0.0, dt1)
-                        durations[i1] = durations.get(i1, 0.0) + max(0.0, dt2)
-                    t0 = t1
-
-                total_sec = sum(durations.values())
-                if total_sec <= 0:
-                    return None
-                # Map indices to names and fractions
-                items = sorted(durations.items(), key=lambda kv: kv[1], reverse=True)
-                def idx_to_name(idx):
-                    # Use a representative longitude within the sign to retrieve the label
-                    lon_rep = (idx * 30.0) + 0.1
-                    return lunar_sign_from_longitude(lon_rep, zodiac_mode)
-                primary_idx, primary_dt = (items[0] if items else (None, 0.0))
-                secondary_idx, secondary_dt = (items[1] if len(items) > 1 else (None, 0.0))
-                return {
-                    'primary': idx_to_name(primary_idx) if primary_idx is not None else None,
-                    'primary_pct': (primary_dt / total_sec) if total_sec > 0 else 0.0,
-                    'secondary': idx_to_name(secondary_idx) if secondary_idx is not None else None,
-                    'secondary_pct': (secondary_dt / total_sec) if total_sec > 0 else 0.0,
-                }
-            except Exception:
-                return None
-
         for i in range(total_days):
             day_dt_utc = start_utc + timedelta(days=i)
             greg = day_dt_utc.date().isoformat()
-            # Sunset bounds for local day (previous sunset -> today's sunset)
+            # Midday sample for positions
             midday = datetime(day_dt_utc.year, day_dt_utc.month, day_dt_utc.day, 12, 0, 0, tzinfo=timezone.utc)
-            s_prev, s_today = day_bounds_utc(midday, latitude, longitude, tz_str)
-            # Sample lunar state at the midpoint of the local day window
-            mid_utc = s_prev + (s_today - s_prev) / 2
-            jd_mid = jd_utc(mid_utc)
+            jd_mid = swe.julday(midday.year, midday.month, midday.day, 12.0)
             lon_sun, lon_moon, phase, illum, dist_km = sun_moon_state(jd_mid)
-            # Enoch day at same sample time
+            # Enoch day
             e_day = calculate_enoch_date(jd_mid, latitude, longitude, tz_str)
+            # Sunset bounds
+            s_prev, s_today = day_bounds_utc(midday, latitude, longitude, tz_str)
             # Lunar sign (tropical default)
             moon_sign = lunar_sign_from_longitude(lon_moon, zodiac_mode)
-            sign_mix = sign_fractions(s_prev, s_today, zodiac_mode)
-            days.append({
+            day_record = {
                 'gregorian': greg,
                 'enoch_year': e_day.get('enoch_year'),
                 'enoch_month': e_day.get('enoch_month'),
@@ -184,13 +148,11 @@ def calc_year():
                 'moon_phase_angle_deg': round(phase, 3),
                 'moon_illum': round(illum, 6),
                 'moon_distance_km': round(dist_km, 1),
-                'moon_sign': sign_mix['primary'] if sign_mix and sign_mix.get('primary') else moon_sign,
-                'moon_sign_primary': sign_mix['primary'] if sign_mix else moon_sign,
-                'moon_sign_primary_pct': round(sign_mix['primary_pct'], 6) if sign_mix else 1.0,
-                'moon_sign_secondary': sign_mix['secondary'] if sign_mix else None,
-                'moon_sign_secondary_pct': round(sign_mix['secondary_pct'], 6) if sign_mix else 0.0,
+                'moon_sign': moon_sign,
                 'moon_zodiac_mode': zodiac_mode
-            })
+            }
+            enrich_with_moon_mix(day_record, s_prev, s_today)
+            days.append(day_record)
 
         # If last day reports added week, extend 7 more days
         if days and days[-1].get('added_week'):
@@ -199,14 +161,12 @@ def calc_year():
                 day_dt_utc = start_utc + timedelta(days=i)
                 greg = day_dt_utc.date().isoformat()
                 midday = datetime(day_dt_utc.year, day_dt_utc.month, day_dt_utc.day, 12, 0, 0, tzinfo=timezone.utc)
-                s_prev, s_today = day_bounds_utc(midday, latitude, longitude, tz_str)
-                mid_utc = s_prev + (s_today - s_prev) / 2
-                jd_mid = jd_utc(mid_utc)
+                jd_mid = swe.julday(midday.year, midday.month, midday.day, 12.0)
                 lon_sun, lon_moon, phase, illum, dist_km = sun_moon_state(jd_mid)
                 e_day = calculate_enoch_date(jd_mid, latitude, longitude, tz_str)
+                s_prev, s_today = day_bounds_utc(midday, latitude, longitude, tz_str)
                 moon_sign = lunar_sign_from_longitude(lon_moon, zodiac_mode)
-                sign_mix = sign_fractions(s_prev, s_today, zodiac_mode)
-                days.append({
+                day_record = {
                     'gregorian': greg,
                     'enoch_year': e_day.get('enoch_year'),
                     'enoch_month': e_day.get('enoch_month'),
@@ -219,13 +179,11 @@ def calc_year():
                     'moon_phase_angle_deg': round(phase, 3),
                     'moon_illum': round(illum, 6),
                     'moon_distance_km': round(dist_km, 1),
-                    'moon_sign': sign_mix['primary'] if sign_mix and sign_mix.get('primary') else moon_sign,
-                    'moon_sign_primary': sign_mix['primary'] if sign_mix else moon_sign,
-                    'moon_sign_primary_pct': round(sign_mix['primary_pct'], 6) if sign_mix else 1.0,
-                    'moon_sign_secondary': sign_mix['secondary'] if sign_mix else None,
-                    'moon_sign_secondary_pct': round(sign_mix['secondary_pct'], 6) if sign_mix else 0.0,
+                    'moon_sign': moon_sign,
                     'moon_zodiac_mode': zodiac_mode
-                })
+                }
+                enrich_with_moon_mix(day_record, s_prev, s_today)
+                days.append(day_record)
 
         # Compute exact lunar events across the full span (from first start to last end)
         if days:
@@ -235,37 +193,29 @@ def calc_year():
             dist_events = scan_perigee_apogee(span_start, span_end, step_hours=6)
             # Map events to containing day bucket
             def bucket_index(t):
-                # Assign to half-open interval [start, end) to avoid double-assigning events on exact sunset
                 for idx, d in enumerate(days):
                     st = datetime.fromisoformat(d['start_utc'].replace('Z','+00:00'))
                     en = datetime.fromisoformat(d['end_utc'].replace('Z','+00:00'))
-                    # For last day, include end boundary
-                    if idx == len(days) - 1:
-                        if st <= t <= en:
-                            return idx
-                    else:
-                        if st <= t < en:
-                            return idx
+                    if st <= t <= en:
+                        return idx
                 return None
-            for ev in sorted(phase_events, key=lambda e: e['time']):
+            for ev in phase_events:
                 bi = bucket_index(ev['time'])
                 if bi is not None:
                     d = days[bi]
-                    # If a bucket already has an event, keep the earliest-set one to avoid overwriting
-                    if 'moon_event' not in d:
-                        # Pick icon mapping
-                        icon = ''
-                        if ev['type'] == 'new':
-                            icon = '🌚'
-                        elif ev['type'] == 'full':
-                            icon = '🌝'
-                        elif ev['type'] == 'first_quarter':
-                            icon = '🌓'
-                        elif ev['type'] == 'last_quarter':
-                            icon = '🌗'
-                        d['moon_event'] = ev['type']
-                        d['moon_event_utc'] = ev['time'].astimezone(timezone.utc).isoformat()
-                        d['moon_icon'] = icon
+                    # Pick icon mapping
+                    icon = ''
+                    if ev['type'] == 'new':
+                        icon = '🌚'
+                    elif ev['type'] == 'full':
+                        icon = '🌝'
+                    elif ev['type'] == 'first_quarter':
+                        icon = '🌓'
+                    elif ev['type'] == 'last_quarter':
+                        icon = '🌗'
+                    d['moon_event'] = ev['type']
+                    d['moon_event_utc'] = ev['time'].astimezone(timezone.utc).isoformat()
+                    d['moon_icon'] = icon
             for ev in dist_events:
                 bi = bucket_index(ev['time'])
                 if bi is not None:

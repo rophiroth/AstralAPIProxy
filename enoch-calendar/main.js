@@ -374,27 +374,29 @@ function snapIconFromAngle(deg) {
 
 // Some backends provide lunar "phase angle" (0=full, 180=new) instead of elongation (0=new, 180=full).
 // This helper converts to canonical elongation degrees, using illumination as a sanity check.
-function toCanonicalElongationDeg(rawDeg, illum) {
+function canonicalElongationDeg(rawDeg, illum, evt) {
   let a = Number(rawDeg);
   if (!Number.isFinite(a)) return NaN;
   a = ((a % 360) + 360) % 360;
-  // If illumination suggests near-full but angle near 0, or near-new but angle near 180, flip.
-  const near = (x, target, lim=20) => {
-    const d = Math.abs(((x - target + 540) % 360) - 180);
-    return d <= lim;
-  };
+  const aflip = ((180 - a) + 360) % 360; // convert phase-angle to elongation (or vice versa)
+  const wantEvt = (typeof evt === 'string') ? evt : '';
+  if (wantEvt) {
+    const eRaw = nearestEventFromAngle(a);
+    const eFlip = nearestEventFromAngle(aflip);
+    if (eFlip === wantEvt && eRaw !== wantEvt) return aflip;
+    if (eRaw === wantEvt && eFlip !== wantEvt) return a;
+  }
   const illumNum = Number(illum);
-  const hasIllum = Number.isFinite(illumNum);
-  // Heuristic: if illum >= 0.9 and angle near 0 => it's phase-angle; flip to elongation.
-  if (hasIllum && illumNum >= 0.9 && near(a, 0)) {
-    return ((180 - a) + 360) % 360;
+  if (Number.isFinite(illumNum)) {
+    const want = (illumNum <= 0.1) ? 'new' : (illumNum >= 0.9 ? 'full' : '');
+    if (want) {
+      const eRaw = nearestEventFromAngle(a);
+      const eFlip = nearestEventFromAngle(aflip);
+      if (eFlip === want && eRaw !== want) return aflip;
+      if (eRaw === want && eFlip !== want) return a;
+    }
   }
-  // If illum <= 0.1 and angle near 180 => flip.
-  if (hasIllum && illumNum <= 0.1 && near(a, 180)) {
-    return ((180 - a) + 360) % 360;
-  }
-  // Otherwise try to keep as-is but also accept explicit phase-angle by preferring smaller distance to expected
-  // If illum suggests full but angle is closer to 0 than 180, keep; if closer to 180, keep; fallback as-is.
+  // Fallback: keep raw
   return a;
 }
 
@@ -1494,7 +1496,7 @@ function renderCalendar(data) {
         isNewEvt = d.moon_event === 'new';
         isFullEvt = d.moon_event === 'full';
       } else if (Number.isFinite(d.moon_phase_angle_deg)) {
-        const elong = toCanonicalElongationDeg(d.moon_phase_angle_deg, d.moon_illum);
+        const elong = canonicalElongationDeg(d.moon_phase_angle_deg, d.moon_illum, d.moon_event);
         dayIcon = snapIconFromAngle(elong);
       } else {
         const lm = lunarMap.get(d.day_of_year);
@@ -1616,7 +1618,7 @@ function renderCalendar(data) {
           newEvt2 = d.moon_event === 'new';
           fullEvt2 = d.moon_event === 'full';
         } else if (Number.isFinite(d.moon_phase_angle_deg)) {
-          const elong2 = toCanonicalElongationDeg(d.moon_phase_angle_deg, d.moon_illum);
+          const elong2 = canonicalElongationDeg(d.moon_phase_angle_deg, d.moon_illum, d.moon_event);
           icon2 = snapIconFromAngle(elong2);
         } else if (lm2) {
           // Fallback (approx) uses discs/half-discs; faces only on precise events

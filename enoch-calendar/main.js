@@ -372,8 +372,69 @@ function snapIconFromAngle(deg) {
   return phaseAngleToIcon(a);
 }
 
-// Some backends provide lunar "phase angle" (0=full, 180=new) instead of elongation (0=new, 180=full).
-// This helper converts to canonical elongation degrees, using illumination as a sanity check.
+// --- Minimal moon icon logic (centralized) ---
+function normalizeIllum(val) {
+  const n = Number(val);
+  if (!Number.isFinite(n)) return NaN;
+  if (n <= 0) return 0;
+  if (n >= 1 && n <= 100) return n / 100; // tolerate 0..100 inputs
+  return Math.min(1, Math.max(0, n));
+}
+
+function pickMoonIcon(d, lunarMap, override) {
+  // 1) Deterministic override (used around exact events to keep symmetry)
+  if (override && override.icon) {
+    return { icon: override.icon, isNewEvt: d.moon_event === 'new', isFullEvt: d.moon_event === 'full' };
+  }
+  // 2) Exact backend event → use faces (🌚/🌝/🌛/🌜)
+  if (d.moon_event) {
+    const m = { new: '🌚', full: '🌝', first_quarter: '🌛', last_quarter: '🌜' };
+    return { icon: m[d.moon_event] || '', isNewEvt: d.moon_event === 'new', isFullEvt: d.moon_event === 'full' };
+  }
+  // 3) Angle from backend, clamped by illumination extremes
+  if (Number.isFinite(d.moon_phase_angle_deg)) {
+    const f = normalizeIllum(d.moon_illum);
+    if (Number.isFinite(f)) {
+      if (f <= 0.02) return { icon: '🌑', isNewEvt: false, isFullEvt: false };
+      if (f >= 0.98) return { icon: '🌕', isNewEvt: false, isFullEvt: false };
+    }
+    return { icon: snapIconFromAngle(d.moon_phase_angle_deg), isNewEvt: false, isFullEvt: false };
+  }
+  // 4) Fallback: approximate lunar map (discs/halves only)
+  const lm = lunarMap && lunarMap.get(d.day_of_year);
+  if (lm) {
+    let icon = '';
+    if (lm.isNew) icon = '🌑';
+    else if (lm.isFull) icon = '🌕';
+    else if (lm.isFirstQuarter) icon = '🌓';
+    else if (lm.isLastQuarter) icon = '🌗';
+    else icon = lm.icon || '';
+    return { icon, isNewEvt: !!lm.isNew, isFullEvt: !!lm.isFull };
+  }
+  return { icon: '', isNewEvt: false, isFullEvt: false };
+}
+
+function buildMoonTooltip(d, lunarMap) {
+  const LblMoon = i18nWord('labelMoon');
+  if (Number.isFinite(d.moon_phase_angle_deg)) {
+    const LblEvent = i18nWord('labelEvent');
+    const LblSign = i18nWord('labelSign');
+    const LblDist = i18nWord('labelDistance');
+    const evt = d.moon_event ? `, ${LblEvent}: ${moonEventLabel(d.moon_event)}${d.moon_event_utc?(' @ '+d.moon_event_utc):''}` : '';
+    const signText = formatSignMix(d);
+    const degText = formatStartEndLunar(d);
+    const sign = (signText || degText) ? `, ${LblSign}: ${signText}${degText ? ' ('+degText+')' : ''}` : '';
+    const dist = (Number.isFinite(d.moon_distance_km)) ? `, ${LblDist}: ${d.moon_distance_km} km` : '';
+    const pct = formatIllumPercent(d.moon_illum);
+    return `\n${LblMoon}: ${pct}${evt}${sign}${dist}`;
+  }
+  const lm = lunarMap && lunarMap.get(d.day_of_year);
+  if (lm) {
+    const l = lm.label || (getLang()==='en'?'Lunar phase':'Fase lunar');
+    return `\n${LblMoon}: ${l}` + (lm.lunarRosh ? (getLang()==='en'?' (Lunar New Year)':' (Año Nuevo lunar)') : '');
+  }
+  return '';
+}
 
 function resolveCalcYearUrl() {
   try {
@@ -1428,79 +1489,18 @@ function renderCalendar(data) {
       const lblDate = window.t ? window.t('labelDate') : 'Date';
       const lblStart = window.t ? window.t('labelStart') : 'Starts';
       const lblEnd = window.t ? window.t('labelEnd') : 'Ends';
-      let moonLine = '';
-      if (Number.isFinite(d.moon_phase_angle_deg)) {
-        const LblMoon = i18nWord('labelMoon');
-        const LblEvent = i18nWord('labelEvent');
-        const LblSign = i18nWord('labelSign');
-        const LblDist = i18nWord('labelDistance');
-        const evt = d.moon_event ? `, ${LblEvent}: ${moonEventLabel(d.moon_event)}${d.moon_event_utc?(' @ '+d.moon_event_utc):''}` : '';
-        const signText = formatSignMix(d);
-        const degText = formatStartEndLunar(d);
-        const sign = (signText || degText) ? `, ${LblSign}: ${signText}${degText ? ' ('+degText+')' : ''}` : '';
-        const dist = (Number.isFinite(d.moon_distance_km)) ? `, ${LblDist}: ${d.moon_distance_km} km` : '';
-        const illumVal = Number(d.moon_illum);
-        const pct = formatIllumPercent(illumVal);
-        moonLine = `\n${LblMoon}: ${pct}${evt}${sign}${dist}`;
-      } else {
-        const lmForTitle = lunarMap.get(d.day_of_year);
-        if (lmForTitle) {
-          const LblMoon = i18nWord('labelMoon');
-          const l = lmForTitle.label || (getLang()==='en'?'Lunar phase':'Fase lunar');
-          moonLine = `\n${LblMoon}: ${l}` + (lmForTitle.lunarRosh ? (getLang()==='en'?' (Lunar New Year)':' (Año Nuevo lunar)') : '');
-        }
-      }
+      const moonLine = buildMoonTooltip(d, lunarMap);
       div.title = `${lblDate}: ${d.gregorian}\n${lblStart}: ${startLocal}\n${lblEnd}: ${endLocal}${festLine}${sefLine}${moonLine}`;
 
       const num = document.createElement('div');
       num.className = 'num';
       num.textContent = d.enoch_day;
-      // Moon icon next to the day number (prefer backend precise data if present)
-      let dayIcon = '';
-      let isNewEvt = false;
-      let isFullEvt = false;
-      // Check deterministic override first
+      // Moon icon next to the day number (centralized logic)
       const override = iconOverrides.get(d.day_of_year);
-      if (override && override.icon) {
-        dayIcon = override.icon;
-        isNewEvt = d.moon_event === 'new';
-        isFullEvt = d.moon_event === 'full';
-      } else if (d.moon_event) {
-        // Trust backend event; use caritas/icons accordingly
-        dayIcon = moonEventIcon(d.moon_event);
-        isNewEvt = d.moon_event === 'new';
-        isFullEvt = d.moon_event === 'full';
-      } else if (Number.isFinite(d.moon_phase_angle_deg)) {
-        // Minimal safety: trust backend angle, but clamp extremes by illumination
-        const fRaw = Number(d.moon_illum);
-        const f = Number.isFinite(fRaw) ? (fRaw > 1 ? fRaw/100 : fRaw) : NaN;
-        if (Number.isFinite(f)) {
-          if (f <= 0.02) {
-            dayIcon = '🌑';
-          } else if (f >= 0.98) {
-            dayIcon = '🌕';
-          } else {
-            dayIcon = snapIconFromAngle(d.moon_phase_angle_deg);
-          }
-        } else {
-          dayIcon = snapIconFromAngle(d.moon_phase_angle_deg);
-        }
-      } else {
-        const lm = lunarMap.get(d.day_of_year);
-        if (lm) {
-          // In fallback (CSV/approx), use discs/half-discs; reserve faces for precise backend events only
-          if (lm.isNew) dayIcon = '🌑';
-          else if (lm.isFull) dayIcon = '🌕';
-          else if (lm.isFirstQuarter) dayIcon = '🌓';
-          else if (lm.isLastQuarter) dayIcon = '🌗';
-          else dayIcon = lm.icon || '';
-          isNewEvt = !!lm.isNew;
-          isFullEvt = !!lm.isFull;
-          if (lm.lunarRosh) div.classList.add('lunar-rosh');
-        } else {
-          dayIcon = '';
-        }
-      }
+      const picked = pickMoonIcon(d, lunarMap, override);
+      const dayIcon = picked.icon;
+      const isNewEvt = picked.isNewEvt;
+      const isFullEvt = picked.isFullEvt;
       if (dayIcon) {
         const m = document.createElement('span');
         m.className = 'moon';
@@ -1564,67 +1564,18 @@ function renderCalendar(data) {
       const lblDate2 = window.t ? window.t('labelDate') : 'Date';
       const lblStart2 = window.t ? window.t('labelStart') : 'Starts';
       const lblEnd2 = window.t ? window.t('labelEnd') : 'Ends';
-      let moonLine2 = '';
-      if (Number.isFinite(d.moon_phase_angle_deg)) {
-        const LblMoon = i18nWord('labelMoon');
-        const LblEvent = i18nWord('labelEvent');
-        const LblSign = i18nWord('labelSign');
-        const LblDist = i18nWord('labelDistance');
-        const evt2 = d.moon_event ? `, ${LblEvent}: ${moonEventLabel(d.moon_event)}${d.moon_event_utc?(' @ '+d.moon_event_utc):''}` : '';
-        const sign2Text = formatSignMix(d);
-        const deg2Text = formatStartEndLunar(d);
-        const sign2 = (sign2Text || deg2Text) ? `, ${LblSign}: ${sign2Text}${deg2Text ? ' ('+deg2Text+')' : ''}` : '';
-        const dist2 = (Number.isFinite(d.moon_distance_km)) ? `, ${LblDist}: ${d.moon_distance_km} km` : '';
-        const illumVal2 = Number(d.moon_illum);
-        const pct2 = formatIllumPercent(illumVal2);
-        moonLine2 = `\n${LblMoon}: ${pct2}${evt2}${sign2}${dist2}`;
-      } else {
-        const lm2 = lunarMap.get(d.day_of_year);
-        if (lm2) {
-          const LblMoon = i18nWord('labelMoon');
-          const l2 = lm2.label || (getLang()==='en'?'Lunar phase':'Fase lunar');
-          moonLine2 = `\n${LblMoon}: ${l2}` + (lm2.lunarRosh ? (getLang()==='en'?' (Lunar New Year)':' (Año Nuevo lunar)') : '');
-        }
-      }
+      const moonLine2 = buildMoonTooltip(d, lunarMap);
       div.title = `${lblDate2}: ${d.gregorian}\n${lblStart2}: ${fmtLocal(pair2.startUTC)}\n${lblEnd2}: ${fmtLocal(pair2.endUTC)}${f2Line}${moonLine2}`;
       const num = document.createElement('div');
       num.className = 'num';
       num.textContent = d.enoch_day;
       // Moon icon next to the day number in intercalary week (prefer backend)
       {
-        let icon2 = '';
-        let newEvt2 = false;
-        let fullEvt2 = false;
-        const override = iconOverrides.get(d.day_of_year);
-        if (override && override.icon) {
-          icon2 = override.icon;
-          newEvt2 = d.moon_event === 'new';
-          fullEvt2 = d.moon_event === 'full';
-        } else if (d.moon_event) {
-          icon2 = moonEventIcon(d.moon_event);
-          newEvt2 = d.moon_event === 'new';
-          fullEvt2 = d.moon_event === 'full';
-        } else if (Number.isFinite(d.moon_phase_angle_deg)) {
-          const fRaw2 = Number(d.moon_illum);
-          const f2 = Number.isFinite(fRaw2) ? (fRaw2 > 1 ? fRaw2/100 : fRaw2) : NaN;
-          if (Number.isFinite(f2)) {
-            if (f2 <= 0.02) icon2 = '🌑';
-            else if (f2 >= 0.98) icon2 = '🌕';
-            else icon2 = snapIconFromAngle(d.moon_phase_angle_deg);
-          } else {
-            icon2 = snapIconFromAngle(d.moon_phase_angle_deg);
-          }
-        } else if (lm2) {
-          // Fallback (approx) uses discs/half-discs; faces only on precise events
-          if (lm2.isNew) icon2 = '🌑';
-          else if (lm2.isFull) icon2 = '🌕';
-          else if (lm2.isFirstQuarter) icon2 = '🌓';
-          else if (lm2.isLastQuarter) icon2 = '🌗';
-          else icon2 = lm2.icon || '';
-          newEvt2 = !!lm2.isNew;
-          fullEvt2 = !!lm2.isFull;
-          if (lm2.lunarRosh) div.classList.add('lunar-rosh');
-        }
+        const override2 = iconOverrides.get(d.day_of_year);
+        const picked2 = pickMoonIcon(d, lunarMap, override2);
+        const icon2 = picked2.icon;
+        const newEvt2 = picked2.isNewEvt;
+        const fullEvt2 = picked2.isFullEvt;
         if (icon2) {
           const m2 = document.createElement('span');
           m2.className = 'moon';

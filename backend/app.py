@@ -11,7 +11,7 @@ from utils.datetime_local import localize_datetime
 from utils.debug import *
 from utils.asc_mc_houses import calculate_asc_mc_and_houses
 from utils.planet_positions import calculate_planets
-from utils.lunar_calc import jd_utc, sun_moon_state, scan_phase_events, scan_perigee_apogee, lunar_sign_from_longitude, lunar_sign_mix
+from utils.lunar_calc import jd_utc, sun_moon_state, scan_phase_events, scan_perigee_apogee, lunar_sign_from_longitude, lunar_sign_mix, refine_sign_cusp
 
 import traceback
 
@@ -111,17 +111,55 @@ def calc_year():
                 day_dict['moon_sign_primary_pct'] = primary_pct
             secondary = mix.get('secondary_sign')
             secondary_pct = mix.get('secondary_pct')
+            # Adjuntar longitudes crudas al inicio/fin del día
+            try:
+                lon_start = sun_moon_state(jd_utc(start_dt))[1]
+                lon_end = sun_moon_state(jd_utc(end_dt))[1]
+                # Normalizar a 0..360 para salida estable
+                lon_start_n = (lon_start % 360.0 + 360.0) % 360.0
+                lon_end_n = (lon_end % 360.0 + 360.0) % 360.0
+                day_dict['moon_long_start_deg'] = round(lon_start_n, 3)
+                day_dict['moon_long_end_deg'] = round(lon_end_n, 3)
+                # Delta hacia adelante (desenrollado)
+                lon_end_unwrapped = lon_end
+                while lon_end_unwrapped < lon_start - 1e-9:
+                    lon_end_unwrapped += 360.0
+                delta = max(0.0, lon_end_unwrapped - lon_start)
+                day_dict['moon_long_delta_deg'] = round(delta, 3)
+                # Signos de inicio/fin
+                sign_start = lunar_sign_from_longitude(lon_start, zodiac_mode)
+                sign_end = lunar_sign_from_longitude(lon_end, zodiac_mode)
+                day_dict['moon_sign_start'] = sign_start
+                day_dict['moon_sign_end'] = sign_end
+            except Exception:
+                pass
+
             # Política: 100% sólo si no hubo cruce de signo; si hubo, reportar mezcla exacta.
             segs = mix.get('segments') or []
             crosses = sum(1 for s in segs if (s.get('share') or 0) > 0) > 1
             if crosses and secondary is not None:
                 day_dict['moon_sign_secondary'] = secondary
                 day_dict['moon_sign_secondary_pct'] = secondary_pct
+                day_dict['moon_sign_crossed'] = True
+                # Intentar reportar instante de cúspide cuando sólo hay un cruce
+                try:
+                    # Detectar cúspide inmediata siguiente al inicio
+                    lon_start = sun_moon_state(jd_utc(start_dt))[1]
+                    base_sector = int((lon_start % 360.0) // 30)
+                    cusp_deg = (base_sector + 1) * 30.0
+                    cusp_deg = cusp_deg % 360.0
+                    cusp_time = refine_sign_cusp(start_dt, end_dt, cusp_deg)
+                    if cusp_time:
+                        day_dict['moon_sign_cusp_utc'] = cusp_time.astimezone(timezone.utc).isoformat()
+                        day_dict['moon_sign_cusp_deg'] = cusp_deg
+                except Exception:
+                    pass
             else:
                 # Día puro
                 day_dict.pop('moon_sign_secondary', None)
                 day_dict.pop('moon_sign_secondary_pct', None)
                 day_dict['moon_sign_primary_pct'] = 1.0
+                day_dict['moon_sign_crossed'] = False
             # Do not include segments in simple mode
 
         # First compute a baseline 364 days; we will extend by 7 if added week is flagged on last day

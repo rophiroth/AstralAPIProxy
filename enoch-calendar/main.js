@@ -282,11 +282,7 @@ function formatSignMix(d) {
     if (!Number.isFinite(sPct) && Number.isFinite(pPct)) {
       sPct = Math.max(0, 1 - pPct);
     }
-    // Only show percentages when the secondary share is significant
-    if (Number.isFinite(pPct) && pPct >= pureClamp) {
-      // Treat high-primary days as pure to emphasize one dominant day
-      return primary || '';
-    }
+    // Si backend envía secundario válido, priorizar mostrar mezcla (sin ocultar por pureClamp)
     if (secondary && Number.isFinite(sPct) && Number.isFinite(pPct) && primary && primary !== secondary) {
       // Decide if we should show mix using fractional threshold to support <1%
       const edgeRoundingCase = (Math.round(pPct * 100) === 100 && Math.round((1 - pPct) * 100) === 0 && pPct < 1 && sPct > 0);
@@ -319,6 +315,10 @@ function formatSignMix(d) {
       const mode = getSignOrderMode();
       if (mode === 'percent' && s > p) { const tmp = p; p = s; s = tmp; }
       return `${primary} ${p}% / ${s}%`;
+    }
+    // Si no hay secundario ni shares utilizables: aplicar clamp de pureza sólo como fallback
+    if (Number.isFinite(pPct) && pPct >= pureClamp) {
+      return primary || '';
     }
     return primary || '';
   } catch(_) { return d.moon_sign || ''; }
@@ -1870,4 +1870,3 @@ async function initCalendar() {
 try { window.renderCalendar = renderCalendar; } catch(_) {}
 
 initCalendar();
-

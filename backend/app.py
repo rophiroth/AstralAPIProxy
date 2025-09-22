@@ -113,8 +113,10 @@ def calc_year():
             secondary_pct = mix.get('secondary_pct')
             # Adjuntar longitudes crudas al inicio/fin del día
             try:
-                lon_start = sun_moon_state(jd_utc(start_dt))[1]
-                lon_end = sun_moon_state(jd_utc(end_dt))[1]
+                s_state = sun_moon_state(jd_utc(start_dt))
+                e_state = sun_moon_state(jd_utc(end_dt))
+                lon_start = s_state[1]
+                lon_end = e_state[1]
                 # Normalizar a 0..360 para salida estable
                 lon_start_n = (lon_start % 360.0 + 360.0) % 360.0
                 lon_end_n = (lon_end % 360.0 + 360.0) % 360.0
@@ -131,6 +133,13 @@ def calc_year():
                 sign_end = lunar_sign_from_longitude(lon_end, zodiac_mode)
                 day_dict['moon_sign_start'] = sign_start
                 day_dict['moon_sign_end'] = sign_end
+                # Fase e iluminación al inicio/fin del día enojeano
+                phase_start, illum_start = s_state[2], s_state[3]
+                phase_end, illum_end = e_state[2], e_state[3]
+                day_dict['moon_phase_angle_start_deg'] = round(phase_start, 3)
+                day_dict['moon_phase_angle_end_deg'] = round(phase_end, 3)
+                day_dict['moon_illum_start'] = round(illum_start, 6)
+                day_dict['moon_illum_end'] = round(illum_end, 6)
             except Exception:
                 pass
 

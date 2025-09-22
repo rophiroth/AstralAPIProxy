@@ -386,10 +386,24 @@ function pickMoonIcon(d, lunarMap, override) {
   if (override && override.icon) {
     return { icon: override.icon, isNewEvt: d.moon_event === 'new', isFullEvt: d.moon_event === 'full' };
   }
-  // 2) Exact backend event → use faces (🌚/🌝/🌛/🌜)
-  if (d.moon_event) {
+  // 2) Exact backend event → use faces (🌚/🌝/🌛/🌜) only if enabled
+  if ((typeof useServerEvents === 'function' ? useServerEvents() : false) && d.moon_event) {
     const m = { new: '🌚', full: '🌝', first_quarter: '🌛', last_quarter: '🌜' };
     return { icon: m[d.moon_event] || '', isNewEvt: d.moon_event === 'new', isFullEvt: d.moon_event === 'full' };
+  }
+  // 2b) Client-side: if angle is near canonical targets, use faces
+  if (Number.isFinite(d.moon_phase_angle_deg)) {
+    const a = ((d.moon_phase_angle_deg % 360) + 360) % 360;
+    const targets = [0,90,180,270];
+    const faces = ['🌚','🌛','🌝','🌜'];
+    let bestIdx = 0, bestD = 1e9;
+    for (let i=0;i<targets.length;i++) {
+      let dist = Math.abs(a - targets[i]);
+      if (dist > 180) dist = 360 - dist;
+      if (dist < bestD) { bestD = dist; bestIdx = i; }
+    }
+    const limit = (bestIdx === 1 || bestIdx === 3) ? SNAP_DEG_QUARTER : SNAP_DEG_SYZIGY;
+    if (bestD <= limit) return { icon: faces[bestIdx], isNewEvt: bestIdx===0, isFullEvt: bestIdx===2 };
   }
   // 3) Angle from backend, clamped by illumination extremes
   if (Number.isFinite(d.moon_phase_angle_deg)) {
@@ -420,7 +434,10 @@ function buildMoonTooltip(d, lunarMap) {
     const LblEvent = i18nWord('labelEvent');
     const LblSign = i18nWord('labelSign');
     const LblDist = i18nWord('labelDistance');
-    const evt = d.moon_event ? `, ${LblEvent}: ${moonEventLabel(d.moon_event)}${d.moon_event_utc?(' @ '+d.moon_event_utc):''}` : '';
+    let evt = '';
+    if (typeof useServerEvents === 'function' ? useServerEvents() : false) {
+      if (d.moon_event) evt = `, ${LblEvent}: ${moonEventLabel(d.moon_event)}${d.moon_event_utc?(' @ '+d.moon_event_utc):''}`;
+    }
     const signText = formatSignMix(d);
     const degText = formatStartEndLunar(d);
     const sign = (signText || degText) ? `, ${LblSign}: ${signText}${degText ? ' ('+degText+')' : ''}` : '';
@@ -1419,6 +1436,14 @@ function renderCalendar(data) {
   } catch(_){}
   const festivalMap = buildFestivalMap(data);
   const lunarMap = buildLunarMap(data);
+  function useServerEvents() {
+    try {
+      const q = (getQS().get('events') || '').toLowerCase();
+      if (['server','backend','on','1','yes','true'].includes(q)) return true;
+      if (['client','local','off','0','no','false'].includes(q)) return false;
+    } catch(_) {}
+    return false; // default: client-side event derivation
+  }
   function useIconOverrides() {
     try {
       const q = (getQS().get('icons') || '').toLowerCase();

@@ -1471,7 +1471,20 @@ function renderCalendar(data) {
         isNewEvt = d.moon_event === 'new';
         isFullEvt = d.moon_event === 'full';
       } else if (Number.isFinite(d.moon_phase_angle_deg)) {
-        dayIcon = snapIconFromAngle(d.moon_phase_angle_deg);
+        // Minimal safety: trust backend angle, but clamp extremes by illumination
+        const fRaw = Number(d.moon_illum);
+        const f = Number.isFinite(fRaw) ? (fRaw > 1 ? fRaw/100 : fRaw) : NaN;
+        if (Number.isFinite(f)) {
+          if (f <= 0.02) {
+            dayIcon = '🌑';
+          } else if (f >= 0.98) {
+            dayIcon = '🌕';
+          } else {
+            dayIcon = snapIconFromAngle(d.moon_phase_angle_deg);
+          }
+        } else {
+          dayIcon = snapIconFromAngle(d.moon_phase_angle_deg);
+        }
       } else {
         const lm = lunarMap.get(d.day_of_year);
         if (lm) {
@@ -1592,7 +1605,15 @@ function renderCalendar(data) {
           newEvt2 = d.moon_event === 'new';
           fullEvt2 = d.moon_event === 'full';
         } else if (Number.isFinite(d.moon_phase_angle_deg)) {
-          icon2 = snapIconFromAngle(d.moon_phase_angle_deg);
+          const fRaw2 = Number(d.moon_illum);
+          const f2 = Number.isFinite(fRaw2) ? (fRaw2 > 1 ? fRaw2/100 : fRaw2) : NaN;
+          if (Number.isFinite(f2)) {
+            if (f2 <= 0.02) icon2 = '🌑';
+            else if (f2 >= 0.98) icon2 = '🌕';
+            else icon2 = snapIconFromAngle(d.moon_phase_angle_deg);
+          } else {
+            icon2 = snapIconFromAngle(d.moon_phase_angle_deg);
+          }
         } else if (lm2) {
           // Fallback (approx) uses discs/half-discs; faces only on precise events
           if (lm2.isNew) icon2 = '🌑';

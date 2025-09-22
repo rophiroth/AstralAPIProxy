@@ -151,6 +151,31 @@ function i18nWord(key) {
   return map[key] || key;
 }
 
+// Format start/end longitudes with zodiac labels from backend
+function formatStartEndLunar(d) {
+  try {
+    const ls = Number(d.moon_long_start_deg);
+    const le = Number(d.moon_long_end_deg);
+    const ss = d.moon_sign_start || '';
+    const se = d.moon_sign_end || '';
+    if (!Number.isFinite(ls) || !Number.isFinite(le)) return '';
+    const fmt = (x) => (Math.round(x * 10) / 10).toFixed(1);
+    const degInSign = (x) => {
+      const n = ((x % 360) + 360) % 360;
+      return n % 30;
+    };
+    const a = fmt(degInSign(ls)) + '°';
+    const b = fmt(degInSign(le)) + '°';
+    if (ss && se && ss !== se) {
+      return `${ss} ${a} → ${se} ${b}`;
+    }
+    if (ss) return `${ss} ${a} → ${b}`;
+    if (se) return `${a} → ${se} ${b}`;
+    return `${a} → ${b}`;
+  } catch(_) { return '';
+  }
+}
+
 // Normalize percent-like values to fraction [0..1]
 function pctToFrac(val) {
   try {
@@ -1408,7 +1433,8 @@ function renderCalendar(data) {
         const LblDist = i18nWord('labelDistance');
         const evt = d.moon_event ? `, ${LblEvent}: ${moonEventLabel(d.moon_event)}${d.moon_event_utc?(' @ '+d.moon_event_utc):''}` : '';
         const signText = formatSignMix(d);
-        const sign = signText ? `, ${LblSign}: ${signText}` : '';
+        const degText = formatStartEndLunar(d);
+        const sign = (signText || degText) ? `, ${LblSign}: ${signText}${degText ? ' ('+degText+')' : ''}` : '';
         const dist = (Number.isFinite(d.moon_distance_km)) ? `, ${LblDist}: ${d.moon_distance_km} km` : '';
         const illumVal = Number(d.moon_illum);
         const pct = formatIllumPercent(illumVal);
@@ -1530,7 +1556,8 @@ function renderCalendar(data) {
         const LblDist = i18nWord('labelDistance');
         const evt2 = d.moon_event ? `, ${LblEvent}: ${moonEventLabel(d.moon_event)}${d.moon_event_utc?(' @ '+d.moon_event_utc):''}` : '';
         const sign2Text = formatSignMix(d);
-        const sign2 = sign2Text ? `, ${LblSign}: ${sign2Text}` : '';
+        const deg2Text = formatStartEndLunar(d);
+        const sign2 = (sign2Text || deg2Text) ? `, ${LblSign}: ${sign2Text}${deg2Text ? ' ('+deg2Text+')' : ''}` : '';
         const dist2 = (Number.isFinite(d.moon_distance_km)) ? `, ${LblDist}: ${d.moon_distance_km} km` : '';
         const illumVal2 = Number(d.moon_illum);
         const pct2 = formatIllumPercent(illumVal2);

@@ -11,7 +11,7 @@ from utils.datetime_local import localize_datetime
 from utils.debug import *
 from utils.asc_mc_houses import calculate_asc_mc_and_houses
 from utils.planet_positions import calculate_planets
-from utils.lunar_calc import jd_utc, sun_moon_state, scan_phase_events, scan_perigee_apogee, lunar_sign_from_longitude, lunar_sign_mix_linear
+from utils.lunar_calc import jd_utc, sun_moon_state, scan_phase_events, scan_perigee_apogee, lunar_sign_from_longitude, lunar_sign_mix
 
 import traceback
 
@@ -96,10 +96,17 @@ def calc_year():
         start_utc = dt_utc - timedelta(days=int(enoch_day_of_year) - 1)
 
         days = []
+        # Anti-ruido: umbral mínimo para reportar signo secundario (e.g., 0.5%)
+        try:
+            min_secondary_share = float(data.get('min_secondary_share', 0.005))
+            if min_secondary_share < 0: min_secondary_share = 0.0
+            if min_secondary_share > 0.1: min_secondary_share = 0.1
+        except Exception:
+            min_secondary_share = 0.005
 
         def enrich_with_moon_mix(day_dict, start_dt, end_dt):
-            # Simple, deterministic split based on lunar longitudes at start/end
-            mix = lunar_sign_mix_linear(start_dt, end_dt, zodiac_mode)
+            # Preciso: detecta cruce(s) reales y reparte por tiempo en cada signo
+            mix = lunar_sign_mix(start_dt, end_dt, zodiac_mode)
             if not mix:
                 return
             primary = mix.get('primary_sign')
@@ -111,13 +118,16 @@ def calc_year():
                 day_dict['moon_sign_primary_pct'] = primary_pct
             secondary = mix.get('secondary_sign')
             secondary_pct = mix.get('secondary_pct')
-            if secondary:
+            # Gate para evitar falsos positivos de mezcla por ruido numérico
+            if secondary and (secondary_pct or 0.0) >= min_secondary_share:
                 day_dict['moon_sign_secondary'] = secondary
-                if secondary_pct is not None:
-                    day_dict['moon_sign_secondary_pct'] = secondary_pct
+                day_dict['moon_sign_secondary_pct'] = secondary_pct
             else:
+                # Tratar como día puro
                 day_dict.pop('moon_sign_secondary', None)
                 day_dict.pop('moon_sign_secondary_pct', None)
+                if 'moon_sign_primary_pct' in day_dict:
+                    day_dict['moon_sign_primary_pct'] = 1.0
             # Do not include segments in simple mode
 
         # First compute a baseline 364 days; we will extend by 7 if added week is flagged on last day

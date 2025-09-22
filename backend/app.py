@@ -100,29 +100,58 @@ def calc_year():
         total_days = 364
         def sign_fractions(s_prev, s_today, zodiac_mode, step_hours=2):
             try:
-                counts = {}
-                t = s_prev
-                total = 0
-                while t <= s_today:
-                    jd_s = jd_utc(t)
-                    lon_sun, lon_moon, phase, illum, dist_km = sun_moon_state(jd_s)
-                    sign = lunar_sign_from_longitude(lon_moon, zodiac_mode)
-                    counts[sign] = counts.get(sign, 0) + 1
-                    total += 1
-                    t += timedelta(hours=step_hours)
-                if total <= 0:
+                # Accumulate actual durations per sign within [s_prev, s_today)
+                def sign_idx_for_time(tt):
+                    jd_s = jd_utc(tt)
+                    lon_sun, lon_moon, *_ = sun_moon_state(jd_s)
+                    idx = int(((lon_moon % 360.0) / 30.0)) % 12
+                    return idx
+
+                durations = {}
+                t0 = s_prev
+                while t0 < s_today:
+                    t1 = min(t0 + timedelta(hours=step_hours), s_today)
+                    i0 = sign_idx_for_time(t0)
+                    i1 = sign_idx_for_time(t1)
+                    if i0 == i1:
+                        dt = (t1 - t0).total_seconds()
+                        durations[i0] = durations.get(i0, 0.0) + dt
+                    else:
+                        # Refine boundary crossing within [t0, t1]
+                        a, b = t0, t1
+                        ia = i0
+                        for _ in range(25):
+                            mid = a + (b - a) / 2
+                            im = sign_idx_for_time(mid)
+                            if im == ia:
+                                a = mid
+                            else:
+                                b = mid
+                            if (b - a).total_seconds() <= 1:
+                                break
+                        tc = b  # crossing time approx
+                        dt1 = (tc - t0).total_seconds()
+                        dt2 = (t1 - tc).total_seconds()
+                        durations[i0] = durations.get(i0, 0.0) + max(0.0, dt1)
+                        durations[i1] = durations.get(i1, 0.0) + max(0.0, dt2)
+                    t0 = t1
+
+                total_sec = sum(durations.values())
+                if total_sec <= 0:
                     return None
-                # Normalize to fractions
-                fracs = {k: v/total for k, v in counts.items()}
-                # Primary and optional secondary
-                items = sorted(fracs.items(), key=lambda kv: kv[1], reverse=True)
-                primary = items[0] if items else (None, 0)
-                secondary = items[1] if len(items) > 1 else (None, 0)
+                # Map indices to names and fractions
+                items = sorted(durations.items(), key=lambda kv: kv[1], reverse=True)
+                def idx_to_name(idx):
+                    # Use a representative longitude within the sign to retrieve the label
+                    lon_rep = (idx * 30.0) + 0.1
+                    return lunar_sign_from_longitude(lon_rep, zodiac_mode)
+                primary_idx, primary_dt = (items[0] if items else (None, 0.0))
+                secondary_idx, secondary_dt = (items[1] if len(items) > 1 else (None, 0.0))
                 return {
-                    'primary': primary[0],
-                    'primary_pct': primary[1],
-                    'secondary': secondary[0],
-                    'secondary_pct': secondary[1]
+                    'primary': idx_to_name(primary_idx) if primary_idx is not None else None,
+                    'primary_pct': (primary_dt / total_sec) if total_sec > 0 else 0.0,
+                    'secondary': idx_to_name(secondary_idx) if secondary_idx is not None else None,
+                    'secondary_pct': (secondary_dt / total_sec) if total_sec > 0 else 0.0,
                 }
             except Exception:
                 return None

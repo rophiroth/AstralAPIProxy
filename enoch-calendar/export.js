@@ -3,7 +3,15 @@ function downloadCSV(data) {
   const hasLunar = typeof data[0].moon_phase_angle_deg !== 'undefined';
   const hasHebrew = typeof data[0].he_year !== 'undefined';
   const baseHeader = ['gregorian','enoch_year','enoch_month','enoch_day','day_of_year','added_week','name','start_utc','end_utc'];
-  const lunarHeader = hasLunar ? ['moon_phase_angle_deg','moon_illum','moon_icon','moon_event','moon_event_utc','moon_sign','moon_sign_primary','moon_sign_primary_pct','moon_sign_secondary','moon_sign_secondary_pct','moon_zodiac_mode','moon_distance_km','perigee','perigee_utc','apogee','apogee_utc'] : [];
+  const lunarHeader = hasLunar ? [
+    'moon_phase_angle_deg',
+    'moon_phase_angle_start_deg','moon_phase_angle_end_deg',
+    'moon_illum','moon_illum_start','moon_illum_end',
+    'moon_icon','moon_event','moon_event_utc',
+    'moon_sign','moon_sign_primary','moon_sign_primary_pct','moon_sign_secondary','moon_sign_secondary_pct','moon_zodiac_mode',
+    'moon_long_start_deg','moon_long_end_deg','moon_long_delta_deg','moon_sign_start','moon_sign_end',
+    'moon_distance_km','perigee','perigee_utc','apogee','apogee_utc'
+  ] : [];
   const hebrewHeader = hasHebrew ? ['he_year','he_month','he_day','he_month_name','is_rosh_chodesh','he_holiday_code','he_holiday_name'] : [];
   const header = [...baseHeader, ...lunarHeader, ...hebrewHeader].join(',');
   const rows = data.map(d => {
@@ -20,7 +28,8 @@ function downloadCSV(data) {
     ];
     const lunar = hasLunar ? [
       (d.moon_phase_angle_deg ?? ''),
-      (d.moon_illum ?? ''),
+      (d.moon_phase_angle_start_deg ?? ''),(d.moon_phase_angle_end_deg ?? ''),
+      (d.moon_illum ?? ''),(d.moon_illum_start ?? ''),(d.moon_illum_end ?? ''),
       (d.moon_icon ?? ''),
       (d.moon_event ?? ''),
       (d.moon_event_utc ?? ''),
@@ -30,6 +39,7 @@ function downloadCSV(data) {
       (d.moon_sign_secondary ?? ''),
       (typeof d.moon_sign_secondary_pct !== 'undefined' ? d.moon_sign_secondary_pct : ''),
       (d.moon_zodiac_mode ?? ''),
+      (d.moon_long_start_deg ?? ''),(d.moon_long_end_deg ?? ''),(d.moon_long_delta_deg ?? ''),(d.moon_sign_start ?? ''),(d.moon_sign_end ?? ''),
       (d.moon_distance_km ?? ''),
       (d.perigee ? '1' : ''),
       (d.perigee_utc ?? ''),

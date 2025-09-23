@@ -80,7 +80,10 @@ function parseCSV(text) {
 
   const NUM_FIELDS = new Set([
     'enoch_year','enoch_month','enoch_day','day_of_year',
-    'moon_phase_angle_deg','moon_illum','moon_distance_km',
+    'moon_phase_angle_deg','moon_phase_angle_start_deg','moon_phase_angle_end_deg',
+    'moon_illum','moon_illum_start','moon_illum_end',
+    'moon_long_start_deg','moon_long_end_deg','moon_long_delta_deg',
+    'moon_distance_km',
     'moon_sign_primary_pct','moon_sign_secondary_pct',
     'he_year','he_month','he_day'
   ]);
@@ -103,7 +106,7 @@ function parseCSV(text) {
         let num = toNum(val);
         // Field-specific normalization
         if (typeof num !== 'undefined') {
-          if (key === 'moon_illum') {
+          if (key === 'moon_illum' || key === 'moon_illum_start' || key === 'moon_illum_end') {
             // Ensure fraction 0..1. If value looks like percent (had % or >1), scale down
             const raw = String(val || '');
             if (/%$/.test(raw) || num > 1) num = num / 100;

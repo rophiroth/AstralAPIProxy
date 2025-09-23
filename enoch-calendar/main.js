@@ -260,7 +260,9 @@ function formatIllumPercent(illum) {
   const x = Number(illum);
   if (!Number.isFinite(x) || x < 0) return '';
   const p = x * 100;
-  if (p > 0 && p < 10) return p.toFixed(1) + '%';
+  // Finer precision near zero to capture subtle changes
+  if (p > 0 && p < 1) return p.toFixed(2) + '%';
+  if (p >= 1 && p < 10) return p.toFixed(1) + '%';
   return Math.round(p) + '%';
 }
 
@@ -442,7 +444,27 @@ function buildMoonTooltip(d, lunarMap) {
     const degText = formatStartEndLunar(d);
     const sign = (signText || degText) ? `, ${LblSign}: ${signText}${degText ? ' ('+degText+')' : ''}` : '';
     const dist = (Number.isFinite(d.moon_distance_km)) ? `, ${LblDist}: ${d.moon_distance_km} km` : '';
-    const pct = formatIllumPercent(d.moon_illum);
+    // Prefer start/end illumination across the Enoch day if available
+    const hasSE = Number.isFinite(d.moon_illum_start) && Number.isFinite(d.moon_illum_end);
+    let pct = formatIllumPercent(d.moon_illum);
+    if (hasSE) {
+      const startPct = formatIllumPercent(d.moon_illum_start);
+      const endPct = formatIllumPercent(d.moon_illum_end);
+      const eps = 0.0005; // ~0.05%
+      const delta = Number(d.moon_illum_end) - Number(d.moon_illum_start);
+      if (Math.abs(delta) <= eps) {
+        // Equal within epsilon: if an event occurs inside, show valley/peak explicitly
+        if (d.moon_event === 'new') {
+          pct = `${startPct} ↘ 0% ↗ ${endPct}`;
+        } else if (d.moon_event === 'full') {
+          pct = `${startPct} ↗ 100% ↘ ${endPct}`;
+        } else {
+          pct = `${startPct} ↔ ${endPct}`;
+        }
+      } else {
+        pct = `${startPct} ${delta > 0 ? '↗' : '↘'} ${endPct}`;
+      }
+    }
     return `\n${LblMoon}: ${pct}${evt}${sign}${dist}`;
   }
   const lm = lunarMap && lunarMap.get(d.day_of_year);
@@ -598,7 +620,15 @@ function buildCsvText(rows) {
   const hasLunar = typeof rows[0].moon_phase_angle_deg !== 'undefined';
   const hasHebrew = typeof rows[0].he_year !== 'undefined';
   const baseHeader = ['gregorian','enoch_year','enoch_month','enoch_day','day_of_year','added_week','name','start_utc','end_utc'];
-  const lunarHeader = hasLunar ? ['moon_phase_angle_deg','moon_illum','moon_icon','moon_event','moon_event_utc','moon_sign','moon_sign_primary','moon_sign_primary_pct','moon_sign_secondary','moon_sign_secondary_pct','moon_zodiac_mode','moon_distance_km','perigee','perigee_utc','apogee','apogee_utc'] : [];
+  const lunarHeader = hasLunar ? [
+    'moon_phase_angle_deg',
+    'moon_phase_angle_start_deg','moon_phase_angle_end_deg',
+    'moon_illum','moon_illum_start','moon_illum_end',
+    'moon_icon','moon_event','moon_event_utc',
+    'moon_sign','moon_sign_primary','moon_sign_primary_pct','moon_sign_secondary','moon_sign_secondary_pct','moon_zodiac_mode',
+    'moon_long_start_deg','moon_long_end_deg','moon_long_delta_deg','moon_sign_start','moon_sign_end',
+    'moon_distance_km','perigee','perigee_utc','apogee','apogee_utc'
+  ] : [];
   const hebrewHeader = hasHebrew ? ['he_year','he_month','he_day','he_month_name','is_rosh_chodesh','he_holiday_code','he_holiday_name'] : [];
   const header = [...baseHeader, ...lunarHeader, ...hebrewHeader].join(',');
   const lines = rows.map(d => {
@@ -620,7 +650,8 @@ function buildCsvText(rows) {
     ];
     const lunar = hasLunar ? [
       (d.moon_phase_angle_deg ?? ''),
-      (d.moon_illum ?? ''),
+      (d.moon_phase_angle_start_deg ?? ''),(d.moon_phase_angle_end_deg ?? ''),
+      (d.moon_illum ?? ''),(d.moon_illum_start ?? ''),(d.moon_illum_end ?? ''),
       (d.moon_icon ?? ''),
       (d.moon_event ?? ''),
       (d.moon_event_utc ?? ''),
@@ -630,6 +661,7 @@ function buildCsvText(rows) {
       (d.moon_sign_secondary ?? ''),
       (typeof d.moon_sign_secondary_pct !== 'undefined' ? d.moon_sign_secondary_pct : ''),
       (d.moon_zodiac_mode ?? ''),
+      (d.moon_long_start_deg ?? ''),(d.moon_long_end_deg ?? ''),(d.moon_long_delta_deg ?? ''),(d.moon_sign_start ?? ''),(d.moon_sign_end ?? ''),
       (d.moon_distance_km ?? ''),
       (d.perigee ? '1' : ''),
       (d.perigee_utc ?? ''),
@@ -711,7 +743,7 @@ const setYearLabel = (window.setYearLabel) ? window.setYearLabel : function(year
 };
 
 // Simple visible version to verify deploy
-const APP_VERSION = 'calendar@2025-08-28T00:00Z';
+const APP_VERSION = 'calendar@2025-09-22T00:00Z';
 try {
   const s = document.getElementById('status');
   if (s) s.textContent = (s.textContent ? s.textContent + ' | ' : '') + APP_VERSION;
@@ -924,7 +956,11 @@ async function loadYearFromCSV(year) {
           end_utc: r.end_utc || sunsetPairForYMD(r.gregorian, uLat1, uLon1).endUTC?.toISOString() || '',
           // Carry lunar fields from CSV if present
           moon_phase_angle_deg: (Number.isFinite(r.moon_phase_angle_deg) ? r.moon_phase_angle_deg : undefined),
+          moon_phase_angle_start_deg: (Number.isFinite(r.moon_phase_angle_start_deg) ? r.moon_phase_angle_start_deg : undefined),
+          moon_phase_angle_end_deg: (Number.isFinite(r.moon_phase_angle_end_deg) ? r.moon_phase_angle_end_deg : undefined),
           moon_illum: (Number.isFinite(r.moon_illum) ? r.moon_illum : undefined),
+          moon_illum_start: (Number.isFinite(r.moon_illum_start) ? r.moon_illum_start : undefined),
+          moon_illum_end: (Number.isFinite(r.moon_illum_end) ? r.moon_illum_end : undefined),
           moon_icon: r.moon_icon,
           moon_event: r.moon_event,
           moon_event_utc: r.moon_event_utc,
@@ -934,6 +970,11 @@ async function loadYearFromCSV(year) {
           moon_sign_secondary: r.moon_sign_secondary,
           moon_sign_secondary_pct: (Number.isFinite(r.moon_sign_secondary_pct) ? r.moon_sign_secondary_pct : (r.moon_sign_secondary_pct ? Number(r.moon_sign_secondary_pct) : undefined)),
           moon_zodiac_mode: r.moon_zodiac_mode,
+          moon_long_start_deg: (Number.isFinite(r.moon_long_start_deg) ? r.moon_long_start_deg : undefined),
+          moon_long_end_deg: (Number.isFinite(r.moon_long_end_deg) ? r.moon_long_end_deg : undefined),
+          moon_long_delta_deg: (Number.isFinite(r.moon_long_delta_deg) ? r.moon_long_delta_deg : undefined),
+          moon_sign_start: r.moon_sign_start,
+          moon_sign_end: r.moon_sign_end,
           moon_distance_km: (Number.isFinite(r.moon_distance_km) ? r.moon_distance_km : undefined),
           perigee: !!r.perigee,
           perigee_utc: r.perigee_utc,
@@ -972,7 +1013,11 @@ async function loadYearFromCSV(year) {
       start_utc: r.start_utc,
       end_utc: r.end_utc,
       moon_phase_angle_deg: (Number.isFinite(r.moon_phase_angle_deg) ? r.moon_phase_angle_deg : undefined),
+      moon_phase_angle_start_deg: (Number.isFinite(r.moon_phase_angle_start_deg) ? r.moon_phase_angle_start_deg : undefined),
+      moon_phase_angle_end_deg: (Number.isFinite(r.moon_phase_angle_end_deg) ? r.moon_phase_angle_end_deg : undefined),
       moon_illum: (Number.isFinite(r.moon_illum) ? r.moon_illum : undefined),
+      moon_illum_start: (Number.isFinite(r.moon_illum_start) ? r.moon_illum_start : undefined),
+      moon_illum_end: (Number.isFinite(r.moon_illum_end) ? r.moon_illum_end : undefined),
       moon_icon: r.moon_icon,
       moon_event: r.moon_event,
       moon_event_utc: r.moon_event_utc,
@@ -982,6 +1027,11 @@ async function loadYearFromCSV(year) {
       moon_sign_secondary: r.moon_sign_secondary,
       moon_sign_secondary_pct: (Number.isFinite(r.moon_sign_secondary_pct) ? r.moon_sign_secondary_pct : (r.moon_sign_secondary_pct ? Number(r.moon_sign_secondary_pct) : undefined)),
       moon_zodiac_mode: r.moon_zodiac_mode,
+      moon_long_start_deg: (Number.isFinite(r.moon_long_start_deg) ? r.moon_long_start_deg : undefined),
+      moon_long_end_deg: (Number.isFinite(r.moon_long_end_deg) ? r.moon_long_end_deg : undefined),
+      moon_long_delta_deg: (Number.isFinite(r.moon_long_delta_deg) ? r.moon_long_delta_deg : undefined),
+      moon_sign_start: r.moon_sign_start,
+      moon_sign_end: r.moon_sign_end,
       moon_distance_km: (Number.isFinite(r.moon_distance_km) ? r.moon_distance_km : undefined),
       perigee: !!r.perigee,
       perigee_utc: r.perigee_utc,

@@ -299,7 +299,11 @@ def calc_year():
             # Extended ISO (BCE) → JD
             jd = _parse_iso_to_jd(date_str)
             bce_mode = True
-        base_enoch = calculate_enoch_date(jd, latitude, longitude, tz_str)
+        try:
+            base_enoch = calculate_enoch_date(jd, latitude, longitude, tz_str)
+        except Exception:
+            traceback.print_exc()
+            base_enoch = _approx_enoch_from_jd(jd, latitude, longitude)
         enoch_year = base_enoch.get('enoch_year')
         enoch_day_of_year = base_enoch.get('enoch_day_of_year')
         # Determine start anchor

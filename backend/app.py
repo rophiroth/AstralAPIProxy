@@ -29,6 +29,32 @@ else:
 
 CORS(app, resources={r"/calculate": {"origins": allowed_origins}, r"/calcYear": {"origins": allowed_origins}}, supports_credentials=False)
 
+# --- Helpers to support extended ISO (including BCE) directly to JD ---
+import re
+def _parse_iso_to_jd(date_str: str) -> float:
+    """
+    Parse extended ISO8601 like -002971-03-25T21:24:00Z or with offset and return UT JD.
+    If timezone offset is present, convert to UTC by subtracting the offset in days.
+    """
+    iso_re = re.compile(r"^([+-]?\d{1,6})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?(Z|[+-]\d{2}:\d{2})?$")
+    m = iso_re.match(date_str)
+    if not m:
+        raise ValueError("unsupported ISO format")
+    y = int(m.group(1)); mo = int(m.group(2)); d = int(m.group(3))
+    hh = int(m.group(4)); mi = int(m.group(5)); ss = int(m.group(6))
+    micros = int((m.group(7) or '0').ljust(6,'0'))
+    tzpart = m.group(8) or 'Z'
+    frac = hh + mi/60.0 + ss/3600.0 + micros/3600000000.0
+    jd_local = swe.julday(y, mo, d, frac)
+    if tzpart == 'Z':
+        return jd_local
+    # tzpart like +HH:MM or -HH:MM
+    sign = 1 if tzpart[0] == '+' else -1
+    th = int(tzpart[1:3]); tm = int(tzpart[4:6])
+    offset_days = sign * (th*3600 + tm*60) / 86400.0
+    # Local time = UTC + offset ⇒ UTC = local - offset
+    return jd_local - offset_days
+
 @app.route('/calculate', methods=['POST'])
 def calculate():
     try:
@@ -37,13 +63,20 @@ def calculate():
         latitude = float(data.get("latitude"))
         longitude = float(data.get("longitude"))
         tz_str = data.get("timezone", "UTC")
-
-        dt = localize_datetime(date_str, tz_str)
-        utc_dt = dt.astimezone(pytz.utc)
-        jd = swe.julday(
-            utc_dt.year, utc_dt.month, utc_dt.day,
-            utc_dt.hour + utc_dt.minute / 60 + utc_dt.second / 3600 + utc_dt.microsecond / 3600000000
-        )
+        jd = None
+        try:
+            dt = localize_datetime(date_str, tz_str)
+            utc_dt = dt.astimezone(pytz.utc)
+            jd = swe.julday(
+                utc_dt.year, utc_dt.month, utc_dt.day,
+                utc_dt.hour + utc_dt.minute / 60 + utc_dt.second / 3600 + utc_dt.microsecond / 3600000000
+            )
+        except Exception:
+            # Try extended ISO → JD path (supports negative years if ISO has Z/offset)
+            if isinstance(date_str, str):
+                jd = _parse_iso_to_jd(date_str)
+            else:
+                raise
         results = calculate_planets(jd, latitude, longitude)
         enoch_data = calculate_enoch_date(jd, latitude, longitude, tz_str)
         houses_data = calculate_asc_mc_and_houses(jd, latitude, longitude)
@@ -286,6 +319,8 @@ def calc_year():
     except Exception as e:
         traceback.print_exc()
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 
 
 if __name__ == '__main__':

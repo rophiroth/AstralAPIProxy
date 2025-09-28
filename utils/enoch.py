@@ -112,7 +112,7 @@ def find_equinoxes_jd(year:int, longitude:float, latitude:float):
 def find_enoch_year_start(target_date,longitude=REFERENCE_LONGITUDE,latitude=REFERENCE_LATITUDE,debugloop=False):
     """
     Encuentra el inicio del año enojiano basado en el equinoccio real
-    y el martes enojiano más cercano (martes al sunset más próximo).
+    y el miércoles enojiano más cercano (miércoles al sunset más próximo).
     """
     # 1. Obtener JD del equinoccio real
     equinox_jd = calculate_real_equinox_jd(target_date,longitude,latitude)
@@ -121,12 +121,13 @@ def find_enoch_year_start(target_date,longitude=REFERENCE_LONGITUDE,latitude=REF
 
     # 2. Buscar miércoles anterior (Enoj inicia en miércoles)
     jd_before = equinox_jd
-    while swe.day_of_week(jd_before) != 2:  # 0=Lun,1=Mar,2=Mié
+    # Swiss day_of_week: 0=Dom,1=Lun,2=Mar,3=Mié,4=Jue,5=Vie,6=Sáb
+    while swe.day_of_week(jd_before) != 3:
         jd_before -= 1.0
     #debug_jd(jd_before,"jd_before")
     # 3. Buscar miércoles siguiente
     jd_after = equinox_jd
-    while swe.day_of_week(jd_after) != 2:
+    while swe.day_of_week(jd_after) != 3:
         jd_after += 1.0
     #debug_jd(jd_after,"jd_after")
     # 4. Calcular sunsets para ambos martes

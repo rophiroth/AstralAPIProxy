@@ -36,12 +36,13 @@ def _parse_iso_to_jd(date_str: str) -> float:
     Parse extended ISO8601 like -002971-03-25T21:24:00Z or with offset and return UT JD.
     If timezone offset is present, convert to UTC by subtracting the offset in days.
     """
-    iso_re = re.compile(r"^([+-]?\d{1,6})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?(Z|[+-]\d{2}:\d{2})?$")
+    # Support: YYYY-MM-DDTHH:MM[:SS[.us]](Z|±HH:MM)
+    iso_re = re.compile(r"^([+-]?\d{1,6})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,6}))?)?(Z|[+-]\d{2}:\d{2})?$")
     m = iso_re.match(date_str)
     if not m:
         raise ValueError("unsupported ISO format")
     y = int(m.group(1)); mo = int(m.group(2)); d = int(m.group(3))
-    hh = int(m.group(4)); mi = int(m.group(5)); ss = int(m.group(6))
+    hh = int(m.group(4)); mi = int(m.group(5)); ss = int(m.group(6) or 0)
     micros = int((m.group(7) or '0').ljust(6,'0'))
     tzpart = m.group(8) or 'Z'
     frac = hh + mi/60.0 + ss/3600.0 + micros/3600000000.0

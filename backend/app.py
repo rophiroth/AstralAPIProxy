@@ -131,16 +131,17 @@ def _approx_enoch_from_jd(jd: float, latitude: float, longitude: float):
     y, m, d, _ = swe.revjul(jd)
     # Anchor equinox ~
     anchor_jd = swe.julday(int(y), 3, 20, 21 + 24/60)
-    # First Wednesday on/after anchor (Swiss day_of_week: 0=Mon .. 6=Sun)
+    # First Wednesday on/after anchor (Swiss day_of_week: 0=Sun .. 6=Sat)
     start_jd = anchor_jd
-    while swe.day_of_week(start_jd) != 2:
+    # Wednesday is index 3 when 0=Sun
+    while swe.day_of_week(start_jd) != 3:
         start_jd += 1.0
     if jd < start_jd:
         # Use previous year's anchor
         py = int(y) - 1
         pa = swe.julday(py, 3, 20, 21 + 24/60)
         start_jd = pa
-        while swe.day_of_week(start_jd) != 2:
+        while swe.day_of_week(start_jd) != 3:
             start_jd += 1.0
     day_of_year = int(jd - start_jd) + 1
     # Month/day split by fixed months: 30,30,31, ..., 31 (same as frontend)

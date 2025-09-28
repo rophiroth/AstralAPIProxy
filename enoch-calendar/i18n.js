@@ -166,6 +166,8 @@ try { console.log('[i18n] file requested'); } catch(_){ }
       try { localStorage.setItem('lang', window.lang); } catch(_){ }
       try { console.log('[i18n] lang change ->', window.lang); } catch(_){}
       applyTranslations();
+      // Optional: sync external brand link/icon if present
+      try { if (typeof window.syncBrandLink === 'function') window.syncBrandLink(); } catch(_){ }
       // Try to re-render current year label in selected language if we have state
       try {
         if (typeof currentYear !== 'undefined') {
@@ -190,6 +192,8 @@ try { console.log('[i18n] file requested'); } catch(_){ }
   function boot(){
     try { console.log('[i18n] boot'); } catch(_){ }
     applyTranslations();
+    // Optional: sync external brand link/icon if present
+    try { if (typeof window.syncBrandLink === 'function') window.syncBrandLink(); } catch(_){ }
     initLangSelector();
   }
   if (document.readyState === 'loading') {

@@ -2,55 +2,285 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Enoch Calendar</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Calendario de Enoj</title>
   <meta name="api-url" content="https://astralapiproxy.onrender.com/calculate" />
   <style>
-    body { font-family: Arial, sans-serif; margin: 1rem; }
-    .controls { margin-bottom: 1rem; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
-    #calendar { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; }
-    table.month { border-collapse: collapse; width: 100%; }
-    table.month caption { font-weight: bold; background: #f0f0f0; padding: 4px; }
-    table.month th, table.month td { border: 1px solid #ccc; padding: 2px; text-align: center; }
-    .day { font-size: 0.8rem; }
-    .day .num { font-weight: bold; display: inline-flex; align-items: center; gap: 4px; justify-content: center; }
-    .today { background: #ffe0e0; }
-    .day.shabbat { background: #00f; color: #fff; }
-    .day.festival.pesach { background: #800080; color: #fff; }
+    :root{
+      --bg: #faf7ff;
+      --surface: #ffffff;
+      --surface-2: #f4effb;
+      --text: #1d1533;
+      --muted: #6b5a8c;
+      --accent: #5e2d91; /* mikra base */
+      --accent-2: #7b68ee; /* fest-mid */
+      --omer: #6f79ff;
+      --shabbat: #2947ff;
+      --border: #e2d9f5;
+      --shadow: 0 4px 14px rgba(30, 10, 60, 0.08);
+    }
+    @media (prefers-color-scheme: dark){
+      :root{
+        --bg: #0d0b12;
+        --surface: #14101c;
+        --surface-2: #1b1526;
+        --text: #ede7f8;
+        --muted: #bfb5d6;
+        --accent: #7e49c3;
+        --accent-2: #9a8eff;
+        --omer: #8c93ff;
+        --shabbat: #6b84ff;
+        --border: #2b2338;
+        --shadow: 0 6px 18px rgba(0,0,0,0.35);
+      }
+    }
+
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; color: var(--text); background: var(--bg); }
+    .wrap { padding: 0 1rem 1rem; }
+
+    /* Top bar */
+    .topbar { position: sticky; top: 0; z-index: 100; background: linear-gradient(180deg, var(--surface), var(--surface-2)); box-shadow: var(--shadow); padding: 0.5rem 1rem; }
+    .topbar-inner { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: 1fr; gap: 0.4rem; }
+    @media (min-width: 860px){ .topbar-inner { grid-template-columns: 1fr auto; align-items: center; } }
+    h1 { margin: 0; font-size: 1.25rem; letter-spacing: 0.2px; }
+    /* Brand */
+    .brand { display: inline-flex; align-items: center; gap: 8px; }
+    .brand a { color: inherit; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
+    .brand-logo { width: 40px; height: 40px; border-radius: 8px; box-shadow: var(--shadow); object-fit: cover; }
+
+    .controls { margin: 0.25rem 0 0; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+    #calendar { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.5rem; }
+    /* Desktop: 3 columns (4 filas x 3 meses) for more width per month */
+    @media (min-width: 1024px) {
+      #calendar { grid-template-columns: repeat(3, 1fr); gap: 0.6rem; }
+    }
+    table.month { border-collapse: collapse; width: 100%; table-layout: fixed; background: var(--surface); border-radius: 10px; overflow: hidden; box-shadow: var(--shadow); }
+    table.month caption { font-weight: 700; background: var(--surface-2); color: var(--text); padding: 6px 8px; font-size: 0.98rem; text-align: left; }
+    table.month th, table.month td { border: 1px solid var(--border); padding: 2px; text-align: center; vertical-align: top; }
+    table.month th, table.month td { word-break: break-word; }
+    /* Uniform cell heights across months (desktop baseline) */
+    table.month td { height: 72px; }
+    .day { font-size: 0.9rem; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 2px; height: 100%; border-radius: 6px; }
+    .day .num { font-weight: bold; }
+    .day .shem { font-size: 0.78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .today { outline: 2px solid var(--accent-2); background: rgba(123,104,238,0.08); }
+    .day.shabbat { box-shadow: inset 0 0 0 3px var(--shabbat); color: inherit; background: transparent; }
+    .day.festival.pesach { background: var(--accent); color: #fff; }
     .day.festival.sukkot { background: #9b30ff; color: #fff; }
-    /* Moon indicator */
-    .day .moon { font-size: 0.9rem; line-height: 1; opacity: 0.9; }
-    .day.moon-new { box-shadow: inset 0 0 0 2px rgba(0,0,0,0.08); }
-    .day.moon-full { box-shadow: inset 0 0 0 2px rgba(255,215,0,0.2); }
-    .day.lunar-rosh { outline: 2px dashed #555; outline-offset: -2px; }
+
+    /* Unified festival styling */
+    .day.festival { position: relative; }
+    .day.festival .fest {
+      margin-top: 2px;
+      font-size: 0.7rem;
+      line-height: 1.1;
+      /* Keep single line for consistent height */
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+    }
+    /* High-holy convocation days (mikra kodesh): deeper purple */
+    .day.mikra { background: var(--accent); color: #fff; }
+    /* Intermediate festival days */
+    .day.fest-mid { background: var(--accent-2); color: #fff; }
+    /* Omer counting days */
+    .day.omer { background: var(--omer); color: #fff; }
+    /* Special single-day festivals */
+    .day.shemini, .day.shavuot { background: var(--accent); color: #fff; }
+
+    /* Buttons/inputs */
+    button, input[type="number"], input[type="date"] {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      padding: 6px 10px;
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+    button { cursor: pointer; }
+    button.primary { background: var(--accent); color: #fff; border-color: transparent; }
+    button:hover { filter: brightness(0.98); }
+    button:active { transform: translateY(1px); }
+
+    /* Legend */
+    .legend { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; font-size: 0.9rem; margin: 0.6rem 0 0.8rem; color: var(--muted); }
+    .tag { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 999px; background: var(--surface); box-shadow: var(--shadow); border: 1px solid var(--border); }
+    .swatch { width: 14px; height: 14px; border-radius: 3px; display: inline-block; }
+    .sw-mikra { background: var(--accent); }
+    .sw-festmid { background: var(--accent-2); }
+    .sw-omer { background: var(--omer); }
+    .sw-shabbat { background: transparent; box-shadow: inset 0 0 0 3px var(--shabbat); }
+
+    /* Medium mobile/Tablet portrait: 3 columns */
+    @media (max-width: 768px) {
+      #calendar { grid-template-columns: repeat(3, 1fr); gap: 0.4rem; }
+      .day { font-size: 0.82rem; }
+      table.month th, table.month td { padding: 2px; }
+      table.month td { height: 52px; }
+      /* Keep labels compact */
+      .day.festival .fest { font-size: 0.66rem; }
+      .day .shem { font-weight: 700; }
+      table.month caption { font-size: 0.9rem; }
+      table.month th { font-size: 0.8rem; }
+    }
+
+    /* Small phones: 2 columns for readability */
+    @media (max-width: 600px) {
+      #calendar { grid-template-columns: repeat(2, 1fr); gap: 0.35rem; }
+      .day { font-size: 0.86rem; }
+      .day.festival .fest { font-size: 0.7rem; }
+      table.month th, table.month td { padding: 3px; }
+      table.month td { height: 50px; }
+      .day .shem { font-weight: 700; }
+    }
+
+    /* Very narrow screens: 1 column */
+    @media (max-width: 380px) {
+      #calendar { grid-template-columns: 1fr; gap: 0.3rem; }
+      .day { font-size: 1rem; }
+      .day.festival .fest { font-size: 0.76rem; }
+      table.month th, table.month td { padding: 3px; }
+      table.month td { height: 54px; }
+      .day .shem { font-weight: 700; }
+    }
+
+    /* Desktop overrides placed at end to win cascade */
+    @media (min-width: 1024px) {
+      table.month td { height: 66px; }
+      .day { font-size: 1.06rem; gap: 1px; }
+      .day .shem { font-size: 0.9rem; }
+      .day.festival .fest { font-size: 0.82rem; }
+      table.month caption { font-size: 1.1rem; }
+      table.month th { font-size: 1rem; }
+    }
+
+    /* Keep controls on one line on desktop; allow wrap on mobile */
+    @media (min-width: 860px) {
+      .controls { flex-wrap: nowrap; }
+      .controls > * { white-space: nowrap; }
+      /* Let year label absorb expansion so buttons don't drop */
+      #yearLabel { flex: 1 1 auto; min-width: 0; text-align: center; }
+    }
   </style>
-  <link rel="icon" href="data:," />
-  <!-- inline empty favicon to avoid 404 noise -->
+  <!-- Psyhackers 72 favicon (PNG) -->
+  <link rel="icon" type="image/png" href="https://calendar.psyhackers.org/favicon.png?v=1" />
+  <link rel="shortcut icon" type="image/png" href="https://72.psyhackers.org/assets/img/favicon.png?v=1" />
+  <link rel="icon" type="image/png" sizes="192x192" href="https://72.psyhackers.org/assets/img/icon-192x192.png" />
+  <link rel="icon" type="image/png" sizes="512x512" href="https://72.psyhackers.org/assets/img/icon-512x512.png" />
+  <meta name="theme-color" content="#5e2d91" />
+  <meta name="description" content="Calendario de Enoj con fiestas, Shabat, Ómer y exportación CSV/ICS. Compatible móvil y offline básico." />
+  <meta property="og:title" content="Calendario de Enoj" />
+  <meta property="og:description" content="Consulta el año de Enoj, fiestas y Shabat. Exporta CSV/ICS." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="https://72.psyhackers.org/assets/img/icon-512x512.png" />
+  <meta property="og:url" content="" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
+  <style>
+    /* brand link hover */
+    .brand a:hover { filter: brightness(0.98); }
+  </style>
 </head>
 <body>
-  <h1>Enoch Calendar</h1>
-  <div class="controls">
-    <button id="prevYear">Previous Year</button>
-    <span id="yearLabel"></span>
-    <button id="nextYear">Next Year</button>
-    <button id="downloadCsv">Download CSV</button>
-    <!-- Jump to Enoch year -->
-    <input id="jumpYearInput" type="number" placeholder="Enoch year" style="width:120px" />
-    <button id="jumpYearBtn">Go</button>
-    <!-- Map Gregorian date to Enoch -->
-    <input id="gregDate" type="date" />
-    <button id="mapDateBtn">Map Date</button>
+  <div class="topbar">
+    <div class="topbar-inner">
+      <h1 class="brand">
+        <a id="brandLink" href="#" target="_blank" rel="noopener noreferrer">
+          <img class="brand-logo" id="brandLogo" src="https://calendar.psyhackers.org/favicon.png?v=1" alt="Psyhackers" />
+          <span id="brandTitle" data-i18n="title">Calendario de Enoj</span>
+        </a>
+      </h1>
+      <div class="controls">
+        <button id="prevYear" data-i18n="prevYear">⟵ Año anterior</button>
+        <span id="yearLabel" aria-live="polite"></span>
+        <button id="nextYear" data-i18n="nextYear">Siguiente año ⟶</button>
+        <button id="todayBtn" class="primary" data-i18n="today">Hoy</button>
+        <button id="downloadCsv" data-i18n="downloadCsv">Descargar CSV</button>
+        <button id="downloadIcs" data-i18n="downloadIcs">Descargar ICS</button>
+        <input id="jumpYearInput" type="number" data-i18n-placeholder="jumpYearPlaceholder" placeholder="Año Enoj" style="width:120px" data-i18n-aria="jumpYearPlaceholder" aria-label="Ir al año de Enoj" />
+        <button id="jumpYearBtn" data-i18n="jumpYearBtn">Ir</button>
+        <input id="gregDate" type="date" data-i18n-aria="mapDateBtn" aria-label="Fecha gregoriana" />
+        <button id="mapDateBtn" data-i18n="mapDateBtn">Mapear fecha</button>
+        <select id="langSel" aria-label="Language">
+          <option value="es">ES</option>
+          <option value="en">EN</option>
+        </select>
+      </div>
+    </div>
   </div>
-  <div id="status">Loading...</div>
-  <div id="pickedInfo" style="margin-top:8px; font-size:0.9rem; color:#333;"></div>
-  <div id="calendar"></div>
+  <div class="wrap">
+    <div class="legend" aria-hidden="true">
+      <span class="tag"><span class="swatch sw-shabbat"></span> <span data-i18n="legendShabbat">Shabat</span></span>
+      <span class="tag"><span class="swatch sw-mikra"></span> <span data-i18n="legendMikra">Mikrá</span></span>
+      <span class="tag"><span class="swatch sw-festmid"></span> <span data-i18n="legendFestMid">Intermedio</span></span>
+      <span class="tag"><span class="swatch sw-omer"></span> <span data-i18n="legendOmer">Ómer</span></span>
+    </div>
+    <div id="status" data-i18n="statusLoading">Cargando...</div>
+    <div id="pickedInfo" style="margin-top:8px; font-size:0.9rem; color:var(--muted);"></div>
+    <div id="calendar"></div>
+  </div>
   <script>
-      document.write('<script src="shemot.js?v=' + Date.now() + '" defer><\\/script>');
-      document.write('<script src="csv.js?v=' + Date.now() + '" defer><\\/script>');
-      document.write('<script src="export.js?v=' + Date.now() + '" defer><\\/script>');
-      document.write('<script src="main.js?v=' + Date.now() + '" defer><\\/script>');
+    // Dynamically load app scripts (i18n first)
+    (function loadScripts() {
+      var v = Date.now();
+      var files = ['i18n.js', 'shemot.js', 'csv.js', 'export.js', 'main.js'];
+      try { console.log('[loader] enqueue', files); } catch(_){ }
+      for (var i = 0; i < files.length; i++) {
+        var s = document.createElement('script');
+        s.src = files[i] + '?v=' + v;
+        s.async = false; // preserve order
+        s.defer = false;
+        (function(name){
+          s.onload = function(){ try { console.log('[loader] loaded', name); } catch(_){ } };
+          s.onerror = function(e){ try { console.error('[loader] error', name, e); } catch(_){ } };
+        })(files[i]);
+        document.head.appendChild(s);
+      }
+    })();
+
+    // Sync brand link/icon to language
+    window.syncBrandLink = function(){
+      try {
+        var lang = (window.lang || (navigator.language||'es').slice(0,2)).toLowerCase();
+        var a = document.getElementById('brandLink');
+        var logo = document.getElementById('brandLogo');
+        if (!a) return;
+        if (lang === 'en') {
+          a.href = 'https://psyhackers.org';
+          if (logo) logo.alt = 'Psyhackers';
+        } else {
+          a.href = 'https://www.sabiduriaholistica.org';
+          if (logo) logo.alt = 'Sabiduría Holística';
+        }
+      } catch(_){ }
+    };
+    document.addEventListener('DOMContentLoaded', function(){
+      window.syncBrandLink();
+      var sel = document.getElementById('langSel');
+      if (sel) sel.addEventListener('change', function(){
+        // i18n.js will update window.lang; we re-sync link
+        setTimeout(window.syncBrandLink, 0);
+      });
+    });
+
+    // Scroll a hoy si existe
+    window.addEventListener('DOMContentLoaded', function(){
+      var btn = document.getElementById('todayBtn');
+      if (!btn) return;
+      btn.addEventListener('click', function(){
+        if (window.goToToday) { window.goToToday(); return; }
+        // Fallback: scroll within current view
+        var el = document.querySelector('.day.today');
+        if (el && el.scrollIntoView) {
+          el.scrollIntoView({behavior:'smooth', block:'center', inline:'center'});
+          el.style.transition = 'box-shadow 0.6s';
+          el.style.boxShadow = '0 0 0 3px var(--accent-2), 0 0 0 6px rgba(123,104,238,0.3)';
+          setTimeout(function(){ el.style.boxShadow = ''; }, 800);
+        }
+      });
+    });
   </script>
   <!-- fallback if document.write blocked -->
   <noscript>

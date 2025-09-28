@@ -782,7 +782,7 @@ function firstWednesdayOnOrAfterUTC(date) {
   const base = new Date(date);
   const day = base.getUTCDay(); // 0=Sun .. 3=Wed .. 6=Sat
   const diffToWed = (3 - day + 7) % 7; // 0..6 to get to Wed
-  return addDays(base, diffToWed);
+  return addDaysUTC(base, diffToWed);
 }
 
 function getApproxEnochStartForGregorianYear(year) {
@@ -809,12 +809,12 @@ function getApproxEnochYearForDate(dateUTC) {
 
 async function fetchEnoch(date) {
   console.log('[fetchEnoch] request', date.toISOString());
-  const { lat, lon } = getUserLatLonTz();
+  const { lat, lon, tz } = getUserLatLonTz();
   const body = {
     datetime: date.toISOString().slice(0, 19),
     latitude: lat,
     longitude: lon,
-    timezone: 'UTC'
+    timezone: tz || 'UTC'
   };
   const res = await fetch(API_URL, {
     method: 'POST',
@@ -841,6 +841,12 @@ async function fetchEnoch(date) {
 function addDays(date, days) {
   const d = new Date(date);
   d.setDate(d.getDate() + days);
+  return d;
+}
+// UTC-safe day addition to avoid DST/local offset shifts when iterating days
+function addDaysUTC(date, days) {
+  const d = new Date(date);
+  d.setUTCDate(d.getUTCDate() + days);
   return d;
 }
 
@@ -912,7 +918,7 @@ function sunsetPairForYMD(ymd, lat, lon) {
   // Start = previous day's sunset; End = same day's sunset
   const base = parseYMDToUTC(ymd);
   if (!base) return { startUTC: null, endUTC: null };
-  const prev = addDays(base, -1);
+  const prev = addDaysUTC(base, -1);
   const startUTC = calcSunsetUTC(prev, lat, lon);
   const endUTC = calcSunsetUTC(base, lat, lon);
   return { startUTC, endUTC };
@@ -1090,7 +1096,9 @@ async function buildCalendar(referenceDate = new Date(), tryCSV = true, base = n
       isBuilding = false;
       return;
     }
-    const startDate = addDays(referenceDate, -(enoch_day_of_year - 1));
+    // Normalize reference to a UTC anchor to avoid DST/local drift, then add days in UTC
+    const refUTC = new Date(referenceDate.toISOString());
+    const startDate = addDaysUTC(refUTC, -(enoch_day_of_year - 1));
     currentStartDate = startDate;
     currentYear = enoch_year;
     try { window.currentYear = currentYear; } catch(_){ }
@@ -1156,12 +1164,12 @@ async function buildCalendar(referenceDate = new Date(), tryCSV = true, base = n
     }
 
     const dates = [];
-    for (let i = 0; i < 364; i++) dates.push(addDays(startDate, i));
+    for (let i = 0; i < 364; i++) dates.push(addDaysUTC(startDate, i));
     let results = await fetchInBatches(dates);
     if (results[363].enoch.added_week) {
       console.log('[buildCalendar] added week detected');
       const extra = [];
-      for (let i = 364; i < 371; i++) extra.push(addDays(startDate, i));
+      for (let i = 364; i < 371; i++) extra.push(addDaysUTC(startDate, i));
       const more = await fetchInBatches(extra);
       results = results.concat(more);
     }
@@ -1806,7 +1814,7 @@ document.getElementById('prevYear').addEventListener('click', async () => {
   const targetYear = currentYear - 1;
   console.log('[prevYear] target', targetYear);
   if (!(preferCsv() && await loadYearFromCSV(targetYear))) {
-    await buildCalendar(addDays(currentStartDate, -7), false);
+    await buildCalendar(addDaysUTC(currentStartDate, -7), false);
   }
 });
 
@@ -1818,7 +1826,7 @@ document.getElementById('nextYear').addEventListener('click', async () => {
   const targetYear = currentYear + 1;
   console.log('[nextYear] target', targetYear);
   if (!(preferCsv() && await loadYearFromCSV(targetYear))) {
-    await buildCalendar(addDays(currentStartDate, currentYearLength + 7), false);
+    await buildCalendar(addDaysUTC(currentStartDate, currentYearLength + 7), false);
   }
 });
 
@@ -1953,5 +1961,44 @@ async function initCalendar() {
 
 // Expose for i18n-driven re-render
 try { window.renderCalendar = renderCalendar; } catch(_) {}
+
+// Smooth scroll to today's cell if present
+function scrollToToday() {
+  try {
+    const el = document.querySelector('.day.today');
+    if (el && el.scrollIntoView) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+      el.style.transition = 'box-shadow 0.6s';
+      el.style.boxShadow = '0 0 0 3px var(--accent-2), 0 0 0 6px rgba(123,104,238,0.3)';
+      setTimeout(() => { try { el.style.boxShadow = ''; } catch(_){} }, 800);
+    }
+  } catch(_){}
+}
+
+// Jump to the Enoch year that contains today, render it, then scroll to today
+async function goToToday() {
+  try {
+    if (isBuilding) { console.log('[today] build in progress'); return; }
+    const today = new Date();
+    // Ask backend for exact Enoch year/day for today respecting user tz
+    const base = await fetchEnoch(today);
+    const y = base?.enoch?.enoch_year;
+    if (y && preferCsv() && await loadYearFromCSV(y)) {
+      // CSV path: already rendered
+      setYearLabel(y);
+      setTimeout(scrollToToday, 0);
+      return;
+    }
+    // Fallback to API build from today base
+    await buildCalendar(today, false, base);
+    setTimeout(scrollToToday, 0);
+  } catch(e) {
+    console.warn('[today] failed', e?.message || e);
+    // As a last resort, try to scroll in current view
+    setTimeout(scrollToToday, 0);
+  }
+}
+
+try { window.goToToday = goToToday; window.scrollToToday = scrollToToday; } catch(_){}
 
 initCalendar();

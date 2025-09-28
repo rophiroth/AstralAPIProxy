@@ -155,6 +155,7 @@ def calc_year():
         zodiac_mode = (data.get("zodiac_mode") or "tropical").lower()
 
         # Base date and Enoch mapping via existing util
+        bce_mode = False
         try:
             dt_local = localize_datetime(date_str, tz_str)
             dt_utc = dt_local.astimezone(pytz.utc)
@@ -165,13 +166,15 @@ def calc_year():
         except Exception:
             # Extended ISO (BCE) → JD
             jd = _parse_iso_to_jd(date_str)
-            dt_utc = jd_to_datetime(jd, pytz.utc)
+            bce_mode = True
         base_enoch = calculate_enoch_date(jd, latitude, longitude, tz_str)
         enoch_year = base_enoch.get('enoch_year')
         enoch_day_of_year = base_enoch.get('enoch_day_of_year')
-
-        # Determine start date (UTC) for day 1 of the Enoch year
-        start_utc = dt_utc - timedelta(days=int(enoch_day_of_year) - 1)
+        # Determine start anchor
+        if not bce_mode:
+            start_utc = dt_utc - timedelta(days=int(enoch_day_of_year) - 1)
+        else:
+            start_jd = jd - (int(enoch_day_of_year) - 1)
 
         days = []
 
@@ -252,49 +255,18 @@ def calc_year():
         # First compute a baseline 364 days; we will extend by 7 if added week is flagged on last day
         total_days = 364
         for i in range(total_days):
-            day_dt_utc = start_utc + timedelta(days=i)
-            greg = day_dt_utc.date().isoformat()
-            # Midday sample for positions
-            midday = datetime(day_dt_utc.year, day_dt_utc.month, day_dt_utc.day, 12, 0, 0, tzinfo=timezone.utc)
-            jd_mid = swe.julday(midday.year, midday.month, midday.day, 12.0)
-            lon_sun, lon_moon, phase, illum, dist_km = sun_moon_state(jd_mid)
-            # Enoch day
-            e_day = calculate_enoch_date(jd_mid, latitude, longitude, tz_str)
-            # Sunset bounds
-            s_prev, s_today = day_bounds_utc(midday, latitude, longitude, tz_str)
-            # Lunar sign (tropical default)
-            moon_sign = lunar_sign_from_longitude(lon_moon, zodiac_mode)
-            day_record = {
-                'gregorian': greg,
-                'enoch_year': e_day.get('enoch_year'),
-                'enoch_month': e_day.get('enoch_month'),
-                'enoch_day': e_day.get('enoch_day'),
-                'added_week': e_day.get('added_week'),
-                'name': e_day.get('name'),
-                'day_of_year': i + 1,
-                'start_utc': (s_prev if isinstance(s_prev, str) else s_prev.isoformat()),
-                'end_utc': (s_today if isinstance(s_today, str) else s_today.isoformat()),
-                'moon_phase_angle_deg': round(phase, 3),
-                'moon_illum': round(illum, 6),
-                'moon_distance_km': round(dist_km, 1),
-                'moon_sign': moon_sign,
-                'moon_zodiac_mode': zodiac_mode
-            }
-            if not isinstance(s_prev, str) and not isinstance(s_today, str):
-                enrich_with_moon_mix(day_record, s_prev, s_today)
-            days.append(day_record)
-
-        # If last day reports added week, extend 7 more days
-        if days and days[-1].get('added_week'):
-            for j in range(7):
-                i = total_days + j
+            if not bce_mode:
                 day_dt_utc = start_utc + timedelta(days=i)
                 greg = day_dt_utc.date().isoformat()
+                # Midday sample for positions
                 midday = datetime(day_dt_utc.year, day_dt_utc.month, day_dt_utc.day, 12, 0, 0, tzinfo=timezone.utc)
                 jd_mid = swe.julday(midday.year, midday.month, midday.day, 12.0)
                 lon_sun, lon_moon, phase, illum, dist_km = sun_moon_state(jd_mid)
+                # Enoch day
                 e_day = calculate_enoch_date(jd_mid, latitude, longitude, tz_str)
+                # Sunset bounds
                 s_prev, s_today = day_bounds_utc(midday, latitude, longitude, tz_str)
+                # Lunar sign (tropical default)
                 moon_sign = lunar_sign_from_longitude(lon_moon, zodiac_mode)
                 day_record = {
                     'gregorian': greg,
@@ -315,6 +287,119 @@ def calc_year():
                 if not isinstance(s_prev, str) and not isinstance(s_today, str):
                     enrich_with_moon_mix(day_record, s_prev, s_today)
                 days.append(day_record)
+            else:
+                # BCE/proleptic path using JD only
+                day_jd0 = start_jd + i
+                y, mo, d, _ = swe.revjul(day_jd0)
+                greg = f"{int(y)}-{int(mo):02d}-{int(d):02d}"
+                jd_mid = swe.julday(int(y), int(mo), int(d), 12.0)
+                lon_sun, lon_moon, phase, illum, dist_km = sun_moon_state(jd_mid)
+                e_day = calculate_enoch_date(jd_mid, latitude, longitude, tz_str)
+                # Sunsets via Swiss Ephemeris
+                geopos = (longitude, latitude, 0)
+                jd0 = swe.julday(int(y), int(mo), int(d), 0.0)
+                try:
+                    _, data_today = swe.rise_trans(jd0, swe.SUN, 2, geopos)
+                    jd_s_today = data_today[0]
+                except Exception:
+                    jd_s_today = jd0 + 0.75
+                jd_prev_day = jd0 - 1.0
+                yb, mb, db, _h = swe.revjul(jd_prev_day)
+                try:
+                    _, data_prev = swe.rise_trans(swe.julday(int(yb), int(mb), int(db), 0.0), swe.SUN, 2, geopos)
+                    jd_s_prev = data_prev[0]
+                except Exception:
+                    jd_s_prev = jd_prev_day + 0.75
+                moon_sign = lunar_sign_from_longitude(lon_moon, zodiac_mode)
+                day_record = {
+                    'gregorian': greg,
+                    'enoch_year': e_day.get('enoch_year'),
+                    'enoch_month': e_day.get('enoch_month'),
+                    'enoch_day': e_day.get('enoch_day'),
+                    'added_week': e_day.get('added_week'),
+                    'name': e_day.get('name'),
+                    'day_of_year': i + 1,
+                    'start_utc': _jd_to_iso_utc(jd_s_prev),
+                    'end_utc': _jd_to_iso_utc(jd_s_today),
+                    'moon_phase_angle_deg': round(phase, 3),
+                    'moon_illum': round(illum, 6),
+                    'moon_distance_km': round(dist_km, 1),
+                    'moon_sign': moon_sign,
+                    'moon_zodiac_mode': zodiac_mode
+                }
+                days.append(day_record)
+
+        # If last day reports added week, extend 7 more days
+        if days and days[-1].get('added_week'):
+            for j in range(7):
+                i = total_days + j
+                if not bce_mode:
+                    day_dt_utc = start_utc + timedelta(days=i)
+                    greg = day_dt_utc.date().isoformat()
+                    midday = datetime(day_dt_utc.year, day_dt_utc.month, day_dt_utc.day, 12, 0, 0, tzinfo=timezone.utc)
+                    jd_mid = swe.julday(midday.year, midday.month, midday.day, 12.0)
+                    lon_sun, lon_moon, phase, illum, dist_km = sun_moon_state(jd_mid)
+                    e_day = calculate_enoch_date(jd_mid, latitude, longitude, tz_str)
+                    s_prev, s_today = day_bounds_utc(midday, latitude, longitude, tz_str)
+                    moon_sign = lunar_sign_from_longitude(lon_moon, zodiac_mode)
+                    day_record = {
+                        'gregorian': greg,
+                        'enoch_year': e_day.get('enoch_year'),
+                        'enoch_month': e_day.get('enoch_month'),
+                        'enoch_day': e_day.get('enoch_day'),
+                        'added_week': e_day.get('added_week'),
+                        'name': e_day.get('name'),
+                        'day_of_year': i + 1,
+                        'start_utc': (s_prev if isinstance(s_prev, str) else s_prev.isoformat()),
+                        'end_utc': (s_today if isinstance(s_today, str) else s_today.isoformat()),
+                        'moon_phase_angle_deg': round(phase, 3),
+                        'moon_illum': round(illum, 6),
+                        'moon_distance_km': round(dist_km, 1),
+                        'moon_sign': moon_sign,
+                        'moon_zodiac_mode': zodiac_mode
+                    }
+                    if not isinstance(s_prev, str) and not isinstance(s_today, str):
+                        enrich_with_moon_mix(day_record, s_prev, s_today)
+                    days.append(day_record)
+                else:
+                    day_jd0 = start_jd + i
+                    y, mo, d, _ = swe.revjul(day_jd0)
+                    greg = f"{int(y)}-{int(mo):02d}-{int(d):02d}"
+                    jd_mid = swe.julday(int(y), int(mo), int(d), 12.0)
+                    lon_sun, lon_moon, phase, illum, dist_km = sun_moon_state(jd_mid)
+                    e_day = calculate_enoch_date(jd_mid, latitude, longitude, tz_str)
+                    geopos = (longitude, latitude, 0)
+                    jd0 = swe.julday(int(y), int(mo), int(d), 0.0)
+                    try:
+                        _, data_today = swe.rise_trans(jd0, swe.SUN, 2, geopos)
+                        jd_s_today = data_today[0]
+                    except Exception:
+                        jd_s_today = jd0 + 0.75
+                    jd_prev_day = jd0 - 1.0
+                    yb, mb, db, _h = swe.revjul(jd_prev_day)
+                    try:
+                        _, data_prev = swe.rise_trans(swe.julday(int(yb), int(mb), int(db), 0.0), swe.SUN, 2, geopos)
+                        jd_s_prev = data_prev[0]
+                    except Exception:
+                        jd_s_prev = jd_prev_day + 0.75
+                    moon_sign = lunar_sign_from_longitude(lon_moon, zodiac_mode)
+                    day_record = {
+                        'gregorian': greg,
+                        'enoch_year': e_day.get('enoch_year'),
+                        'enoch_month': e_day.get('enoch_month'),
+                        'enoch_day': e_day.get('enoch_day'),
+                        'added_week': e_day.get('added_week'),
+                        'name': e_day.get('name'),
+                        'day_of_year': i + 1,
+                        'start_utc': _jd_to_iso_utc(jd_s_prev),
+                        'end_utc': _jd_to_iso_utc(jd_s_today),
+                        'moon_phase_angle_deg': round(phase, 3),
+                        'moon_illum': round(illum, 6),
+                        'moon_distance_km': round(dist_km, 1),
+                        'moon_sign': moon_sign,
+                        'moon_zodiac_mode': zodiac_mode
+                    }
+                    days.append(day_record)
 
         # Compute exact lunar events across the full span (from first start to last end)
         if days:

@@ -316,7 +316,10 @@ def calc_year():
 
         def enrich_with_moon_mix(day_dict, start_dt, end_dt):
             # Preciso: detecta cruce(s) reales y reparte por tiempo en cada signo
-            mix = lunar_sign_mix(start_dt, end_dt, zodiac_mode)
+            try:
+                mix = lunar_sign_mix(start_dt, end_dt, zodiac_mode)
+            except Exception:
+                mix = None
             if not mix:
                 return
             primary = mix.get('primary_sign')
@@ -346,10 +349,13 @@ def calc_year():
                 delta = max(0.0, lon_end_unwrapped - lon_start)
                 day_dict['moon_long_delta_deg'] = round(delta, 3)
                 # Signos de inicio/fin
-                sign_start = lunar_sign_from_longitude(lon_start, zodiac_mode)
-                sign_end = lunar_sign_from_longitude(lon_end, zodiac_mode)
-                day_dict['moon_sign_start'] = sign_start
-                day_dict['moon_sign_end'] = sign_end
+                try:
+                    sign_start = lunar_sign_from_longitude(lon_start, zodiac_mode)
+                    sign_end = lunar_sign_from_longitude(lon_end, zodiac_mode)
+                    day_dict['moon_sign_start'] = sign_start
+                    day_dict['moon_sign_end'] = sign_end
+                except Exception:
+                    pass
                 # Fase e iluminación al inicio/fin del día enojeano
                 phase_start, illum_start = s_state[2], s_state[3]
                 phase_end, illum_end = e_state[2], e_state[3]
@@ -416,6 +422,7 @@ def calc_year():
                 try:
                     lon_sun, lon_moon, phase, illum, dist_km = sun_moon_state(jd_mid)
                 except Exception:
+                    lon_sun = None; lon_moon = None
                     phase, illum = _approx_lunar_for_jd(jd_mid)
                     dist_km = None
                 # Enoch day
@@ -423,7 +430,10 @@ def calc_year():
                 # Sunset bounds
                 s_prev, s_today = day_bounds_utc(midday, latitude, longitude, tz_str)
                 # Lunar sign (tropical default)
-                moon_sign = lunar_sign_from_longitude(lon_moon, zodiac_mode)
+                try:
+                    moon_sign = lunar_sign_from_longitude(lon_moon, zodiac_mode) if lon_moon is not None else ''
+                except Exception:
+                    moon_sign = ''
                 day_record = {
                     'gregorian': greg,
                     'enoch_year': e_day.get('enoch_year'),
@@ -452,6 +462,7 @@ def calc_year():
                 try:
                     lon_sun, lon_moon, phase, illum, dist_km = sun_moon_state(jd_mid)
                 except Exception:
+                    lon_sun = None; lon_moon = None
                     phase, illum = _approx_lunar_for_jd(jd_mid)
                     dist_km = None
                 e_day = calculate_enoch_date(jd_mid, latitude, longitude, tz_str)
@@ -470,7 +481,10 @@ def calc_year():
                     jd_s_prev = data_prev[0]
                 except Exception:
                     jd_s_prev = jd_prev_day + 0.75
-                moon_sign = lunar_sign_from_longitude(lon_moon, zodiac_mode)
+                try:
+                    moon_sign = lunar_sign_from_longitude(lon_moon, zodiac_mode) if lon_moon is not None else ''
+                except Exception:
+                    moon_sign = ''
                 day_record = {
                     'gregorian': greg,
                     'enoch_year': e_day.get('enoch_year'),
@@ -501,11 +515,15 @@ def calc_year():
                     try:
                         lon_sun, lon_moon, phase, illum, dist_km = sun_moon_state(jd_mid)
                     except Exception:
+                        lon_sun = None; lon_moon = None
                         phase, illum = _approx_lunar_for_jd(jd_mid)
                         dist_km = None
                     e_day = calculate_enoch_date(jd_mid, latitude, longitude, tz_str)
                     s_prev, s_today = day_bounds_utc(midday, latitude, longitude, tz_str)
-                    moon_sign = lunar_sign_from_longitude(lon_moon, zodiac_mode)
+                    try:
+                        moon_sign = lunar_sign_from_longitude(lon_moon, zodiac_mode) if lon_moon is not None else ''
+                    except Exception:
+                        moon_sign = ''
                     day_record = {
                         'gregorian': greg,
                         'enoch_year': e_day.get('enoch_year'),
@@ -533,6 +551,7 @@ def calc_year():
                     try:
                         lon_sun, lon_moon, phase, illum, dist_km = sun_moon_state(jd_mid)
                     except Exception:
+                        lon_sun = None; lon_moon = None
                         phase, illum = _approx_lunar_for_jd(jd_mid)
                         dist_km = None
                     e_day = calculate_enoch_date(jd_mid, latitude, longitude, tz_str)
@@ -550,7 +569,10 @@ def calc_year():
                         jd_s_prev = data_prev[0]
                     except Exception:
                         jd_s_prev = jd_prev_day + 0.75
-                    moon_sign = lunar_sign_from_longitude(lon_moon, zodiac_mode)
+                    try:
+                        moon_sign = lunar_sign_from_longitude(lon_moon, zodiac_mode) if lon_moon is not None else ''
+                    except Exception:
+                        moon_sign = ''
                     day_record = {
                         'gregorian': greg,
                         'enoch_year': e_day.get('enoch_year'),

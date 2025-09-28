@@ -71,6 +71,100 @@ def _jd_to_iso_utc(jd: float) -> str:
     y_str = (f"{int(y):04d}" if int(y) >= 0 else f"{int(y)}")
     return f"{y_str}-{int(mo):02d}-{int(d):02d}T{hh:02d}:{mi:02d}:{ss:02d}Z"
 
+# --- Pure-python approximate fallbacks (no Swiss ephemeris files) ---
+import math
+
+def _approx_sunset_ut_hms(y:int, m:int, d:int, lat:float, lon:float):
+    """Approximate sunset time in UT as (h,m,s) using NOAA-like formula.
+    Works proleptically; ignores elevation and refraction fine-tuning.
+    """
+    try:
+        def to_rad(x): return x * math.pi / 180.0
+        def to_deg(x): return x * 180.0 / math.pi
+        # Day of year N for proleptic Gregorian; rough for BCE but monotonic
+        # Compute N via JD differencing to avoid datetime
+        jd_day = swe.julday(y, m, d, 0.0)
+        jd_year0 = swe.julday(y, 1, 1, 0.0)
+        N = int(jd_day - jd_year0) + 1
+        lng_hour = lon / 15.0
+        t = N + ((18 - lng_hour) / 24.0)
+        M = (0.9856 * t) - 3.289
+        L = M + (1.916 * math.sin(to_rad(M))) + (0.020 * math.sin(to_rad(2*M))) + 282.634
+        L = (L % 360 + 360) % 360
+        RA = to_deg(math.atan(0.91764 * math.tan(to_rad(L))))
+        RA = (RA % 360 + 360) % 360
+        Lq = math.floor(L/90) * 90
+        RAq = math.floor(RA/90) * 90
+        RA = (RA + (Lq - RAq)) / 15.0
+        sinDec = 0.39782 * math.sin(to_rad(L))
+        cosDec = math.cos(math.asin(sinDec))
+        cosH = (math.cos(to_rad(90.833)) - (sinDec * math.sin(to_rad(lat)))) / (cosDec * math.cos(to_rad(lat)))
+        if cosH < -1 or cosH > 1:
+            # No sunset/rise; return 18:00 UT as placeholder
+            return 18, 0, 0
+        H = to_deg(math.acos(cosH)) / 15.0
+        T = H + RA - (0.06571 * t) - 6.622
+        UT = T - lng_hour
+        UT = (UT % 24 + 24) % 24
+        hh = int(math.floor(UT))
+        mm = int(math.floor((UT - hh) * 60))
+        ss = int(round((((UT - hh) * 60) - mm) * 60))
+        if ss == 60:
+            ss = 0; mm += 1
+        if mm == 60:
+            mm = 0; hh = (hh + 1) % 24
+        return hh, mm, ss
+    except Exception:
+        return 18, 0, 0
+
+def _iso_from_ymd_hms(y:int, mo:int, d:int, hh:int, mi:int, ss:int) -> str:
+    y_str = (f"{y:04d}" if y >= 0 else str(y))
+    return f"{y_str}-{mo:02d}-{d:02d}T{hh:02d}:{mi:02d}:{ss:02d}Z"
+
+def _approx_enoch_from_jd(jd: float, latitude: float, longitude: float):
+    """Approximate Enoch mapping without Swiss ephemeris files.
+    - Anchor equinox at Mar 20 21:24 UT of that Gregorian year
+    - Start of Enoch year = first Wednesday on/after that anchor (by JD weekday)
+    - Day-of-year = floor(jd - start) + 1
+    - Enoch year number mapped to reference 2025 -> 5996
+    """
+    y, m, d, _ = swe.revjul(jd)
+    # Anchor equinox ~
+    anchor_jd = swe.julday(int(y), 3, 20, 21 + 24/60)
+    # First Wednesday on/after anchor (Swiss day_of_week: 0=Mon .. 6=Sun)
+    start_jd = anchor_jd
+    while swe.day_of_week(start_jd) != 2:
+        start_jd += 1.0
+    if jd < start_jd:
+        # Use previous year's anchor
+        py = int(y) - 1
+        pa = swe.julday(py, 3, 20, 21 + 24/60)
+        start_jd = pa
+        while swe.day_of_week(start_jd) != 2:
+            start_jd += 1.0
+    day_of_year = int(jd - start_jd) + 1
+    # Month/day split by fixed months: 30,30,31, ..., 31 (same as frontend)
+    months = [30,30,31,30,30,31,30,30,31,30,30,31]
+    added_week = day_of_year > 364
+    md = day_of_year - 1
+    m_idx = 0
+    while m_idx < 12 and md >= months[m_idx]:
+        md -= months[m_idx]
+        m_idx += 1
+    enoch_month = min(12, m_idx + 1)
+    enoch_day = md + 1
+    # Enoch year numbering relative to 2025->5996, using the Gregorian year of the start
+    sy, _, _, _ = swe.revjul(start_jd)
+    years_passed = int(sy) - 2025
+    enoch_year = 5996 + years_passed
+    return {
+        'enoch_year': enoch_year,
+        'enoch_month': enoch_month,
+        'enoch_day': enoch_day,
+        'enoch_day_of_year': day_of_year,
+        'added_week': added_week
+    }
+
 @app.route('/calculate', methods=['POST'])
 def calculate():
     try:
@@ -93,9 +187,23 @@ def calculate():
                 jd = _parse_iso_to_jd(date_str)
             else:
                 raise
-        results = calculate_planets(jd, latitude, longitude)
-        enoch_data = calculate_enoch_date(jd, latitude, longitude, tz_str)
-        houses_data = calculate_asc_mc_and_houses(jd, latitude, longitude)
+        # Planets (may fail if ephemeris files missing)
+        try:
+            results = calculate_planets(jd, latitude, longitude)
+        except Exception as _e:
+            traceback.print_exc()
+            results = { 'error': 'ephemeris-missing' }
+        # Enoch mapping (fallback to approximate if precise fails)
+        try:
+            enoch_data = calculate_enoch_date(jd, latitude, longitude, tz_str)
+        except Exception as _e:
+            traceback.print_exc()
+            enoch_data = _approx_enoch_from_jd(jd, latitude, longitude)
+        # Houses (optional)
+        try:
+            houses_data = calculate_asc_mc_and_houses(jd, latitude, longitude)
+        except Exception:
+            houses_data = None
         return jsonify({
             "julian_day": jd,
             "planets": results,
@@ -121,27 +229,39 @@ def day_bounds_utc(greg_date: datetime, latitude: float, longitude: float, tz_st
         s_prev = astral_sun(loc.observer, date=(local_day - timedelta(days=1)).date(), tzinfo=tz)["sunset"]
         return s_prev.astimezone(pytz.utc), s_today.astimezone(pytz.utc)
     except Exception:
-        # Fallback: Swiss Ephemeris sunsets (works for BCE/proleptic)
-        geopos = (longitude, latitude, 0)
-        # today
-        jd0 = swe.julday(greg_date.year, greg_date.month, greg_date.day, 0.0)
+        # Fallback chain: Swiss sunsets → NOAA approx
         try:
-            _, data_today = swe.rise_trans(jd0, swe.SUN, 2, geopos)  # 2 = sunset
-            jd_s_today = data_today[0]
+            geopos = (longitude, latitude, 0)
+            jd0 = swe.julday(greg_date.year, greg_date.month, greg_date.day, 0.0)
+            try:
+                _, data_today = swe.rise_trans(jd0, swe.SUN, 2, geopos)  # 2 = sunset
+                jd_s_today = data_today[0]
+            except Exception:
+                jd_s_today = jd0 + 0.75
+            jd_prev_day = jd0 - 1.0
+            yb, mb, db, _ = swe.revjul(jd_prev_day)
+            try:
+                _, data_prev = swe.rise_trans(swe.julday(int(yb), int(mb), int(db), 0.0), swe.SUN, 2, geopos)
+                jd_s_prev = data_prev[0]
+            except Exception:
+                jd_s_prev = jd_prev_day + 0.75
+            return _jd_to_iso_utc(jd_s_prev), _jd_to_iso_utc(jd_s_today)
         except Exception:
-            jd_s_today = jd0 + 0.75  # approx 18:00 UTC fallback
-        # previous day
-        y2, m2, d2 = (greg_date.year, greg_date.month, greg_date.day)
-        # naive previous day in JD
-        jd_prev_day = swe.julday(y2, m2, d2, 0.0) - 1.0
-        yb, mb, db, _ = swe.revjul(jd_prev_day)
-        try:
-            _, data_prev = swe.rise_trans(swe.julday(yb, mb, db, 0.0), swe.SUN, 2, geopos)
-            jd_s_prev = data_prev[0]
-        except Exception:
-            jd_s_prev = jd_prev_day + 0.75
-        # For BCE we cannot return datetime; return ISO strings instead
-        return _jd_to_iso_utc(jd_s_prev), _jd_to_iso_utc(jd_s_today)
+            # NOAA approx (no Swiss files)
+            y = greg_date.year; mo = greg_date.month; d = greg_date.day
+            ph, pm, ps = _approx_sunset_ut_hms(y, mo, d-1 if d>1 else d, latitude, longitude)
+            th, tm, ts = _approx_sunset_ut_hms(y, mo, d, latitude, longitude)
+            # Adjust previous day if d==1
+            if d == 1:
+                # previous day via JD
+                jd_today = swe.julday(y, mo, d, 0.0)
+                yb, mb, db, _ = swe.revjul(jd_today - 1.0)
+                prev_iso = _iso_from_ymd_hms(int(yb), int(mb), int(db), ph, pm, ps)
+                today_iso = _iso_from_ymd_hms(y, mo, d, th, tm, ts)
+                return prev_iso, today_iso
+            prev_iso = _iso_from_ymd_hms(y, mo, d-1, ph, pm, ps)
+            today_iso = _iso_from_ymd_hms(y, mo, d, th, tm, ts)
+            return prev_iso, today_iso
 
 
 @app.route('/calcYear', methods=['POST'])

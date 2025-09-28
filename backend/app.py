@@ -165,6 +165,18 @@ def _approx_enoch_from_jd(jd: float, latitude: float, longitude: float):
         'added_week': added_week
     }
 
+# Approx lunar phase (no Swiss files)
+SYNODIC_DAYS = 29.530588853
+REF_NEW_MOON_JD = swe.julday(2000, 1, 6, 18 + 14/60)
+
+def _approx_lunar_for_jd(jd: float):
+    days = jd - REF_NEW_MOON_JD
+    age = days % SYNODIC_DAYS
+    phase_frac = age / SYNODIC_DAYS  # 0=new, 0.5=full
+    illum = 0.5 * (1 - math.cos(2 * math.pi * phase_frac))
+    angle_deg = (phase_frac * 360.0) % 360.0  # 0=new, 90=first quarter, 180=full
+    return angle_deg, illum
+
 @app.route('/calculate', methods=['POST'])
 def calculate():
     try:
@@ -312,37 +324,53 @@ def calc_year():
                 day_dict['moon_sign_primary_pct'] = primary_pct
             secondary = mix.get('secondary_sign')
             secondary_pct = mix.get('secondary_pct')
-            # Adjuntar longitudes crudas al inicio/fin del día
-            try:
-                s_state = sun_moon_state(jd_utc(start_dt))
-                e_state = sun_moon_state(jd_utc(end_dt))
-                lon_start = s_state[1]
-                lon_end = e_state[1]
-                # Normalizar a 0..360 para salida estable
-                lon_start_n = (lon_start % 360.0 + 360.0) % 360.0
-                lon_end_n = (lon_end % 360.0 + 360.0) % 360.0
-                day_dict['moon_long_start_deg'] = round(lon_start_n, 3)
-                day_dict['moon_long_end_deg'] = round(lon_end_n, 3)
-                # Delta hacia adelante (desenrollado)
-                lon_end_unwrapped = lon_end
-                while lon_end_unwrapped < lon_start - 1e-9:
-                    lon_end_unwrapped += 360.0
-                delta = max(0.0, lon_end_unwrapped - lon_start)
-                day_dict['moon_long_delta_deg'] = round(delta, 3)
-                # Signos de inicio/fin
-                sign_start = lunar_sign_from_longitude(lon_start, zodiac_mode)
-                sign_end = lunar_sign_from_longitude(lon_end, zodiac_mode)
-                day_dict['moon_sign_start'] = sign_start
-                day_dict['moon_sign_end'] = sign_end
-                # Fase e iluminación al inicio/fin del día enojeano
-                phase_start, illum_start = s_state[2], s_state[3]
-                phase_end, illum_end = e_state[2], e_state[3]
-                day_dict['moon_phase_angle_start_deg'] = round(phase_start, 3)
-                day_dict['moon_phase_angle_end_deg'] = round(phase_end, 3)
-                day_dict['moon_illum_start'] = round(illum_start, 6)
-                day_dict['moon_illum_end'] = round(illum_end, 6)
-            except Exception:
-                pass
+                # Adjuntar longitudes crudas al inicio/fin del día (best effort)
+                try:
+                    s_state = sun_moon_state(jd_utc(start_dt))
+                    e_state = sun_moon_state(jd_utc(end_dt))
+                    lon_start = s_state[1]
+                    lon_end = e_state[1]
+                    # Normalizar a 0..360 para salida estable
+                    lon_start_n = (lon_start % 360.0 + 360.0) % 360.0
+                    lon_end_n = (lon_end % 360.0 + 360.0) % 360.0
+                    day_dict['moon_long_start_deg'] = round(lon_start_n, 3)
+                    day_dict['moon_long_end_deg'] = round(lon_end_n, 3)
+                    # Delta hacia adelante (desenrollado)
+                    lon_end_unwrapped = lon_end
+                    while lon_end_unwrapped < lon_start - 1e-9:
+                        lon_end_unwrapped += 360.0
+                    delta = max(0.0, lon_end_unwrapped - lon_start)
+                    day_dict['moon_long_delta_deg'] = round(delta, 3)
+                    # Signos de inicio/fin
+                    sign_start = lunar_sign_from_longitude(lon_start, zodiac_mode)
+                    sign_end = lunar_sign_from_longitude(lon_end, zodiac_mode)
+                    day_dict['moon_sign_start'] = sign_start
+                    day_dict['moon_sign_end'] = sign_end
+                    # Fase e iluminación al inicio/fin del día enojeano
+                    phase_start, illum_start = s_state[2], s_state[3]
+                    phase_end, illum_end = e_state[2], e_state[3]
+                    day_dict['moon_phase_angle_start_deg'] = round(phase_start, 3)
+                    day_dict['moon_phase_angle_end_deg'] = round(phase_end, 3)
+                    day_dict['moon_illum_start'] = round(illum_start, 6)
+                    day_dict['moon_illum_end'] = round(illum_end, 6)
+                except Exception:
+                    # Approximate start/end illum when Swiss is unavailable
+                    try:
+                        # If start_dt/end_dt are strings (ISO), convert to JD
+                        def to_jd_from_any(x):
+                            if isinstance(x, str):
+                                return _parse_iso_to_jd(x)
+                            return jd_utc(x)
+                        jd_s = to_jd_from_any(start_dt)
+                        jd_e = to_jd_from_any(end_dt)
+                        ph_s, il_s = _approx_lunar_for_jd(jd_s)
+                        ph_e, il_e = _approx_lunar_for_jd(jd_e)
+                        day_dict['moon_phase_angle_start_deg'] = round(ph_s, 3)
+                        day_dict['moon_phase_angle_end_deg'] = round(ph_e, 3)
+                        day_dict['moon_illum_start'] = round(il_s, 6)
+                        day_dict['moon_illum_end'] = round(il_e, 6)
+                    except Exception:
+                        pass
 
             # Política: 100% sólo si no hubo cruce de signo; si hubo, reportar mezcla exacta.
             segs = mix.get('segments') or []
@@ -381,7 +409,11 @@ def calc_year():
                 # Midday sample for positions
                 midday = datetime(day_dt_utc.year, day_dt_utc.month, day_dt_utc.day, 12, 0, 0, tzinfo=timezone.utc)
                 jd_mid = swe.julday(midday.year, midday.month, midday.day, 12.0)
-                lon_sun, lon_moon, phase, illum, dist_km = sun_moon_state(jd_mid)
+                try:
+                    lon_sun, lon_moon, phase, illum, dist_km = sun_moon_state(jd_mid)
+                except Exception:
+                    phase, illum = _approx_lunar_for_jd(jd_mid)
+                    dist_km = None
                 # Enoch day
                 e_day = calculate_enoch_date(jd_mid, latitude, longitude, tz_str)
                 # Sunset bounds
@@ -413,7 +445,11 @@ def calc_year():
                 y, mo, d, _ = swe.revjul(day_jd0)
                 greg = f"{int(y)}-{int(mo):02d}-{int(d):02d}"
                 jd_mid = swe.julday(int(y), int(mo), int(d), 12.0)
-                lon_sun, lon_moon, phase, illum, dist_km = sun_moon_state(jd_mid)
+                try:
+                    lon_sun, lon_moon, phase, illum, dist_km = sun_moon_state(jd_mid)
+                except Exception:
+                    phase, illum = _approx_lunar_for_jd(jd_mid)
+                    dist_km = None
                 e_day = calculate_enoch_date(jd_mid, latitude, longitude, tz_str)
                 # Sunsets via Swiss Ephemeris
                 geopos = (longitude, latitude, 0)
@@ -458,7 +494,11 @@ def calc_year():
                     greg = day_dt_utc.date().isoformat()
                     midday = datetime(day_dt_utc.year, day_dt_utc.month, day_dt_utc.day, 12, 0, 0, tzinfo=timezone.utc)
                     jd_mid = swe.julday(midday.year, midday.month, midday.day, 12.0)
-                    lon_sun, lon_moon, phase, illum, dist_km = sun_moon_state(jd_mid)
+                    try:
+                        lon_sun, lon_moon, phase, illum, dist_km = sun_moon_state(jd_mid)
+                    except Exception:
+                        phase, illum = _approx_lunar_for_jd(jd_mid)
+                        dist_km = None
                     e_day = calculate_enoch_date(jd_mid, latitude, longitude, tz_str)
                     s_prev, s_today = day_bounds_utc(midday, latitude, longitude, tz_str)
                     moon_sign = lunar_sign_from_longitude(lon_moon, zodiac_mode)
@@ -486,7 +526,11 @@ def calc_year():
                     y, mo, d, _ = swe.revjul(day_jd0)
                     greg = f"{int(y)}-{int(mo):02d}-{int(d):02d}"
                     jd_mid = swe.julday(int(y), int(mo), int(d), 12.0)
-                    lon_sun, lon_moon, phase, illum, dist_km = sun_moon_state(jd_mid)
+                    try:
+                        lon_sun, lon_moon, phase, illum, dist_km = sun_moon_state(jd_mid)
+                    except Exception:
+                        phase, illum = _approx_lunar_for_jd(jd_mid)
+                        dist_km = None
                     e_day = calculate_enoch_date(jd_mid, latitude, longitude, tz_str)
                     geopos = (longitude, latitude, 0)
                     jd0 = swe.julday(int(y), int(mo), int(d), 0.0)

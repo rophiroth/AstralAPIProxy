@@ -119,14 +119,14 @@ def find_enoch_year_start(target_date,longitude=REFERENCE_LONGITUDE,latitude=REF
 
     geopos = (longitude, latitude, 0) #Esta referencia debe ser modificada por la ubicación literal ingresada por el usuario
 
-    # 2. Buscar martes anterior
+    # 2. Buscar miércoles anterior (Enoj inicia en miércoles)
     jd_before = equinox_jd
-    while swe.day_of_week(jd_before) != 1:  # 2 = Tuesday
+    while swe.day_of_week(jd_before) != 2:  # 0=Lun,1=Mar,2=Mié
         jd_before -= 1.0
     #debug_jd(jd_before,"jd_before")
-    # 3. Buscar martes siguiente
+    # 3. Buscar miércoles siguiente
     jd_after = equinox_jd
-    while swe.day_of_week(jd_after) != 1:
+    while swe.day_of_week(jd_after) != 2:
         jd_after += 1.0
     #debug_jd(jd_after,"jd_after")
     # 4. Calcular sunsets para ambos martes

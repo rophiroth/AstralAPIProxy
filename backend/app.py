@@ -655,7 +655,66 @@ def calc_year():
         return jsonify(resp)
     except Exception as e:
         traceback.print_exc()
-        return jsonify({'ok': False, 'error': str(e)}), 500
+        # Ultimate fallback: build an approximate year without any Swiss-dependent calls (except julday/revjul)
+        try:
+            data = request.get_json() or {}
+            date_str = data.get("datetime")
+            latitude = float(data.get("latitude"))
+            longitude = float(data.get("longitude"))
+            tz_str = data.get("timezone", "UTC")
+            # Parse JD from ISO
+            jd = _parse_iso_to_jd(date_str)
+            base_enoch = _approx_enoch_from_jd(jd, latitude, longitude)
+            enoch_year = base_enoch.get('enoch_year')
+            enoch_day_of_year = base_enoch.get('enoch_day_of_year')
+            start_jd = jd - (int(enoch_day_of_year) - 1)
+            days = []
+            total_days = 364
+            for i in range(total_days):
+                day_jd0 = start_jd + i
+                y, mo, d, _ = swe.revjul(day_jd0)
+                greg = f"{int(y)}-{int(mo):02d}-{int(d):02d}"
+                jd_mid = swe.julday(int(y), int(mo), int(d), 12.0)
+                phase, illum = _approx_lunar_for_jd(jd_mid)
+                # Sunsets approx (Swiss may be unavailable)
+                try:
+                    geopos = (longitude, latitude, 0)
+                    jd0 = swe.julday(int(y), int(mo), int(d), 0.0)
+                    _, data_today = swe.rise_trans(jd0, swe.SUN, 2, geopos)
+                    jd_s_today = data_today[0]
+                except Exception:
+                    jd0 = swe.julday(int(y), int(mo), int(d), 0.0)
+                    jd_s_today = jd0 + 0.75
+                try:
+                    jd_prev_day = jd0 - 1.0
+                    yb, mb, db, _h = swe.revjul(jd_prev_day)
+                    _, data_prev = swe.rise_trans(swe.julday(int(yb), int(mb), int(db), 0.0), swe.SUN, 2, geopos)
+                    jd_s_prev = data_prev[0]
+                except Exception:
+                    jd_prev_day = jd0 - 1.0
+                    jd_s_prev = jd_prev_day + 0.75
+                e_day = _approx_enoch_from_jd(jd_mid, latitude, longitude)
+                day_record = {
+                    'gregorian': greg,
+                    'enoch_year': e_day.get('enoch_year'),
+                    'enoch_month': e_day.get('enoch_month'),
+                    'enoch_day': e_day.get('enoch_day'),
+                    'added_week': e_day.get('added_week'),
+                    'name': e_day.get('name'),
+                    'day_of_year': i + 1,
+                    'start_utc': _jd_to_iso_utc(jd_s_prev),
+                    'end_utc': _jd_to_iso_utc(jd_s_today),
+                    'moon_phase_angle_deg': round(phase, 3),
+                    'moon_illum': round(illum, 6),
+                    'moon_distance_km': None,
+                    'moon_sign': '',
+                    'moon_zodiac_mode': (data.get('zodiac_mode') or 'tropical').lower()
+                }
+                days.append(day_record)
+            return jsonify({'ok': True, 'enoch_year': enoch_year, 'days': days, 'quality': 'approx'}), 200
+        except Exception as e2:
+            traceback.print_exc()
+            return jsonify({'ok': False, 'error': str(e2)}), 500
 
 
 

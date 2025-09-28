@@ -285,6 +285,9 @@ def calc_year():
         longitude = float(data.get("longitude"))
         tz_str = data.get("timezone", "UTC")
         zodiac_mode = (data.get("zodiac_mode") or "tropical").lower()
+        # Force approximate mode if requested (avoids any Swiss-dependent calls except julday/revjul)
+        approx_flag_raw = str(data.get('approx') or data.get('mode') or '').strip().lower()
+        approx_mode = approx_flag_raw in ('1','true','yes','on','approx')
 
         # Base date and Enoch mapping via existing util
         bce_mode = False
@@ -299,11 +302,14 @@ def calc_year():
             # Extended ISO (BCE) → JD
             jd = _parse_iso_to_jd(date_str)
             bce_mode = True
-        try:
-            base_enoch = calculate_enoch_date(jd, latitude, longitude, tz_str)
-        except Exception:
-            traceback.print_exc()
+        if approx_mode:
             base_enoch = _approx_enoch_from_jd(jd, latitude, longitude)
+        else:
+            try:
+                base_enoch = calculate_enoch_date(jd, latitude, longitude, tz_str)
+            except Exception:
+                traceback.print_exc()
+                base_enoch = _approx_enoch_from_jd(jd, latitude, longitude)
         enoch_year = base_enoch.get('enoch_year')
         enoch_day_of_year = base_enoch.get('enoch_day_of_year')
         # Determine start anchor
@@ -413,7 +419,7 @@ def calc_year():
         # First compute a baseline 364 days; we will extend by 7 if added week is flagged on last day
         total_days = 364
         for i in range(total_days):
-            if not bce_mode:
+            if not bce_mode and not approx_mode:
                 day_dt_utc = start_utc + timedelta(days=i)
                 greg = day_dt_utc.date().isoformat()
                 # Midday sample for positions
@@ -426,7 +432,10 @@ def calc_year():
                     phase, illum = _approx_lunar_for_jd(jd_mid)
                     dist_km = None
                 # Enoch day
-                e_day = calculate_enoch_date(jd_mid, latitude, longitude, tz_str)
+                try:
+                    e_day = calculate_enoch_date(jd_mid, latitude, longitude, tz_str)
+                except Exception:
+                    e_day = _approx_enoch_from_jd(jd_mid, latitude, longitude)
                 # Sunset bounds
                 s_prev, s_today = day_bounds_utc(midday, latitude, longitude, tz_str)
                 # Lunar sign (tropical default)
@@ -459,13 +468,10 @@ def calc_year():
                 y, mo, d, _ = swe.revjul(day_jd0)
                 greg = f"{int(y)}-{int(mo):02d}-{int(d):02d}"
                 jd_mid = swe.julday(int(y), int(mo), int(d), 12.0)
-                try:
-                    lon_sun, lon_moon, phase, illum, dist_km = sun_moon_state(jd_mid)
-                except Exception:
-                    lon_sun = None; lon_moon = None
-                    phase, illum = _approx_lunar_for_jd(jd_mid)
-                    dist_km = None
-                e_day = calculate_enoch_date(jd_mid, latitude, longitude, tz_str)
+                lon_sun = None; lon_moon = None
+                phase, illum = _approx_lunar_for_jd(jd_mid)
+                # Enoch day approx to avoid Swiss
+                e_day = _approx_enoch_from_jd(jd_mid, latitude, longitude)
                 # Sunsets via Swiss Ephemeris
                 geopos = (longitude, latitude, 0)
                 jd0 = swe.julday(int(y), int(mo), int(d), 0.0)
@@ -638,11 +644,15 @@ def calc_year():
                         d['apogee'] = True
                         d['apogee_utc'] = ev['time'].astimezone(timezone.utc).isoformat()
 
-        return jsonify({
+        resp = {
             'ok': True,
             'enoch_year': enoch_year,
             'days': days
-        })
+        }
+        # Signal quality when approximations were used
+        if approx_mode or any((d.get('moon_distance_km') is None for d in days)):
+            resp['quality'] = 'approx'
+        return jsonify(resp)
     except Exception as e:
         traceback.print_exc()
         return jsonify({'ok': False, 'error': str(e)}), 500

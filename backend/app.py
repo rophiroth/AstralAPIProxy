@@ -129,19 +129,24 @@ def _approx_enoch_from_jd(jd: float, latitude: float, longitude: float):
     - Enoch year number mapped to reference 2025 -> 5996
     """
     y, m, d, _ = swe.revjul(jd)
+    # Helper: day-of-week index for a JD using date-only (0h UT) to avoid noon JD quirks
+    def _dow_index(jd_val: float) -> int:
+        yy, mo, dd, _h = swe.revjul(jd_val)
+        return swe.day_of_week(swe.julday(int(yy), int(mo), int(dd), 0.0))
+    # Detect Wednesday index at runtime using a known Wednesday (2025-03-19)
+    WED_IDX = swe.day_of_week(swe.julday(2025, 3, 19, 0.0))
     # Anchor equinox ~
     anchor_jd = swe.julday(int(y), 3, 20, 21 + 24/60)
-    # First Wednesday on/after anchor (Swiss day_of_week: 0=Sun .. 6=Sat)
+    # First Wednesday on/after anchor
     start_jd = anchor_jd
-    # Wednesday is index 3 when 0=Sun
-    while swe.day_of_week(start_jd) != 3:
+    while _dow_index(start_jd) != WED_IDX:
         start_jd += 1.0
     if jd < start_jd:
         # Use previous year's anchor
         py = int(y) - 1
         pa = swe.julday(py, 3, 20, 21 + 24/60)
         start_jd = pa
-        while swe.day_of_week(start_jd) != 3:
+        while _dow_index(start_jd) != WED_IDX:
             start_jd += 1.0
     day_of_year = int(jd - start_jd) + 1
     # Month/day split by fixed months: 30,30,31, ..., 31 (same as frontend)

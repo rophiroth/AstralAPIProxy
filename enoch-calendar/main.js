@@ -85,6 +85,32 @@ async function resolveUserLocation() {
 
 function getUserLatLonTz() { return { lat: USER_LAT, lon: USER_LON, tz: USER_TZ }; }
 
+// Format an ISO UTC datetime string into user's timezone (YYYY-MM-DD HH:mm TZ)
+function formatUTCToLocal(isoUtc, tz) {
+  try {
+    if (!isoUtc) return '';
+    const d = new Date(isoUtc);
+    if (isNaN(d.getTime())) return String(isoUtc);
+    const options = { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz, timeZoneName: 'short' };
+    const parts = new Intl.DateTimeFormat(undefined, options).formatToParts(d);
+    const get = (t) => (parts.find(p => p.type === t)?.value || '');
+    const yyyy = get('year');
+    const mm = get('month');
+    const dd = get('day');
+    const hh = get('hour');
+    const mi = get('minute');
+    const tzName = get('timeZoneName');
+    const core = `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
+    return tzName ? `${core} ${tzName}` : `${core}`;
+  } catch(_) {
+    return String(isoUtc || '');
+  }
+}
+
+function fmtUtcToLocalShort(isoUtc) {
+  try { const { tz } = getUserLatLonTz(); return formatUTCToLocal(isoUtc, tz); } catch(_) { return String(isoUtc||''); }
+}
+
 // Sanity: map phase angle to nearest canonical event
 function nearestEventFromAngle(deg) {
   if (typeof deg !== 'number' || !isFinite(deg)) return '';
@@ -438,8 +464,14 @@ function buildMoonTooltip(d, lunarMap) {
     const LblDist = i18nWord('labelDistance');
     let evt = '';
     if (typeof useServerEvents === 'function' ? useServerEvents() : false) {
-      if (d.moon_event) evt = `, ${LblEvent}: ${moonEventLabel(d.moon_event)}${d.moon_event_utc?(' @ '+d.moon_event_utc):''}`;
+      if (d.moon_event) evt = `, ${LblEvent}: ${moonEventLabel(d.moon_event)}${d.moon_event_utc?(' @ '+fmtUtcToLocalShort(d.moon_event_utc)):''}`;
     }
+    // Always include perigee/apogee times (if present) in the info line, formatted to user's TZ
+    let distEvt = '';
+    try {
+      if (d.perigee && d.perigee_utc) distEvt += `, ${i18nWord('perigee')}: ${fmtUtcToLocalShort(d.perigee_utc)}`;
+      if (d.apogee && d.apogee_utc) distEvt += `, ${i18nWord('apogee')}: ${fmtUtcToLocalShort(d.apogee_utc)}`;
+    } catch(_) {}
     const signText = formatSignMix(d);
     const degText = formatStartEndLunar(d);
     const sign = (signText || degText) ? `, ${LblSign}: ${signText}${degText ? ' ('+degText+')' : ''}` : '';
@@ -465,7 +497,7 @@ function buildMoonTooltip(d, lunarMap) {
         pct = `${startPct} ${delta > 0 ? '↗' : '↘'} ${endPct}`;
       }
     }
-    return `\n${LblMoon}: ${pct}${evt}${sign}${dist}`;
+    return `\n${LblMoon}: ${pct}${evt}${distEvt}${sign}${dist}`;
   }
   const lm = lunarMap && lunarMap.get(d.day_of_year);
   if (lm) {
@@ -1601,10 +1633,10 @@ function renderCalendar(data) {
         if (isFullEvt) div.classList.add('moon-full');
         // Perigee/Apogee small badges
         if (d.perigee) {
-          const b = document.createElement('span'); b.textContent = '↓'; b.title = `${i18nWord('perigee')} ${d.perigee_utc||''}`; b.style.marginLeft = '2px'; num.appendChild(b);
+          const b = document.createElement('span'); b.textContent = '↓'; b.title = `${i18nWord('perigee')} ${fmtUtcToLocalShort(d.perigee_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b);
         }
         if (d.apogee) {
-          const b = document.createElement('span'); b.textContent = '↑'; b.title = `${i18nWord('apogee')} ${d.apogee_utc||''}`; b.style.marginLeft = '2px'; num.appendChild(b);
+          const b = document.createElement('span'); b.textContent = '↑'; b.title = `${i18nWord('apogee')} ${fmtUtcToLocalShort(d.apogee_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b);
         }
       }
       const shem = document.createElement('div');

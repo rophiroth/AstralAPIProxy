@@ -56,6 +56,21 @@ def _parse_iso_to_jd(date_str: str) -> float:
     # Local time = UTC + offset ⇒ UTC = local - offset
     return jd_local - offset_days
 
+def _jd_to_iso_utc(jd: float) -> str:
+    """Format a JD as an ISO-like UTC string supporting extended years (BCE)."""
+    y, mo, d, hour = swe.revjul(jd)
+    hh = int(hour)
+    mm_f = (hour - hh) * 60.0
+    mi = int(mm_f)
+    ss = int(round((mm_f - mi) * 60.0))
+    if ss == 60:
+        ss = 0; mi += 1
+    if mi == 60:
+        mi = 0; hh += 1
+    # Year can be negative; no datetime here. Pad positives to 4 digits.
+    y_str = (f"{int(y):04d}" if int(y) >= 0 else f"{int(y)}")
+    return f"{y_str}-{int(mo):02d}-{int(d):02d}T{hh:02d}:{mi:02d}:{ss:02d}Z"
+
 @app.route('/calculate', methods=['POST'])
 def calculate():
     try:
@@ -125,7 +140,8 @@ def day_bounds_utc(greg_date: datetime, latitude: float, longitude: float, tz_st
             jd_s_prev = data_prev[0]
         except Exception:
             jd_s_prev = jd_prev_day + 0.75
-        return jd_to_datetime(jd_s_prev, pytz.utc), jd_to_datetime(jd_s_today, pytz.utc)
+        # For BCE we cannot return datetime; return ISO strings instead
+        return _jd_to_iso_utc(jd_s_prev), _jd_to_iso_utc(jd_s_today)
 
 
 @app.route('/calcYear', methods=['POST'])
@@ -256,15 +272,16 @@ def calc_year():
                 'added_week': e_day.get('added_week'),
                 'name': e_day.get('name'),
                 'day_of_year': i + 1,
-                'start_utc': s_prev.isoformat(),
-                'end_utc': s_today.isoformat(),
+                'start_utc': (s_prev if isinstance(s_prev, str) else s_prev.isoformat()),
+                'end_utc': (s_today if isinstance(s_today, str) else s_today.isoformat()),
                 'moon_phase_angle_deg': round(phase, 3),
                 'moon_illum': round(illum, 6),
                 'moon_distance_km': round(dist_km, 1),
                 'moon_sign': moon_sign,
                 'moon_zodiac_mode': zodiac_mode
             }
-            enrich_with_moon_mix(day_record, s_prev, s_today)
+            if not isinstance(s_prev, str) and not isinstance(s_today, str):
+                enrich_with_moon_mix(day_record, s_prev, s_today)
             days.append(day_record)
 
         # If last day reports added week, extend 7 more days
@@ -287,23 +304,29 @@ def calc_year():
                     'added_week': e_day.get('added_week'),
                     'name': e_day.get('name'),
                     'day_of_year': i + 1,
-                    'start_utc': s_prev.isoformat(),
-                    'end_utc': s_today.isoformat(),
+                    'start_utc': (s_prev if isinstance(s_prev, str) else s_prev.isoformat()),
+                    'end_utc': (s_today if isinstance(s_today, str) else s_today.isoformat()),
                     'moon_phase_angle_deg': round(phase, 3),
                     'moon_illum': round(illum, 6),
                     'moon_distance_km': round(dist_km, 1),
                     'moon_sign': moon_sign,
                     'moon_zodiac_mode': zodiac_mode
                 }
-                enrich_with_moon_mix(day_record, s_prev, s_today)
+                if not isinstance(s_prev, str) and not isinstance(s_today, str):
+                    enrich_with_moon_mix(day_record, s_prev, s_today)
                 days.append(day_record)
 
         # Compute exact lunar events across the full span (from first start to last end)
         if days:
-            span_start = datetime.fromisoformat(days[0]['start_utc'].replace('Z','+00:00'))
-            span_end = datetime.fromisoformat(days[-1]['end_utc'].replace('Z','+00:00'))
-            phase_events = scan_phase_events(span_start, span_end, step_hours=6)
-            dist_events = scan_perigee_apogee(span_start, span_end, step_hours=6)
+            # Event scanning only when bounds are standard ISO parseable
+            try:
+                span_start = datetime.fromisoformat(days[0]['start_utc'].replace('Z','+00:00'))
+                span_end = datetime.fromisoformat(days[-1]['end_utc'].replace('Z','+00:00'))
+                phase_events = scan_phase_events(span_start, span_end, step_hours=6)
+                dist_events = scan_perigee_apogee(span_start, span_end, step_hours=6)
+            except Exception:
+                phase_events = []
+                dist_events = []
             # Map events to containing day bucket
             def bucket_index(t):
                 for idx, d in enumerate(days):

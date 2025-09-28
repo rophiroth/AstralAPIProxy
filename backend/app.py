@@ -324,53 +324,53 @@ def calc_year():
                 day_dict['moon_sign_primary_pct'] = primary_pct
             secondary = mix.get('secondary_sign')
             secondary_pct = mix.get('secondary_pct')
-                # Adjuntar longitudes crudas al inicio/fin del día (best effort)
+            # Adjuntar longitudes crudas al inicio/fin del día (best effort)
+            try:
+                s_state = sun_moon_state(jd_utc(start_dt))
+                e_state = sun_moon_state(jd_utc(end_dt))
+                lon_start = s_state[1]
+                lon_end = e_state[1]
+                # Normalizar a 0..360 para salida estable
+                lon_start_n = (lon_start % 360.0 + 360.0) % 360.0
+                lon_end_n = (lon_end % 360.0 + 360.0) % 360.0
+                day_dict['moon_long_start_deg'] = round(lon_start_n, 3)
+                day_dict['moon_long_end_deg'] = round(lon_end_n, 3)
+                # Delta hacia adelante (desenrollado)
+                lon_end_unwrapped = lon_end
+                while lon_end_unwrapped < lon_start - 1e-9:
+                    lon_end_unwrapped += 360.0
+                delta = max(0.0, lon_end_unwrapped - lon_start)
+                day_dict['moon_long_delta_deg'] = round(delta, 3)
+                # Signos de inicio/fin
+                sign_start = lunar_sign_from_longitude(lon_start, zodiac_mode)
+                sign_end = lunar_sign_from_longitude(lon_end, zodiac_mode)
+                day_dict['moon_sign_start'] = sign_start
+                day_dict['moon_sign_end'] = sign_end
+                # Fase e iluminación al inicio/fin del día enojeano
+                phase_start, illum_start = s_state[2], s_state[3]
+                phase_end, illum_end = e_state[2], e_state[3]
+                day_dict['moon_phase_angle_start_deg'] = round(phase_start, 3)
+                day_dict['moon_phase_angle_end_deg'] = round(phase_end, 3)
+                day_dict['moon_illum_start'] = round(illum_start, 6)
+                day_dict['moon_illum_end'] = round(illum_end, 6)
+            except Exception:
+                # Approximate start/end illum when Swiss is unavailable
                 try:
-                    s_state = sun_moon_state(jd_utc(start_dt))
-                    e_state = sun_moon_state(jd_utc(end_dt))
-                    lon_start = s_state[1]
-                    lon_end = e_state[1]
-                    # Normalizar a 0..360 para salida estable
-                    lon_start_n = (lon_start % 360.0 + 360.0) % 360.0
-                    lon_end_n = (lon_end % 360.0 + 360.0) % 360.0
-                    day_dict['moon_long_start_deg'] = round(lon_start_n, 3)
-                    day_dict['moon_long_end_deg'] = round(lon_end_n, 3)
-                    # Delta hacia adelante (desenrollado)
-                    lon_end_unwrapped = lon_end
-                    while lon_end_unwrapped < lon_start - 1e-9:
-                        lon_end_unwrapped += 360.0
-                    delta = max(0.0, lon_end_unwrapped - lon_start)
-                    day_dict['moon_long_delta_deg'] = round(delta, 3)
-                    # Signos de inicio/fin
-                    sign_start = lunar_sign_from_longitude(lon_start, zodiac_mode)
-                    sign_end = lunar_sign_from_longitude(lon_end, zodiac_mode)
-                    day_dict['moon_sign_start'] = sign_start
-                    day_dict['moon_sign_end'] = sign_end
-                    # Fase e iluminación al inicio/fin del día enojeano
-                    phase_start, illum_start = s_state[2], s_state[3]
-                    phase_end, illum_end = e_state[2], e_state[3]
-                    day_dict['moon_phase_angle_start_deg'] = round(phase_start, 3)
-                    day_dict['moon_phase_angle_end_deg'] = round(phase_end, 3)
-                    day_dict['moon_illum_start'] = round(illum_start, 6)
-                    day_dict['moon_illum_end'] = round(illum_end, 6)
+                    # If start_dt/end_dt are strings (ISO), convert to JD
+                    def to_jd_from_any(x):
+                        if isinstance(x, str):
+                            return _parse_iso_to_jd(x)
+                        return jd_utc(x)
+                    jd_s = to_jd_from_any(start_dt)
+                    jd_e = to_jd_from_any(end_dt)
+                    ph_s, il_s = _approx_lunar_for_jd(jd_s)
+                    ph_e, il_e = _approx_lunar_for_jd(jd_e)
+                    day_dict['moon_phase_angle_start_deg'] = round(ph_s, 3)
+                    day_dict['moon_phase_angle_end_deg'] = round(ph_e, 3)
+                    day_dict['moon_illum_start'] = round(il_s, 6)
+                    day_dict['moon_illum_end'] = round(il_e, 6)
                 except Exception:
-                    # Approximate start/end illum when Swiss is unavailable
-                    try:
-                        # If start_dt/end_dt are strings (ISO), convert to JD
-                        def to_jd_from_any(x):
-                            if isinstance(x, str):
-                                return _parse_iso_to_jd(x)
-                            return jd_utc(x)
-                        jd_s = to_jd_from_any(start_dt)
-                        jd_e = to_jd_from_any(end_dt)
-                        ph_s, il_s = _approx_lunar_for_jd(jd_s)
-                        ph_e, il_e = _approx_lunar_for_jd(jd_e)
-                        day_dict['moon_phase_angle_start_deg'] = round(ph_s, 3)
-                        day_dict['moon_phase_angle_end_deg'] = round(ph_e, 3)
-                        day_dict['moon_illum_start'] = round(il_s, 6)
-                        day_dict['moon_illum_end'] = round(il_e, 6)
-                    except Exception:
-                        pass
+                    pass
 
             # Política: 100% sólo si no hubo cruce de signo; si hubo, reportar mezcla exacta.
             segs = mix.get('segments') or []

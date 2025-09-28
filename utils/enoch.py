@@ -19,6 +19,14 @@ for archivo in ["seplm36.se1", "seplm42.se1", "sepl_30.se1"]:
     print(f"✅ {archivo} encontrado: {os.path.exists(ruta)}")
 print(f"[DEBUG] Ruta de efemérides seteada en: {ruta_efem}")
 
+# Detectar índice de miércoles en runtime (evita supuestos de mapeo del backend de Swiss Ephemeris)
+WEDNESDAY_INDEX = swe.day_of_week(swe.julday(2025, 3, 19, 0.0))  # 2025-03-19 es miércoles
+
+def _dow_index_from_jd(jd_val: float) -> int:
+    """Devuelve el índice de día de semana para el JD dado, usando 0h UT del día civil."""
+    y, mo, d, _h = swe.revjul(jd_val)
+    return swe.day_of_week(swe.julday(int(y), int(mo), int(d), 0.0))
+
 
 def calculate_real_equinox_jd(target_date,longitude,latitude):
     """
@@ -121,13 +129,13 @@ def find_enoch_year_start(target_date,longitude=REFERENCE_LONGITUDE,latitude=REF
 
     # 2. Buscar miércoles anterior (Enoj inicia en miércoles)
     jd_before = equinox_jd
-    # Swiss day_of_week: 0=Dom,1=Lun,2=Mar,3=Mié,4=Jue,5=Vie,6=Sáb
-    while swe.day_of_week(jd_before) != 3:
+    # Usar índice detectado para miércoles, comparando con el día civil (0h UT)
+    while _dow_index_from_jd(jd_before) != WEDNESDAY_INDEX:
         jd_before -= 1.0
     #debug_jd(jd_before,"jd_before")
     # 3. Buscar miércoles siguiente
     jd_after = equinox_jd
-    while swe.day_of_week(jd_after) != 3:
+    while _dow_index_from_jd(jd_after) != WEDNESDAY_INDEX:
         jd_after += 1.0
     #debug_jd(jd_after,"jd_after")
     # 4. Calcular sunsets para ambos martes

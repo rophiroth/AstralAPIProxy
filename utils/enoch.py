@@ -9,6 +9,7 @@ REFERENCE_LONGITUDE = -70.6667
 REFERENCE_ENOCH_YEAR = 5996  # Año base de Enoj (equivale a 2025)
 
 import os
+from datetime import datetime
 
 # Ruta ABSOLUTA al directorio que contiene los .se1
 ruta_efem = os.path.abspath("sweph/ephe")
@@ -44,37 +45,68 @@ def calculate_real_equinox_jd(target_date,longitude,latitude):
 
 
 
-def _find_equinox_jd_for_year(year,longitude,latitude):
+def _find_longitude_crossing_for_year(year:int, target_longitude:float, longitude:float, latitude:float, start_hint:tuple) -> float:
     """
-    Función auxiliar que encuentra el JD del equinoccio de marzo de un año dado.
+    Busca el JD (UT) donde el Sol alcanza `target_longitude` (0=Aries, 90=Cáncer, 180=Libra, 270=Capricornio)
+    en el año `year`. Usa un inicio aproximado `start_hint` = (mes, día) para converger rápido.
     """
     swe.set_topo(longitude, latitude, 0)
-    jd_start = swe.julday(year, 3, 15)
-
-    target_longitude = 0.0  # 0° Aries
+    m, d = start_hint
+    jd_start = swe.julday(year, m, d)
     planet = swe.SUN
-    flags = swe.FLG_SWIEPH | swe.FLG_TOPOCTR #| swe.FLG_TRUEPOS
-
-    step = 0.25  # Paso de búsqueda en días
-    max_iterations = 200
+    flags = swe.FLG_SWIEPH | swe.FLG_TOPOCTR
+    max_iterations = 240
     for _ in range(max_iterations):
         jd_tt = jd_to_tt(jd_start)
-        pos, _ = swe.calc(jd_tt, planet,flags)
-        sun_long = pos[0] % 360
+        pos, _ = swe.calc(jd_tt, planet, flags)
+        sun_long = pos[0] % 360.0
+        diff = (sun_long - target_longitude + 540.0) % 360.0 - 180.0
+        if abs(diff) < 0.005:  # ~0.005° ≈ 20'' de arco
+            return jd_start
+        jd_start -= diff / (360.0 / 365.2422)
+    raise RuntimeError(f"No se encontró cruce solar {target_longitude}° para el año {year}")
 
-        if abs(sun_long - target_longitude) < 0.01:
-            break
 
-        diff = (sun_long - target_longitude + 360) % 360
-        if diff > 180:
-            diff -= 360
+def _find_equinox_jd_for_year(year,longitude,latitude):
+    """
+    Equinoccio de marzo (Sol en 0° Aries). Si falla el cálculo preciso,
+    aplica fallback: interpolación por DB opcional y, en última instancia, aproximación fija.
+    """
+    try:
+        return _find_longitude_crossing_for_year(year, 0.0, longitude, latitude, (3, 15))
+    except Exception:
+        # 1) Intentar interpolación con base de datos opcional backend/equinox_db.json
+        try:
+            import json
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            db_path = os.path.normpath(os.path.join(base_dir, '..', 'backend', 'equinox_db.json'))
+            if os.path.exists(db_path):
+                with open(db_path, 'r', encoding='utf-8') as f:
+                    db = json.load(f)
+                years = sorted(int(y) for y in db.keys())
+                before = max((y for y in years if y < year and db.get(str(y), {}).get('march_utc')), default=None)
+                after = min((y for y in years if y > year and db.get(str(y), {}).get('march_utc')), default=None)
+                if before is not None and after is not None and after != before:
+                    b_iso = db[str(before)]['march_utc']
+                    a_iso = db[str(after)]['march_utc']
+                    b_dt = datetime.fromisoformat(b_iso.replace('Z', '+00:00'))
+                    a_dt = datetime.fromisoformat(a_iso.replace('Z', '+00:00'))
+                    # Interpolación lineal en tiempo
+                    w = (year - before) / (after - before)
+                    avg_dt = b_dt + (a_dt - b_dt) * w
+                    h = avg_dt.hour + avg_dt.minute/60 + avg_dt.second/3600 + avg_dt.microsecond/3600000000
+                    return swe.julday(avg_dt.year, avg_dt.month, avg_dt.day, h)
+        except Exception:
+            pass
+        # 2) Aproximación estable: 20-Mar a las 21:24 UTC
+        return swe.julday(year, 3, 20, 21 + 24/60)
 
-        jd_start -= diff / (360 / 365.2422)
 
-    else:
-        raise RuntimeError(f"No se encontró el equinoccio para el año {year}")
-
-    return jd_start
+def find_equinoxes_jd(year:int, longitude:float, latitude:float):
+    """Retorna (jd_march, jd_september) para el año dado."""
+    jd_mar = _find_longitude_crossing_for_year(year, 0.0, longitude, latitude, (3, 15))
+    jd_sep = _find_longitude_crossing_for_year(year, 180.0, longitude, latitude, (9, 15))
+    return jd_mar, jd_sep
 
 
 def find_enoch_year_start(target_date,longitude=REFERENCE_LONGITUDE,latitude=REFERENCE_LATITUDE,debugloop=False):

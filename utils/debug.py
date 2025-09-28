@@ -11,8 +11,17 @@ def debug_jd(jd, label="Debug JD",label2="DEBUG"):
     minutes = int(minutes_decimal)
     seconds_decimal = (minutes_decimal - minutes) * 60
     seconds = int(seconds_decimal)
-    dt = datetime(y,m,d,hours,minutes,seconds,0)
-    name = dt.strftime("%A")
+    try:
+        # datetime no soporta años <= 0; sólo usar cuando está en rango
+        if 1 <= int(y) <= 9999:
+            dt = datetime(int(y), int(m), int(d), hours, minutes, seconds, 0)
+            name = dt.strftime("%A")
+        else:
+            raise ValueError("year out of range")
+    except Exception:
+        # Nombre del día vía Swiss Ephemeris
+        dow = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        name = dow[int(swe.day_of_week(jd))]
     print(f"[{label2}] {label} Fecha Gregoriana: {name} {int(d):02d}/{int(m):02d}/{int(y)} {hours:02d}:{minutes:02d}:{seconds:02d} UTC  (JD: {jd:.6f})")
     
     

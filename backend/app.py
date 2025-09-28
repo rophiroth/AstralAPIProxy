@@ -94,15 +94,38 @@ def calculate():
 
 def day_bounds_utc(greg_date: datetime, latitude: float, longitude: float, tz_str: str):
     """Return (start_utc, end_utc) where start is previous day's sunset and end is day's sunset."""
+    # Preferred: Astral (good for common-year ranges)
     try:
         tz = pytz.timezone(tz_str)
     except Exception:
         tz = pytz.utc
-    loc = LocationInfo(name="L", region="L", timezone=tz_str, latitude=latitude, longitude=longitude)
-    local_day = tz.localize(datetime(greg_date.year, greg_date.month, greg_date.day, 12, 0, 0))
-    s_today = astral_sun(loc.observer, date=local_day.date(), tzinfo=tz)["sunset"]
-    s_prev = astral_sun(loc.observer, date=(local_day - timedelta(days=1)).date(), tzinfo=tz)["sunset"]
-    return s_prev.astimezone(pytz.utc), s_today.astimezone(pytz.utc)
+    try:
+        loc = LocationInfo(name="L", region="L", timezone=tz_str, latitude=latitude, longitude=longitude)
+        local_day = tz.localize(datetime(greg_date.year, greg_date.month, greg_date.day, 12, 0, 0))
+        s_today = astral_sun(loc.observer, date=local_day.date(), tzinfo=tz)["sunset"]
+        s_prev = astral_sun(loc.observer, date=(local_day - timedelta(days=1)).date(), tzinfo=tz)["sunset"]
+        return s_prev.astimezone(pytz.utc), s_today.astimezone(pytz.utc)
+    except Exception:
+        # Fallback: Swiss Ephemeris sunsets (works for BCE/proleptic)
+        geopos = (longitude, latitude, 0)
+        # today
+        jd0 = swe.julday(greg_date.year, greg_date.month, greg_date.day, 0.0)
+        try:
+            _, data_today = swe.rise_trans(jd0, swe.SUN, 2, geopos)  # 2 = sunset
+            jd_s_today = data_today[0]
+        except Exception:
+            jd_s_today = jd0 + 0.75  # approx 18:00 UTC fallback
+        # previous day
+        y2, m2, d2 = (greg_date.year, greg_date.month, greg_date.day)
+        # naive previous day in JD
+        jd_prev_day = swe.julday(y2, m2, d2, 0.0) - 1.0
+        yb, mb, db, _ = swe.revjul(jd_prev_day)
+        try:
+            _, data_prev = swe.rise_trans(swe.julday(yb, mb, db, 0.0), swe.SUN, 2, geopos)
+            jd_s_prev = data_prev[0]
+        except Exception:
+            jd_s_prev = jd_prev_day + 0.75
+        return jd_to_datetime(jd_s_prev, pytz.utc), jd_to_datetime(jd_s_today, pytz.utc)
 
 
 @app.route('/calcYear', methods=['POST'])
@@ -116,12 +139,17 @@ def calc_year():
         zodiac_mode = (data.get("zodiac_mode") or "tropical").lower()
 
         # Base date and Enoch mapping via existing util
-        dt_local = localize_datetime(date_str, tz_str)
-        dt_utc = dt_local.astimezone(pytz.utc)
-        jd = swe.julday(
-            dt_utc.year, dt_utc.month, dt_utc.day,
-            dt_utc.hour + dt_utc.minute / 60 + dt_utc.second / 3600 + dt_utc.microsecond / 3600000000
-        )
+        try:
+            dt_local = localize_datetime(date_str, tz_str)
+            dt_utc = dt_local.astimezone(pytz.utc)
+            jd = swe.julday(
+                dt_utc.year, dt_utc.month, dt_utc.day,
+                dt_utc.hour + dt_utc.minute / 60 + dt_utc.second / 3600 + dt_utc.microsecond / 3600000000
+            )
+        except Exception:
+            # Extended ISO (BCE) → JD
+            jd = _parse_iso_to_jd(date_str)
+            dt_utc = jd_to_datetime(jd, pytz.utc)
         base_enoch = calculate_enoch_date(jd, latitude, longitude, tz_str)
         enoch_year = base_enoch.get('enoch_year')
         enoch_day_of_year = base_enoch.get('enoch_day_of_year')

@@ -1672,14 +1672,29 @@ function renderCalendar(data) {
     } catch(_) {}
     return false; // default: keep it simple, no overrides
   }
-  // Alignment mode for calendar columns: 'civil' (default) or 'enoch'
+  // Heuristic: dataset built approximately (BCE/proleptic) when most days lack moon_distance_km
+  function isApproxData() {
+    try {
+      if (!Array.isArray(data) || data.length === 0) return false;
+      let missing = 0, total = 0;
+      for (let i = 0; i < data.length; i++) {
+        const v = data[i] && data[i].moon_distance_km;
+        if (!(typeof v === 'number' && isFinite(v))) missing++;
+        total++;
+        if (i >= 60) break; // sample first ~2 months for speed
+      }
+      return total > 0 && (missing / total) > 0.6; // majority missing ⇒ approx
+    } catch(_) { return false; }
+  }
+  // Alignment mode for calendar columns: 'civil' or 'enoch'
   function getAlignMode() {
     try {
       const q = (getQS().get('align') || '').toLowerCase();
       if (['enoch','enoq','e'].includes(q)) return 'enoch';
       if (['civil','greg','g'].includes(q)) return 'civil';
     } catch(_) {}
-    return 'civil';
+    // Default: when data is approximate (BCE), align by Enoch week so day 1 is Wednesday
+    return isApproxData() ? 'enoch' : 'civil';
   }
   const calendarDiv = document.getElementById('calendar');
   calendarDiv.innerHTML = '';
@@ -1720,7 +1735,7 @@ function renderCalendar(data) {
     let row = document.createElement('tr');
     // Compute leading blanks for the first day of this month.
     const anchor = monthData.find(d => d.enoch_day === 1) || monthData[0];
-    // Align month start: default to civil weekdays; allow override via ?align=enoch
+    // Align month start; auto-switch to Enoch in approx datasets
     const startCol = (getAlignMode() === 'enoch')
       ? enochWeekIndexForDay(anchor)
       : civilWeekIndexForDay(anchor);

@@ -1664,8 +1664,14 @@ function renderCalendar(data) {
     // Fallback to Enoch-anchored index if timestamps are missing
     return ((d.day_of_year - 1) + 3) % 7;
   }
-  // Enoch week index anchored so that day 1 of the year is Wednesday (index 3)
-  function enochWeekIndexForDay(d) {
+  // Week index for the Enoch day, using the civil weekday of the START boundary (sunset-to-sunset day)
+  function enochStartWeekIndexForDay(d) {
+    try {
+      const { tz } = getUserLatLonTz();
+      const dt = d && d.start_utc ? parseIsoUtcSafe(d.start_utc) : null;
+      if (dt && !isNaN(dt)) return weekdayIndexInTzFromDate(dt, tz || 'UTC');
+    } catch(_) {}
+    // Fallback to Enoch anchor
     return ((d.day_of_year - 1) + 3) % 7;
   }
   // No separate Enoch label in tooltip; grid alignment already conveys weekday
@@ -1748,9 +1754,9 @@ function renderCalendar(data) {
     let row = document.createElement('tr');
     // Compute leading blanks for the first day of this month.
     const anchor = monthData.find(d => d.enoch_day === 1) || monthData[0];
-    // Align month start; auto-switch to Enoch in approx datasets
+    // Align month start; in 'enoch' mode align by the civil weekday of the day START (sunset)
     const startCol = (getAlignMode() === 'enoch')
-      ? enochWeekIndexForDay(anchor)
+      ? enochStartWeekIndexForDay(anchor)
       : civilWeekIndexForDay(anchor);
     for (let i = 0; i < startCol; i++) row.appendChild(document.createElement('td'));
 

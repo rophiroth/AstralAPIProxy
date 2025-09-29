@@ -717,8 +717,8 @@ def calc_year():
             jd = _parse_iso_to_jd(date_str)
             base_enoch = _approx_enoch_from_jd(jd, latitude, longitude)
             enoch_year = base_enoch.get('enoch_year')
-            enoch_day_of_year = base_enoch.get('enoch_day_of_year')
-            start_jd = jd - (int(enoch_day_of_year) - 1)
+            # Anchor start at Wednesday sunset nearest equinox (approx path, no Swiss ephe)
+            start_jd = _approx_start_jd_for_enoch_year(jd, latitude, longitude)
             days = []
             total_days = 364
             for i in range(total_days):

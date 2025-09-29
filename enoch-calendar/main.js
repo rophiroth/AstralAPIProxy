@@ -85,6 +85,79 @@ async function resolveUserLocation() {
 
 function getUserLatLonTz() { return { lat: USER_LAT, lon: USER_LON, tz: USER_TZ }; }
 
+// Format an ISO UTC datetime string into user's timezone (YYYY-MM-DD HH:mm TZ)
+// Robust ISO UTC -> local string formatter that handles years 0..99 and BCE
+function parseIsoUtcSafe(isoUtc) {
+  if (!isoUtc || typeof isoUtc !== 'string') return null;
+  try {
+    // Try native first
+    const n = new Date(isoUtc);
+    if (!isNaN(n.getTime())) return n;
+  } catch(_) {}
+  try {
+    // Fallback manual parser: YYYY-MM-DDTHH:MM[:SS[.sss]]Z or +00:00
+    const m = isoUtc.match(/^([+-]?\d{1,6})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,6}))?)?(Z|[+-]\d{2}:\d{2})?$/);
+    if (!m) return null;
+    const Y = parseInt(m[1], 10);
+    const Mo = parseInt(m[2], 10) - 1;
+    const D = parseInt(m[3], 10);
+    const h = parseInt(m[4], 10);
+    const mi = parseInt(m[5], 10);
+    const s = m[6] ? parseInt(m[6], 10) : 0;
+    const ms = m[7] ? Math.round(parseInt((m[7] + '000').slice(0,3), 10)) : 0;
+    const tz = m[8] || 'Z';
+    // Build UTC time value; handle offsets
+    let t = Date.UTC(Y >= 0 ? Y : Y, Mo, D, h, mi, s, ms);
+    if (tz !== 'Z') {
+      const sign = tz[0] === '+' ? 1 : -1;
+      const th = parseInt(tz.slice(1,3), 10);
+      const tm = parseInt(tz.slice(4,6), 10);
+      const offMs = sign * (th*3600 + tm*60) * 1000;
+      // local = UTC + offset => UTC = local - offset
+      t -= offMs;
+    }
+    const d = new Date(t);
+    // Correct 0..99 year quirk when constructing via components
+    if (Y >= 0 && Y <= 99) d.setUTCFullYear(Y);
+    return d;
+  } catch (_) {
+    return null;
+  }
+}
+
+function formatUTCToLocal(isoUtc, tz) {
+  try {
+    if (!isoUtc) return '';
+    const d = parseIsoUtcSafe(isoUtc);
+    if (isNaN(d.getTime())) return String(isoUtc);
+    const options = { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz, timeZoneName: 'short' };
+    const parts = new Intl.DateTimeFormat(undefined, options).formatToParts(d);
+    const get = (t) => (parts.find(p => p.type === t)?.value || '');
+    // Preserve BCE years from the original ISO string if present
+    let yyyy = get('year');
+    try {
+      const m = String(isoUtc).match(/^([+-]?\d{1,6})-/);
+      if (m) {
+        const Y = parseInt(m[1], 10);
+        if (Y <= 0) yyyy = String(Y); // astronomical year (0=1 BC)
+      }
+    } catch(_){ }
+    const mm = get('month');
+    const dd = get('day');
+    const hh = get('hour');
+    const mi = get('minute');
+    const tzName = get('timeZoneName');
+    const core = `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
+    return tzName ? `${core} ${tzName}` : `${core}`;
+  } catch(_) {
+    return String(isoUtc || '');
+  }
+}
+
+function fmtUtcToLocalShort(isoUtc) {
+  try { const { tz } = getUserLatLonTz(); return formatUTCToLocal(isoUtc, tz); } catch(_) { return String(isoUtc||''); }
+}
+
 // Sanity: map phase angle to nearest canonical event
 function nearestEventFromAngle(deg) {
   if (typeof deg !== 'number' || !isFinite(deg)) return '';
@@ -438,8 +511,14 @@ function buildMoonTooltip(d, lunarMap) {
     const LblDist = i18nWord('labelDistance');
     let evt = '';
     if (typeof useServerEvents === 'function' ? useServerEvents() : false) {
-      if (d.moon_event) evt = `, ${LblEvent}: ${moonEventLabel(d.moon_event)}${d.moon_event_utc?(' @ '+d.moon_event_utc):''}`;
+      if (d.moon_event) evt = `, ${LblEvent}: ${moonEventLabel(d.moon_event)}${d.moon_event_utc?(' @ '+fmtUtcToLocalShort(d.moon_event_utc)):''}`;
     }
+    // Always include perigee/apogee times (if present) in the info line, formatted to user's TZ
+    let distEvt = '';
+    try {
+      if (d.perigee && d.perigee_utc) distEvt += `, ${i18nWord('perigee')}: ${fmtUtcToLocalShort(d.perigee_utc)}`;
+      if (d.apogee && d.apogee_utc) distEvt += `, ${i18nWord('apogee')}: ${fmtUtcToLocalShort(d.apogee_utc)}`;
+    } catch(_) {}
     const signText = formatSignMix(d);
     const degText = formatStartEndLunar(d);
     const sign = (signText || degText) ? `, ${LblSign}: ${signText}${degText ? ' ('+degText+')' : ''}` : '';
@@ -465,7 +544,7 @@ function buildMoonTooltip(d, lunarMap) {
         pct = `${startPct} ${delta > 0 ? '↗' : '↘'} ${endPct}`;
       }
     }
-    return `\n${LblMoon}: ${pct}${evt}${sign}${dist}`;
+    return `\n${LblMoon}: ${pct}${evt}${distEvt}${sign}${dist}`;
   }
   const lm = lunarMap && lunarMap.get(d.day_of_year);
   if (lm) {
@@ -492,6 +571,7 @@ function resolveCalcYearUrl() {
     return (API_URL || '').replace(/\/calculate$/, '/calcYear') || '/calcYear';
   }
 }
+
 
 // --- CSV cache/upload config helpers ---
 function getQS() {
@@ -1158,7 +1238,33 @@ async function buildCalendar(referenceDate = new Date(), tryCSV = true, base = n
           return;
         }
       }
-      console.warn('[buildCalendar] /calcYear failed or returned invalid, falling back');
+      // Retry calcYear once in approximate mode before falling back
+      try {
+        const bodyApprox = { ...body, approx: true };
+        console.log('[buildCalendar] retry /calcYear approx', calcYearUrl, bodyApprox);
+        const res2 = await fetch(calcYearUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bodyApprox) });
+        if (res2.ok) {
+          const j2 = await res2.json();
+          if (j2 && j2.ok && Array.isArray(j2.days)) {
+            currentData = j2.days.map(d => ({ ...d, name: (d && d.name) ? d.name : getShemEnochiano(d.enoch_month, d.enoch_day, d.added_week) }));
+            currentYearLength = currentData.length;
+            try { window.currentData = currentData; } catch(_){ }
+            renderCalendar(currentData);
+            setYearLabel(j2.enoch_year || enoch_year);
+            status.textContent = '';
+            try {
+              const csv = buildCsvText(currentData);
+              if (csv && shouldCacheCsv()) saveCsvToLocal(j2.enoch_year || enoch_year, csv);
+              if (csv && shouldUploadCsv()) uploadCsvToServer(j2.enoch_year || enoch_year, csv);
+            } catch(e){ console.warn('[buildCalendar] cache/upload skipped', e?.message || e); }
+            isBuilding = false;
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn('[buildCalendar] /calcYear approx failed', e?.message || e);
+      }
+      console.warn('[buildCalendar] /calcYear failed or invalid after approx retry, falling back');
     } catch(e) {
       console.warn('[buildCalendar] /calcYear error, fallback to daily batches', e?.message || e);
     }
@@ -1494,6 +1600,82 @@ function renderCalendar(data) {
   } catch(_){}
   const festivalMap = buildFestivalMap(data);
   const lunarMap = buildLunarMap(data);
+  // By definition, Enoch Year day 1 is Wednesday; lock alignment to avoid drift across years
+  let w0 = 3; // 0=Sun .. 3=Wed .. 6=Sat
+  // Localized weekday labels for display/tooltips
+  function getWeekdayLabelsLocalized() {
+    try {
+      const L = getLang();
+      // Always return Sunday-first order to match layout indexing (0=Sun..6=Sat)
+      return (L === 'es')
+        ? ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb']
+        : ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    } catch(_) { return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; }
+  }
+  const WEEKDAYS_LABELS = getWeekdayLabelsLocalized();
+  // Helper: Gregorian weekday short name for a YYYY-MM-DD using user's tz and app lang
+  function gregWeekdayShort(ymd) {
+    try {
+      // Try standard YMD (positive years)
+      let dt = parseYMDToUTC(ymd);
+      // Support BCE/negative years by building a full ISO and using safe parser
+      if (!dt) {
+        const iso = `${String(ymd)}T12:00:00Z`;
+        dt = parseIsoUtcSafe(iso);
+      }
+      if (!dt) return '';
+      const { tz } = getUserLatLonTz();
+      const L = getLang();
+      const locale = (L === 'en') ? 'en-US' : 'es-CL';
+      const txt = new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone: tz || 'UTC' }).format(dt);
+      // Normalize first letter uppercase for consistency
+      return (txt && typeof txt === 'string') ? (txt.charAt(0).toUpperCase() + txt.slice(1)) : txt;
+    } catch(_) { return ''; }
+  }
+  // Enoch weekday label (use the civil weekday of the day END boundary)
+  function enochWeekdayShortFromDay(d) {
+    try {
+      const { tz } = getUserLatLonTz();
+      // Prefer end_utc (day ends at sunset), then fallback to start_utc
+      let dt = d && d.end_utc ? parseIsoUtcSafe(d.end_utc) : null;
+      if (!dt || isNaN(dt)) dt = d && d.start_utc ? parseIsoUtcSafe(d.start_utc) : null;
+      if (!dt || isNaN(dt)) return '';
+      const L = getLang();
+      const locale = (L === 'en') ? 'en-US' : 'es-CL';
+      const txt = new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone: tz || 'UTC' }).format(dt);
+      return (txt && typeof txt === 'string') ? (txt.charAt(0).toUpperCase() + txt.slice(1)) : txt;
+    } catch(_) { return ''; }
+  }
+  // Helper: weekday index (0=Sun..6=Sat) for an ISO UTC timestamp in user's tz
+  function weekdayIndexInTzFromDate(dt, tz) {
+    try {
+      const short = new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: tz || 'UTC' }).format(dt);
+      const map = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+      return Math.max(0, map.indexOf(short));
+    } catch(_) { return 0; }
+  }
+  // Civil weekday index in user's timezone (0=Sun..6=Sat)
+  function civilWeekIndexForDay(d) {
+    try {
+      const { tz } = getUserLatLonTz();
+      let dt = d && d.end_utc ? parseIsoUtcSafe(d.end_utc) : null;
+      if (!dt || isNaN(dt)) dt = d && d.start_utc ? parseIsoUtcSafe(d.start_utc) : null;
+      if (dt && !isNaN(dt)) return weekdayIndexInTzFromDate(dt, tz || 'UTC');
+    } catch(_) {}
+    // Fallback to Enoch-anchored index if timestamps are missing
+    return ((d.day_of_year - 1) + 3) % 7;
+  }
+  // Week index for the Enoch day, using the civil weekday of the END boundary (sunset-to-sunset day)
+  function enochEndWeekIndexForDay(d) {
+    try {
+      const { tz } = getUserLatLonTz();
+      const dt = d && d.end_utc ? parseIsoUtcSafe(d.end_utc) : null;
+      if (dt && !isNaN(dt)) return weekdayIndexInTzFromDate(dt, tz || 'UTC');
+    } catch(_) {}
+    // Fallback to Enoch anchor
+    return ((d.day_of_year - 1) + 3) % 7;
+  }
+  // No separate Enoch label in tooltip; grid alignment already conveys weekday
   function useServerEvents() {
     try {
       const q = (getQS().get('events') || '').toLowerCase();
@@ -1510,13 +1692,42 @@ function renderCalendar(data) {
     } catch(_) {}
     return false; // default: keep it simple, no overrides
   }
+  // Heuristic: dataset built approximately (BCE/proleptic) when most days lack moon_distance_km
+  function isApproxData() {
+    try {
+      if (!Array.isArray(data) || data.length === 0) return false;
+      let missing = 0, total = 0;
+      for (let i = 0; i < data.length; i++) {
+        const v = data[i] && data[i].moon_distance_km;
+        if (!(typeof v === 'number' && isFinite(v))) missing++;
+        total++;
+        if (i >= 60) break; // sample first ~2 months for speed
+      }
+      return total > 0 && (missing / total) > 0.6; // majority missing ⇒ approx
+    } catch(_) { return false; }
+  }
+  // Alignment mode for calendar columns: 'civil' or 'enoch'
+  function getAlignMode() {
+    try {
+      const q = (getQS().get('align') || '').toLowerCase();
+      if (['enoch','enoq','e'].includes(q)) return 'enoch';
+      if (['civil','greg','g'].includes(q)) return 'civil';
+    } catch(_) {}
+    // Default: when data is approximate (BCE), align by Enoch week so day 1 is Wednesday
+    return isApproxData() ? 'enoch' : 'civil';
+  }
   const calendarDiv = document.getElementById('calendar');
   calendarDiv.innerHTML = '';
   const iconOverrides = useIconOverrides() ? buildIconOverrides(data) : new Map();
   const todayStr = new Date().toISOString().slice(0, 10);
 
   for (let m = 1; m <= 12; m++) {
-    const monthData = data.filter(d => d.enoch_month === m);
+    // Ensure month days start at enoch_day=1 to avoid off-by-one alignment when
+    // the first record happens to be day 2 due to approximation paths.
+    const monthData = data
+      .filter(d => d.enoch_month === m)
+      .slice()
+      .sort((a, b) => (a.enoch_day || 0) - (b.enoch_day || 0));
     const table = document.createElement('table');
     table.className = 'month';
     const caption = document.createElement('caption');
@@ -1532,8 +1743,7 @@ function renderCalendar(data) {
 
     const thead = document.createElement('thead');
     const headRow = document.createElement('tr');
-    const WEEKDAYS = getWeekdaysShort();
-    WEEKDAYS.forEach(w => {
+    WEEKDAYS_LABELS.forEach(w => {
       const th = document.createElement('th');
       th.textContent = w;
       headRow.appendChild(th);
@@ -1544,10 +1754,11 @@ function renderCalendar(data) {
     const tbody = document.createElement('tbody');
     let row = document.createElement('tr');
     // Compute leading blanks for the first day of this month.
-    // In this calendar, day_of_year 1 is Wednesday (index 3 when 0=Sun).
-    // Month starts are determined by the day_of_year of the first entry of the month.
-    const firstDayOfYear = monthData[0]?.day_of_year || 1;
-    const startCol = ((firstDayOfYear - 1) + 3) % 7; // 0=Sun .. 6=Sat
+    const anchor = monthData.find(d => d.enoch_day === 1) || monthData[0];
+    // Align month start; in 'enoch' mode align by the civil weekday of the day END (sunset)
+    const startCol = (getAlignMode() === 'enoch')
+      ? enochEndWeekIndexForDay(anchor)
+      : civilWeekIndexForDay(anchor);
     for (let i = 0; i < startCol; i++) row.appendChild(document.createElement('td'));
 
     monthData.forEach(d => {
@@ -1559,17 +1770,25 @@ function renderCalendar(data) {
       const div = document.createElement('div');
       div.className = 'day';
       if (d.gregorian === todayStr) div.classList.add('today');
-      if ((d.day_of_year + 3) % 7 === 0) div.classList.add('shabbat');
+      // Shabbat styling follows civil Saturday
+      if (civilWeekIndexForDay(d) === 6) div.classList.add('shabbat');
       const festInfo = festivalMap.get(d.day_of_year);
       if (festInfo) {
         (festInfo.classList || []).forEach(c => div.classList.add(c));
         div.classList.add('festival');
       }
-      // Tooltip: include start/end at local sunset boundaries
-      const { lat, lon } = getUserLatLonTz();
-      const { startUTC, endUTC } = sunsetPairForYMD(d.gregorian, lat, lon);
-      const startLocal = fmtLocal(startUTC);
-      const endLocal = fmtLocal(endUTC);
+      // Tooltip: prefer backend start/end if present; fallback to local NOAA
+      let startLocal = '';
+      let endLocal = '';
+      if (d.start_utc && d.end_utc) {
+        startLocal = fmtUtcToLocalShort(d.start_utc);
+        endLocal = fmtUtcToLocalShort(d.end_utc);
+      } else {
+        const { lat, lon } = getUserLatLonTz();
+        const { startUTC, endUTC } = sunsetPairForYMD(d.gregorian, lat, lon);
+        startLocal = fmtLocal(startUTC);
+        endLocal = fmtLocal(endUTC);
+      }
       const festLine = festInfo && festInfo.name ? `\n${window.t ? window.t('labelFestival') : 'Festival'}: ${festInfo.name}` : '';
       // Add Sefirot mapping for Days of Awe (7/1..7/10)
       let sefLine = '';
@@ -1581,7 +1800,10 @@ function renderCalendar(data) {
       const lblStart = window.t ? window.t('labelStart') : 'Starts';
       const lblEnd = window.t ? window.t('labelEnd') : 'Ends';
       const moonLine = buildMoonTooltip(d, lunarMap);
-      div.title = `${lblDate}: ${d.gregorian}\n${lblStart}: ${startLocal}\n${lblEnd}: ${endLocal}${festLine}${sefLine}${moonLine}`;
+      // Show Gregorian weekday next to the date (localized)
+      const gWk = enochWeekdayShortFromDay(d) || gregWeekdayShort(d.gregorian);
+      div.title = `${lblDate}: ${d.gregorian}${gWk ? ' (' + gWk + ')' : ''}`
+        + `\n${lblStart}: ${startLocal}\n${lblEnd}: ${endLocal}${festLine}${sefLine}${moonLine}`;
 
       const num = document.createElement('div');
       num.className = 'num';
@@ -1601,10 +1823,10 @@ function renderCalendar(data) {
         if (isFullEvt) div.classList.add('moon-full');
         // Perigee/Apogee small badges
         if (d.perigee) {
-          const b = document.createElement('span'); b.textContent = '↓'; b.title = `${i18nWord('perigee')} ${d.perigee_utc||''}`; b.style.marginLeft = '2px'; num.appendChild(b);
+          const b = document.createElement('span'); b.textContent = '↓'; b.title = `${i18nWord('perigee')} ${fmtUtcToLocalShort(d.perigee_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b);
         }
         if (d.apogee) {
-          const b = document.createElement('span'); b.textContent = '↑'; b.title = `${i18nWord('apogee')} ${d.apogee_utc||''}`; b.style.marginLeft = '2px'; num.appendChild(b);
+          const b = document.createElement('span'); b.textContent = '↑'; b.title = `${i18nWord('apogee')} ${fmtUtcToLocalShort(d.apogee_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b);
         }
       }
       const shem = document.createElement('div');
@@ -1641,7 +1863,7 @@ function renderCalendar(data) {
       const cell = document.createElement('td');
       const div = document.createElement('div');
       div.className = 'day';
-      if ((d.day_of_year + 3) % 7 === 0) div.classList.add('shabbat');
+      if (civilWeekIndexForDay(d) === 6) div.classList.add('shabbat');
       const fest2 = festivalMap.get(d.day_of_year);
       if (fest2) {
         (fest2.classList || []).forEach(c => div.classList.add(c));
@@ -1649,14 +1871,28 @@ function renderCalendar(data) {
       }
       // Intercalary tooltip with sunset boundaries
       const { lat: lat2, lon: lon2 } = getUserLatLonTz();
-      const pair2 = sunsetPairForYMD(d.gregorian, lat2, lon2);
+      // Prefer backend bounds; fallback to local NOAA
+      let pair2 = null;
+      let startLocal2 = '';
+      let endLocal2 = '';
+      if (d.start_utc && d.end_utc) {
+        startLocal2 = fmtUtcToLocalShort(d.start_utc);
+        endLocal2 = fmtUtcToLocalShort(d.end_utc);
+      } else {
+        pair2 = sunsetPairForYMD(d.gregorian, lat2, lon2);
+        startLocal2 = fmtLocal(pair2.startUTC);
+        endLocal2 = fmtLocal(pair2.endUTC);
+      }
       const f2 = festivalMap.get(d.day_of_year);
       const f2Line = f2 && f2.name ? `\n${window.t ? window.t('labelFestival') : 'Festival'}: ${f2.name}` : '';
       const lblDate2 = window.t ? window.t('labelDate') : 'Date';
       const lblStart2 = window.t ? window.t('labelStart') : 'Starts';
       const lblEnd2 = window.t ? window.t('labelEnd') : 'Ends';
       const moonLine2 = buildMoonTooltip(d, lunarMap);
-      div.title = `${lblDate2}: ${d.gregorian}\n${lblStart2}: ${fmtLocal(pair2.startUTC)}\n${lblEnd2}: ${fmtLocal(pair2.endUTC)}${f2Line}${moonLine2}`;
+      // Include Gregorian weekday name for intercalary days too
+      const gWk2 = enochWeekdayShortFromDay(d) || gregWeekdayShort(d.gregorian);
+      div.title = `${lblDate2}: ${d.gregorian}${gWk2 ? ' (' + gWk2 + ')' : ''}`
+        + `\n${lblStart2}: ${startLocal2}\n${lblEnd2}: ${endLocal2}${f2Line}${moonLine2}`;
       const num = document.createElement('div');
       num.className = 'num';
       num.textContent = d.enoch_day;

@@ -171,6 +171,27 @@ def _approx_enoch_from_jd(jd: float, latitude: float, longitude: float):
         'added_week': added_week
     }
 
+def _approx_start_jd_for_enoch_year(jd: float) -> float:
+    """Return the approximate start JD (UT) of the Enoch year containing the given JD.
+    Uses the same heuristic as _approx_enoch_from_jd but returns the anchor Wednesday JD.
+    """
+    y, _m, _d, _ = swe.revjul(jd)
+    def _dow_index(jd_val: float) -> int:
+        yy, mo, dd, _h = swe.revjul(jd_val)
+        return swe.day_of_week(swe.julday(int(yy), int(mo), int(dd), 0.0))
+    WED_IDX = swe.day_of_week(swe.julday(2025, 3, 19, 0.0))
+    anchor_jd = swe.julday(int(y), 3, 20, 21 + 24/60)
+    start_jd = anchor_jd
+    while _dow_index(start_jd) != WED_IDX:
+        start_jd += 1.0
+    if jd < start_jd:
+        py = int(y) - 1
+        pa = swe.julday(py, 3, 20, 21 + 24/60)
+        start_jd = pa
+        while _dow_index(start_jd) != WED_IDX:
+            start_jd += 1.0
+    return start_jd
+
 # Approx lunar phase (no Swiss files)
 SYNODIC_DAYS = 29.530588853
 REF_NEW_MOON_JD = swe.julday(2000, 1, 6, 18 + 14/60)
@@ -319,10 +340,19 @@ def calc_year():
         enoch_year = base_enoch.get('enoch_year')
         enoch_day_of_year = base_enoch.get('enoch_day_of_year')
         # Determine start anchor
-        if not bce_mode:
-            start_utc = dt_utc - timedelta(days=int(enoch_day_of_year) - 1)
+        use_jd_path = False
+        start_utc = None
+        start_jd = None
+        if approx_mode:
+            # For approximate years, always build from a JD anchor aligned to Wednesday
+            start_jd = _approx_start_jd_for_enoch_year(jd)
+            use_jd_path = True
         else:
-            start_jd = jd - (int(enoch_day_of_year) - 1)
+            if not bce_mode:
+                start_utc = dt_utc - timedelta(days=int(enoch_day_of_year) - 1)
+            else:
+                start_jd = jd - (int(enoch_day_of_year) - 1)
+                use_jd_path = True
 
         days = []
 
@@ -425,7 +455,7 @@ def calc_year():
         # First compute a baseline 364 days; we will extend by 7 if added week is flagged on last day
         total_days = 364
         for i in range(total_days):
-            if not bce_mode and not approx_mode:
+            if not use_jd_path:
                 day_dt_utc = start_utc + timedelta(days=i)
                 greg = day_dt_utc.date().isoformat()
                 # Midday sample for positions

@@ -1632,12 +1632,13 @@ function renderCalendar(data) {
       return (txt && typeof txt === 'string') ? (txt.charAt(0).toUpperCase() + txt.slice(1)) : txt;
     } catch(_) { return ''; }
   }
-  // Enoch weekday label (use the civil weekday of the day start boundary)
+  // Enoch weekday label (use the civil weekday of the day END boundary)
   function enochWeekdayShortFromDay(d) {
     try {
       const { tz } = getUserLatLonTz();
-      let dt = d && d.start_utc ? parseIsoUtcSafe(d.start_utc) : null;
-      if (!dt || isNaN(dt)) dt = d && d.end_utc ? parseIsoUtcSafe(d.end_utc) : null;
+      // Prefer end_utc (day ends at sunset), then fallback to start_utc
+      let dt = d && d.end_utc ? parseIsoUtcSafe(d.end_utc) : null;
+      if (!dt || isNaN(dt)) dt = d && d.start_utc ? parseIsoUtcSafe(d.start_utc) : null;
       if (!dt || isNaN(dt)) return '';
       const L = getLang();
       const locale = (L === 'en') ? 'en-US' : 'es-CL';
@@ -1664,11 +1665,11 @@ function renderCalendar(data) {
     // Fallback to Enoch-anchored index if timestamps are missing
     return ((d.day_of_year - 1) + 3) % 7;
   }
-  // Week index for the Enoch day, using the civil weekday of the START boundary (sunset-to-sunset day)
-  function enochStartWeekIndexForDay(d) {
+  // Week index for the Enoch day, using the civil weekday of the END boundary (sunset-to-sunset day)
+  function enochEndWeekIndexForDay(d) {
     try {
       const { tz } = getUserLatLonTz();
-      const dt = d && d.start_utc ? parseIsoUtcSafe(d.start_utc) : null;
+      const dt = d && d.end_utc ? parseIsoUtcSafe(d.end_utc) : null;
       if (dt && !isNaN(dt)) return weekdayIndexInTzFromDate(dt, tz || 'UTC');
     } catch(_) {}
     // Fallback to Enoch anchor
@@ -1754,9 +1755,9 @@ function renderCalendar(data) {
     let row = document.createElement('tr');
     // Compute leading blanks for the first day of this month.
     const anchor = monthData.find(d => d.enoch_day === 1) || monthData[0];
-    // Align month start; in 'enoch' mode align by the civil weekday of the day START (sunset)
+    // Align month start; in 'enoch' mode align by the civil weekday of the day END (sunset)
     const startCol = (getAlignMode() === 'enoch')
-      ? enochStartWeekIndexForDay(anchor)
+      ? enochEndWeekIndexForDay(anchor)
       : civilWeekIndexForDay(anchor);
     for (let i = 0; i < startCol; i++) row.appendChild(document.createElement('td'));
 

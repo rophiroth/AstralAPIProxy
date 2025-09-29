@@ -171,26 +171,45 @@ def _approx_enoch_from_jd(jd: float, latitude: float, longitude: float):
         'added_week': added_week
     }
 
-def _approx_start_jd_for_enoch_year(jd: float) -> float:
+def _approx_start_jd_for_enoch_year(jd: float, latitude: float, longitude: float) -> float:
     """Return the approximate start JD (UT) of the Enoch year containing the given JD.
-    Uses the same heuristic as _approx_enoch_from_jd but returns the anchor Wednesday JD.
+    Chooses the Wednesday whose SUNSET is closest to the March equinox anchor,
+    using a NOAA-like sunset approximation at the provided latitude/longitude.
+    If the date is before that start, computes from the previous year's anchor.
     """
-    y, _m, _d, _ = swe.revjul(jd)
-    def _dow_index(jd_val: float) -> int:
+    def _dow_index_0h(jd_val: float) -> int:
         yy, mo, dd, _h = swe.revjul(jd_val)
         return swe.day_of_week(swe.julday(int(yy), int(mo), int(dd), 0.0))
     WED_IDX = swe.day_of_week(swe.julday(2025, 3, 19, 0.0))
-    anchor_jd = swe.julday(int(y), 3, 20, 21 + 24/60)
-    start_jd = anchor_jd
-    while _dow_index(start_jd) != WED_IDX:
-        start_jd += 1.0
-    if jd < start_jd:
+
+    def _pick_wed_sunset_near(anchor_jd_val: float) -> float:
+        # Find previous and next Wednesdays by civil day
+        jd_before = anchor_jd_val
+        while _dow_index_0h(jd_before) != WED_IDX:
+            jd_before -= 1.0
+        yb, mb, db, _ = swe.revjul(jd_before)
+
+        jd_after = anchor_jd_val
+        while _dow_index_0h(jd_after) != WED_IDX:
+            jd_after += 1.0
+        ya, ma, da, _ = swe.revjul(jd_after)
+
+        # Compute sunset UT for both candidates using NOAA approx
+        sh_b_h, sh_b_m, sh_b_s = _approx_sunset_ut_hms(int(yb), int(mb), int(db), latitude, longitude)
+        sh_a_h, sh_a_m, sh_a_s = _approx_sunset_ut_hms(int(ya), int(ma), int(da), latitude, longitude)
+        s_before = swe.julday(int(yb), int(mb), int(db), sh_b_h + sh_b_m/60 + sh_b_s/3600)
+        s_after  = swe.julday(int(ya), int(ma), int(da), sh_a_h + sh_a_m/60 + sh_a_s/3600)
+        # Pick sunset closer to equinox anchor
+        return s_before if abs(s_before - anchor_jd_val) <= abs(s_after - anchor_jd_val) else s_after
+
+    y, _m, _d, _ = swe.revjul(jd)
+    anchor = swe.julday(int(y), 3, 20, 21 + 24/60)
+    start = _pick_wed_sunset_near(anchor)
+    if jd < start:
         py = int(y) - 1
-        pa = swe.julday(py, 3, 20, 21 + 24/60)
-        start_jd = pa
-        while _dow_index(start_jd) != WED_IDX:
-            start_jd += 1.0
-    return start_jd
+        anchor_prev = swe.julday(py, 3, 20, 21 + 24/60)
+        start = _pick_wed_sunset_near(anchor_prev)
+    return start
 
 # Approx lunar phase (no Swiss files)
 SYNODIC_DAYS = 29.530588853
@@ -344,8 +363,8 @@ def calc_year():
         start_utc = None
         start_jd = None
         if approx_mode:
-            # For approximate years, always build from a JD anchor aligned to Wednesday
-            start_jd = _approx_start_jd_for_enoch_year(jd)
+            # For approximate years, build from a JD anchor at Wednesday's sunset nearest the equinox
+            start_jd = _approx_start_jd_for_enoch_year(jd, latitude, longitude)
             use_jd_path = True
         else:
             if not bce_mode:

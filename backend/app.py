@@ -123,33 +123,20 @@ def _iso_from_ymd_hms(y:int, mo:int, d:int, hh:int, mi:int, ss:int) -> str:
 
 def _approx_enoch_from_jd(jd: float, latitude: float, longitude: float):
     """Approximate Enoch mapping without Swiss ephemeris files.
-    - Anchor equinox at Mar 20 21:24 UT of that Gregorian year
-    - Start of Enoch year = first Wednesday on/after that anchor (by JD weekday)
-    - Day-of-year = floor(jd - start) + 1
-    - Enoch year number mapped to reference 2025 -> 5996
+    Policy (aligned with UI/backfill paths):
+    - Day boundary is at local SUNSET.
+    - Year starts at the TUESDAY SUNSET nearest to March equinox at given lat/lon
+      (i.e., Day 1 runs Tue-sunset → Wed-sunset).
+    - Day-of-year = floor(jd - year_start_tuesday_sunset) + 1
+    - Month lengths fixed: 30,30,31,30,30,31,30,30,31,30,30,31
+    - Year number mapped so that Gregorian 2025 → Enoch 5996 using the
+      Gregorian year of the start boundary.
     """
-    y, m, d, _ = swe.revjul(jd)
-    # Helper: day-of-week index for a JD using date-only (0h UT) to avoid noon JD quirks
-    def _dow_index(jd_val: float) -> int:
-        yy, mo, dd, _h = swe.revjul(jd_val)
-        return swe.day_of_week(swe.julday(int(yy), int(mo), int(dd), 0.0))
-    # Detect Wednesday index at runtime using a known Wednesday (2025-03-19)
-    WED_IDX = swe.day_of_week(swe.julday(2025, 3, 19, 0.0))
-    # Anchor equinox ~
-    anchor_jd = swe.julday(int(y), 3, 20, 21 + 24/60)
-    # First Wednesday on/after anchor
-    start_jd = anchor_jd
-    while _dow_index(start_jd) != WED_IDX:
-        start_jd += 1.0
-    if jd < start_jd:
-        # Use previous year's anchor
-        py = int(y) - 1
-        pa = swe.julday(py, 3, 20, 21 + 24/60)
-        start_jd = pa
-        while _dow_index(start_jd) != WED_IDX:
-            start_jd += 1.0
-    day_of_year = int(jd - start_jd) + 1
-    # Month/day split by fixed months: 30,30,31, ..., 31 (same as frontend)
+    # Start boundary (Tuesday sunset) for the containing year
+    start_jd = _approx_start_jd_for_enoch_year(jd, latitude, longitude)
+    # Use floor to be safe with BCE and fractional JDs around boundary
+    day_of_year = int(math.floor(jd - start_jd)) + 1
+    # Month/day split
     months = [30,30,31,30,30,31,30,30,31,30,30,31]
     added_week = day_of_year > 364
     md = day_of_year - 1
@@ -159,7 +146,7 @@ def _approx_enoch_from_jd(jd: float, latitude: float, longitude: float):
         m_idx += 1
     enoch_month = min(12, m_idx + 1)
     enoch_day = md + 1
-    # Enoch year numbering relative to 2025->5996, using the Gregorian year of the start
+    # Year numbering relative to start boundary's civil year
     sy, _, _, _ = swe.revjul(start_jd)
     years_passed = int(sy) - 2025
     enoch_year = 5996 + years_passed

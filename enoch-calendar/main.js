@@ -1632,6 +1632,19 @@ function renderCalendar(data) {
       return (txt && typeof txt === 'string') ? (txt.charAt(0).toUpperCase() + txt.slice(1)) : txt;
     } catch(_) { return ''; }
   }
+  // Enoch weekday label (use the civil weekday of the day start boundary)
+  function enochWeekdayShortFromDay(d) {
+    try {
+      const { tz } = getUserLatLonTz();
+      let dt = d && d.start_utc ? parseIsoUtcSafe(d.start_utc) : null;
+      if (!dt || isNaN(dt)) dt = d && d.end_utc ? parseIsoUtcSafe(d.end_utc) : null;
+      if (!dt || isNaN(dt)) return '';
+      const L = getLang();
+      const locale = (L === 'en') ? 'en-US' : 'es-CL';
+      const txt = new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone: tz || 'UTC' }).format(dt);
+      return (txt && typeof txt === 'string') ? (txt.charAt(0).toUpperCase() + txt.slice(1)) : txt;
+    } catch(_) { return ''; }
+  }
   // Helper: weekday index (0=Sun..6=Sat) for an ISO UTC timestamp in user's tz
   function weekdayIndexInTzFromDate(dt, tz) {
     try {
@@ -1781,7 +1794,7 @@ function renderCalendar(data) {
       const lblEnd = window.t ? window.t('labelEnd') : 'Ends';
       const moonLine = buildMoonTooltip(d, lunarMap);
       // Show Gregorian weekday next to the date (localized)
-      const gWk = gregWeekdayShort(d.gregorian);
+      const gWk = enochWeekdayShortFromDay(d) || gregWeekdayShort(d.gregorian);
       div.title = `${lblDate}: ${d.gregorian}${gWk ? ' (' + gWk + ')' : ''}`
         + `\n${lblStart}: ${startLocal}\n${lblEnd}: ${endLocal}${festLine}${sefLine}${moonLine}`;
 
@@ -1870,7 +1883,7 @@ function renderCalendar(data) {
       const lblEnd2 = window.t ? window.t('labelEnd') : 'Ends';
       const moonLine2 = buildMoonTooltip(d, lunarMap);
       // Include Gregorian weekday name for intercalary days too
-      const gWk2 = gregWeekdayShort(d.gregorian);
+      const gWk2 = enochWeekdayShortFromDay(d) || gregWeekdayShort(d.gregorian);
       div.title = `${lblDate2}: ${d.gregorian}${gWk2 ? ' (' + gWk2 + ')' : ''}`
         + `\n${lblStart2}: ${startLocal2}\n${lblEnd2}: ${endLocal2}${f2Line}${moonLine2}`;
       const num = document.createElement('div');

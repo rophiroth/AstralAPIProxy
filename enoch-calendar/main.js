@@ -796,6 +796,7 @@ let currentYearLength = 364;
 let currentYear;
 let currentData = [];
 let isBuilding = false;
+let todayTimerId = null;
 
 console.log('[main] script loaded');
 
@@ -1769,6 +1770,7 @@ function renderCalendar(data) {
       const cell = document.createElement('td');
       const div = document.createElement('div');
       div.className = 'day';
+      try { div.setAttribute('data-day-of-year', String(d.day_of_year)); } catch(_) {}
       if (d.gregorian === todayStr) div.classList.add('today');
       // Shabbat styling follows civil Saturday
       if (civilWeekIndexForDay(d) === 6) div.classList.add('shabbat');
@@ -1863,6 +1865,7 @@ function renderCalendar(data) {
       const cell = document.createElement('td');
       const div = document.createElement('div');
       div.className = 'day';
+      try { div.setAttribute('data-day-of-year', String(d.day_of_year)); } catch(_) {}
       if (civilWeekIndexForDay(d) === 6) div.classList.add('shabbat');
       const fest2 = festivalMap.get(d.day_of_year);
       if (fest2) {
@@ -1930,6 +1933,59 @@ function renderCalendar(data) {
     table.appendChild(tbody);
     calendarDiv.appendChild(table);
   }
+
+  // After rendering, ensure today's highlight is correct and schedule rollover
+  try { refreshTodayHighlight(); scheduleTodayRollover(); } catch(_){ }
+}
+
+// Compute and apply the .today class based on start/end UTC boundaries
+function refreshTodayHighlight() {
+  try {
+    if (!Array.isArray(currentData) || currentData.length === 0) return;
+    const nowMs = Date.now();
+    // Find the day whose [start_utc, end_utc) interval contains now
+    let todayDoY = null;
+    for (let i = 0; i < currentData.length; i++) {
+      const d = currentData[i];
+      const a = Date.parse(d.start_utc || '');
+      const b = Date.parse(d.end_utc || '');
+      if (Number.isFinite(a) && Number.isFinite(b) && a <= nowMs && nowMs < b) {
+        todayDoY = d.day_of_year;
+        break;
+      }
+    }
+    // Update DOM classes
+    const nodes = document.querySelectorAll('.day.today');
+    nodes.forEach(n => n.classList.remove('today'));
+    if (todayDoY != null) {
+      const el = document.querySelector(`.day[data-day-of-year="${todayDoY}"]`);
+      if (el) el.classList.add('today');
+    }
+  } catch(_) { }
+}
+
+// Schedule a timer to flip highlight at the next boundary (start/end UTC)
+function scheduleTodayRollover() {
+  try {
+    if (todayTimerId) { clearTimeout(todayTimerId); todayTimerId = null; }
+    if (!Array.isArray(currentData) || currentData.length === 0) return;
+    const nowMs = Date.now();
+    let nextMs = Infinity;
+    for (let i = 0; i < currentData.length; i++) {
+      const d = currentData[i];
+      const a = Date.parse(d.start_utc || '');
+      const b = Date.parse(d.end_utc || '');
+      if (Number.isFinite(a) && a > nowMs && a < nextMs) nextMs = a;
+      if (Number.isFinite(b) && b > nowMs && b < nextMs) nextMs = b;
+    }
+    // Fallback: refresh in one minute if no boundary found
+    const delay = (nextMs !== Infinity) ? Math.max(1000, nextMs - nowMs + 1000) : 60 * 1000;
+    todayTimerId = setTimeout(() => {
+      try { refreshTodayHighlight(); } catch(_){}
+      // Reschedule for the next boundary
+      try { scheduleTodayRollover(); } catch(_){}
+    }, delay);
+  } catch(_) { }
 }
 
 // --- Touch/click tooltip support for mobile (Android/iOS) ---
@@ -2211,21 +2267,47 @@ function scrollToToday() {
   } catch(_){}
 }
 
-// Jump to the Enoch year that contains today, render it, then scroll to today
+// Jump to today's year with CSV-first and avoid rebuilding if already loaded
 async function goToToday() {
   try {
     if (isBuilding) { console.log('[today] build in progress'); return; }
     const today = new Date();
-    // Ask backend for exact Enoch year/day for today respecting user tz
-    const base = await fetchEnoch(today);
-    const y = base?.enoch?.enoch_year;
-    if (y && preferCsv() && await loadYearFromCSV(y)) {
-      // CSV path: already rendered
-      setYearLabel(y);
+
+    // 0) If today's cell is already visible, just scroll/highlight
+    const el = document.querySelector('.day.today');
+    if (el) { setTimeout(scrollToToday, 0); return; }
+
+    // 1) CSV-first using local approximation (no backend call)
+    const approxYear = getApproxEnochYearForDate(new Date(today.toISOString()));
+    if (currentYear === approxYear && Array.isArray(currentData) && currentData.length) {
+      // Already showing the correct year; reuse view and just scroll
+      setYearLabel(currentYear);
       setTimeout(scrollToToday, 0);
       return;
     }
-    // Fallback to API build from today base
+    if (preferCsv() && await loadYearFromCSV(approxYear)) {
+      setYearLabel(approxYear);
+      setTimeout(scrollToToday, 0);
+      return;
+    }
+
+    // 2) Backend as precise fallback to get exact Enoch year/day, then prefer CSV
+    const base = await fetchEnoch(today);
+    const y = base?.enoch?.enoch_year;
+    if (y) {
+      if (currentYear === y && Array.isArray(currentData) && currentData.length) {
+        setYearLabel(y);
+        setTimeout(scrollToToday, 0);
+        return;
+      }
+      if (preferCsv() && await loadYearFromCSV(y)) {
+        setYearLabel(y);
+        setTimeout(scrollToToday, 0);
+        return;
+      }
+    }
+
+    // 3) Final fallback: build from today base via API
     await buildCalendar(today, false, base);
     setTimeout(scrollToToday, 0);
   } catch(e) {

@@ -1953,15 +1953,22 @@ function renderCalendar(data) {
         num.appendChild(m);
         if (isNewEvt) div.classList.add('moon-new');
         if (isFullEvt) div.classList.add('moon-full');
-        // Perigee/Apogee small badges
-        if (d.perigee) { const b = document.createElement('span'); b.textContent = 'P'; b.title = `${i18nWord('perigee')} ${fmtUtcToLocalShort(d.perigee_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
-        if (d.apogee) { const b = document.createElement('span'); b.textContent = 'A'; b.title = `${i18nWord('apogee')} ${fmtUtcToLocalShort(d.apogee_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
-        if (d.equinox) { const b = document.createElement('span'); b.textContent = 'EQ'; b.title = `${i18nWord('equinox')} ${fmtUtcToLocalShort(d.equinox_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
-        if (d.solstice) { const b = document.createElement('span'); b.textContent = 'SOL'; b.title = `${i18nWord('solstice')} ${fmtUtcToLocalShort(d.solstice_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
-        if (d.solar_eclipse) { const b = document.createElement('span'); b.textContent = 'SE'; b.title = `${i18nWord('solarEclipse')} ${fmtUtcToLocalShort(d.solar_eclipse_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
-        if (d.lunar_eclipse) { const b = document.createElement('span'); b.textContent = 'LE'; b.title = `${i18nWord('lunarEclipse')} ${fmtUtcToLocalShort(d.lunar_eclipse_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
-        if (d.supermoon) { const b = document.createElement('span'); b.textContent = 'S'; b.title = `${i18nWord('supermoon')} ${fmtUtcToLocalShort(d.supermoon_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
-        if (Number(d.alignment) >= 4) { const b = document.createElement('span'); b.textContent = 'AL'; b.title = `${i18nWord('alignment')} (${d.alignment}) ${fmtUtcToLocalShort(d.alignment_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
+        // Helper to append badges with a centered dot separator between them
+        const appendBadge = (label, title) => {
+          if (!label) return;
+          const had = num.querySelectorAll('span.badge').length > 0;
+          if (had) { const s = document.createElement('span'); s.className = 'badge-sep'; s.textContent = '·'; s.style.margin = '0 2px'; num.appendChild(s); }
+          const b = document.createElement('span'); b.className = 'badge'; b.textContent = label; if (title) b.title = title; num.appendChild(b);
+        };
+        // Perigee/Apogee and other astro badges
+        if (d.perigee) appendBadge('P', `${i18nWord('perigee')} ${fmtUtcToLocalShort(d.perigee_utc)||''}`);
+        if (d.apogee) appendBadge('A', `${i18nWord('apogee')} ${fmtUtcToLocalShort(d.apogee_utc)||''}`);
+        if (d.equinox) appendBadge('EQ', `${i18nWord('equinox')} ${fmtUtcToLocalShort(d.equinox_utc)||''}`);
+        if (d.solstice) appendBadge('SOL', `${i18nWord('solstice')} ${fmtUtcToLocalShort(d.solstice_utc)||''}`);
+        if (d.solar_eclipse) appendBadge('SE', `${i18nWord('solarEclipse')} ${fmtUtcToLocalShort(d.solar_eclipse_utc)||''}`);
+        if (d.lunar_eclipse) appendBadge('LE', `${i18nWord('lunarEclipse')} ${fmtUtcToLocalShort(d.lunar_eclipse_utc)||''}`);
+        if (d.supermoon) appendBadge('S', `${i18nWord('supermoon')} ${fmtUtcToLocalShort(d.supermoon_utc)||''}`);
+        if (Number(d.alignment) >= 4) appendBadge('AL', `${i18nWord('alignment')} (${d.alignment}) ${fmtUtcToLocalShort(d.alignment_utc)||''}`);
       }
       const shem = document.createElement('div');
       shem.className = 'shem';
@@ -2047,15 +2054,21 @@ function renderCalendar(data) {
           if (newEvt2) div.classList.add('moon-new');
           if (fullEvt2) div.classList.add('moon-full');
         }
-        // Small badges for additional astronomical events
-        if (d.perigee) { const b = document.createElement('span'); b.textContent = 'P'; b.title = `${i18nWord('perigee')} ${fmtUtcToLocalShort(d.perigee_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
-        if (d.apogee) { const b = document.createElement('span'); b.textContent = 'A'; b.title = `${i18nWord('apogee')} ${fmtUtcToLocalShort(d.apogee_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
-        if (d.equinox) { const b = document.createElement('span'); b.textContent = 'EQ'; b.title = `${i18nWord('equinox')} ${fmtUtcToLocalShort(d.equinox_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
-        if (d.solstice) { const b = document.createElement('span'); b.textContent = 'SOL'; b.title = `${i18nWord('solstice')} ${fmtUtcToLocalShort(d.solstice_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
-        if (d.solar_eclipse) { const b = document.createElement('span'); b.textContent = 'SE'; b.title = `${i18nWord('solarEclipse')} ${fmtUtcToLocalShort(d.solar_eclipse_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
-        if (d.lunar_eclipse) { const b = document.createElement('span'); b.textContent = 'LE'; b.title = `${i18nWord('lunarEclipse')} ${fmtUtcToLocalShort(d.lunar_eclipse_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
-        if (d.supermoon) { const b = document.createElement('span'); b.textContent = 'S'; b.title = `${i18nWord('supermoon')} ${fmtUtcToLocalShort(d.supermoon_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
-        if (Number(d.alignment) >= 4) { const b = document.createElement('span'); b.textContent = 'AL'; b.title = `${i18nWord('alignment')} (${d.alignment}) ${fmtUtcToLocalShort(d.alignment_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
+        // Small badges for additional astronomical events with dot separators
+        const appendBadge2 = (label, title) => {
+          if (!label) return;
+          const had = num.querySelectorAll('span.badge').length > 0;
+          if (had) { const s = document.createElement('span'); s.className = 'badge-sep'; s.textContent = '·'; s.style.margin = '0 2px'; num.appendChild(s); }
+          const b = document.createElement('span'); b.className = 'badge'; b.textContent = label; if (title) b.title = title; num.appendChild(b);
+        };
+        if (d.perigee) appendBadge2('P', `${i18nWord('perigee')} ${fmtUtcToLocalShort(d.perigee_utc)||''}`);
+        if (d.apogee) appendBadge2('A', `${i18nWord('apogee')} ${fmtUtcToLocalShort(d.apogee_utc)||''}`);
+        if (d.equinox) appendBadge2('EQ', `${i18nWord('equinox')} ${fmtUtcToLocalShort(d.equinox_utc)||''}`);
+        if (d.solstice) appendBadge2('SOL', `${i18nWord('solstice')} ${fmtUtcToLocalShort(d.solstice_utc)||''}`);
+        if (d.solar_eclipse) appendBadge2('SE', `${i18nWord('solarEclipse')} ${fmtUtcToLocalShort(d.solar_eclipse_utc)||''}`);
+        if (d.lunar_eclipse) appendBadge2('LE', `${i18nWord('lunarEclipse')} ${fmtUtcToLocalShort(d.lunar_eclipse_utc)||''}`);
+        if (d.supermoon) appendBadge2('S', `${i18nWord('supermoon')} ${fmtUtcToLocalShort(d.supermoon_utc)||''}`);
+        if (Number(d.alignment) >= 4) appendBadge2('AL', `${i18nWord('alignment')} (${d.alignment}) ${fmtUtcToLocalShort(d.alignment_utc)||''}`);
       }
       const shem = document.createElement('div');
       shem.className = 'shem';

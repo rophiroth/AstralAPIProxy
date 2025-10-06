@@ -31,7 +31,8 @@ else:
         "https://calendar.psyhackers.org",
     ]
 
-CORS(app, resources={r"/calculate": {"origins": allowed_origins}, r"/calcYear": {"origins": allowed_origins}}, supports_credentials=False)
+# Broaden CORS to all routes so even error responses carry CORS headers for these origins
+CORS(app, resources={r"/*": {"origins": allowed_origins}}, supports_credentials=False)
 
 # --- Helpers to support extended ISO (including BCE) directly to JD ---
 import re

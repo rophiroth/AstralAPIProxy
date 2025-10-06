@@ -613,7 +613,7 @@ function resolveUploadUrl() {
 // Build CSV URL with versioned cache-busting and optional no-cache toggle
 function csvFetchUrl(year) {
   try {
-    const base = `./enoch-calendar-${year}.csv`;
+    const base = `./csv/enoch-calendar-${year}.csv`;
     const u = new URL(base, window.location.href);
     const ver = (typeof APP_VERSION === 'string' && APP_VERSION) ? APP_VERSION : String(Date.now());
     u.searchParams.set('v', ver);

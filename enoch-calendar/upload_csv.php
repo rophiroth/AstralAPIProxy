@@ -57,7 +57,11 @@ if ($year === '') {
 
 // Fixed, safe filename pattern
 $safeName = 'enoch-calendar-' . $year . '.csv';
-$targetDir = __DIR__;
+// Save into ./csv subfolder
+$targetDir = __DIR__ . DIRECTORY_SEPARATOR . 'csv';
+if (!is_dir($targetDir)) {
+  @mkdir($targetDir, 0755, true);
+}
 $target = $targetDir . DIRECTORY_SEPARATOR . $safeName;
 
 // Basic size guard (<= 2 MB)
@@ -79,4 +83,3 @@ if (!move_uploaded_file($_FILES['file']['tmp_name'], $target)) {
 
 echo json_encode(['ok' => true, 'file' => basename($target)]);
 exit;
-

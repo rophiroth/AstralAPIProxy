@@ -260,6 +260,177 @@ ZODIAC_TROPICAL = [
     'Aries','Taurus','Gemini','Cancer','Leo','Virgo','Libra','Scorpio','Sagittarius','Capricorn','Aquarius','Pisces'
 ]
 
+# --- Solar cardinal points (equinoxes/solstices) ---
+def _to_tt_jd(jd_ut: float) -> float:
+    return jd_ut + (69.0/86400.0)
+
+def _sun_ecliptic_longitude_deg(jd_ut: float) -> float:
+    jd_tt = _to_tt_jd(jd_ut)
+    flags = swe.FLG_SWIEPH
+    lon = swe.calc(jd_tt, swe.SUN, flags)[0][0]
+    return _norm360(lon)
+
+def _refine_longitude_crossing(t0_utc: datetime, t1_utc: datetime, target_deg: float, iters: int = 25) -> datetime:
+    target = target_deg % 360.0
+    def f(t: datetime) -> float:
+        return _wrap180(_sun_ecliptic_longitude_deg(jd_utc(t)) - target)
+    a, b = t0_utc, t1_utc
+    fa, fb = f(a), f(b)
+    if abs(fa) < 1e-3: return a
+    if abs(fb) < 1e-3: return b
+    # If same sign, choose closer endpoint; otherwise bisection
+    if fa * fb > 0:
+        return a if abs(fa) < abs(fb) else b
+    for _ in range(iters):
+        mid = a + (b - a) / 2
+        fm = f(mid)
+        if abs(fm) < 1e-4 or (b - a).total_seconds() <= 60:
+            return mid
+        if fa * fm <= 0:
+            b, fb = mid, fm
+        else:
+            a, fa = mid, fm
+    return a + (b - a) / 2
+
+def solar_cardinal_points_for_year(year: int) -> list:
+    """
+    Return list of {'type': 'equinox'|'solstice', 'season': 'march'|'june'|'september'|'december', 'time': datetime_utc}
+    for the given Gregorian year using Swiss Ephemeris.
+    """
+    # Rough anchors to bracket events
+    anchors = [
+        (3, 18, 0.0, 0.0, 'equinox', 'march'),      # around Mar 20
+        (6, 20, 0.0, 90.0, 'solstice', 'june'),      # around Jun 21
+        (9, 20, 0.0, 180.0, 'equinox', 'september'), # around Sep 22/23
+        (12, 20, 0.0, 270.0, 'solstice', 'december') # around Dec 21/22
+    ]
+    out = []
+    for mo, d, hh, tgt, kind, name in anchors:
+        try:
+            # bracket +/- 5 days
+            t0 = datetime(year, mo, d, int(hh), 0, 0, tzinfo=timezone.utc) - timedelta(days=5)
+            t1 = t0 + timedelta(days=10)
+            # Coarse scan to find sign change
+            step = timedelta(hours=12)
+            prev_t = t0
+            prev_v = _wrap180(_sun_ecliptic_longitude_deg(jd_utc(prev_t)) - tgt)
+            found = None
+            t = t0 + step
+            while t <= t1:
+                v = _wrap180(_sun_ecliptic_longitude_deg(jd_utc(t)) - tgt)
+                if v == 0 or (prev_v < 0 and v > 0) or (prev_v > 0 and v < 0):
+                    found = (prev_t, t)
+                    break
+                prev_t, prev_v = t, v
+                t += step
+            if found is None:
+                # fallback: pick endpoint
+                cand = t0 + timedelta(days=5)
+                out.append({'type': kind, 'season': name, 'time': cand})
+            else:
+                t_best = _refine_longitude_crossing(found[0], found[1], tgt)
+                out.append({'type': kind, 'season': name, 'time': t_best})
+        except Exception:
+            # fallback approximate
+            approx = datetime(year, mo, d, 12, 0, 0, tzinfo=timezone.utc)
+            out.append({'type': kind, 'season': name, 'time': approx})
+    return out
+
+# --- Eclipses (best-effort; guarded if functions unavailable) ---
+def scan_eclipses_global(start: datetime, end: datetime) -> list:
+    """Return list of eclipse events between start/end UTC.
+    Each event: { 'type': 'solar'|'lunar', 'time': datetime_utc, 'subtype': str }
+    Uses Swiss Ephemeris when available; otherwise returns [].
+    """
+    events = []
+    try:
+        jd_start = jd_utc(start)
+        jd_end = jd_utc(end)
+        # Solar eclipses (global)
+        try:
+            jd = jd_start
+            while jd < jd_end:
+                # flags: 0 forward
+                r = swe.sol_eclipse_when_glob(jd, swe.FLG_SWIEPH, 0)
+                if isinstance(r, tuple) and len(r) >= 2:
+                    tret = r[1]
+                    if tret and len(tret) > 0 and tret[0] > 0:
+                        t = tret[0]
+                        dt = swe.revjul(t)
+                        dt_utc = datetime(int(dt[0]), int(dt[1]), int(dt[2]), int(dt[3]) % 24, int((dt[3] % 1)*60), 0, tzinfo=timezone.utc)
+                        events.append({'type': 'solar', 'time': dt_utc, 'subtype': 'eclipse'})
+                        jd = t + 5  # skip ahead some days
+                    else:
+                        jd += 20
+                else:
+                    break
+        except Exception:
+            pass
+        # Lunar eclipses (global)
+        try:
+            jd = jd_start
+            while jd < jd_end:
+                r = swe.lun_eclipse_when(jd, swe.FLG_SWIEPH, 0)
+                if isinstance(r, tuple) and len(r) >= 2:
+                    tret = r[1]
+                    if tret and len(tret) > 0 and tret[0] > 0:
+                        t = tret[0]
+                        dt = swe.revjul(t)
+                        dt_utc = datetime(int(dt[0]), int(dt[1]), int(dt[2]), int(dt[3]) % 24, int((dt[3] % 1)*60), 0, tzinfo=timezone.utc)
+                        events.append({'type': 'lunar', 'time': dt_utc, 'subtype': 'eclipse'})
+                        jd = t + 5
+                    else:
+                        jd += 20
+                else:
+                    break
+        except Exception:
+            pass
+    except Exception:
+        return []
+    # Keep only those inside window
+    events = [e for e in events if start <= e['time'] <= end]
+    return events
+
+# --- Simple planetary alignment detector ---
+def _planet_longitudes_deg(dt_utc: datetime) -> dict:
+    jd = jd_utc(dt_utc)
+    jd_tt = _to_tt(jd)
+    flags = swe.FLG_SWIEPH
+    ids = [swe.MERCURY, swe.VENUS, swe.MARS, swe.JUPITER, swe.SATURN]
+    longs = {}
+    for pid in ids:
+        try:
+            lon = swe.calc(jd_tt, pid, flags)[0][0]
+            longs[pid] = _norm360(lon)
+        except Exception:
+            pass
+    return longs
+
+def scan_alignments_simple(start: datetime, end: datetime, max_span_deg: float = 30.0, min_count: int = 4) -> list:
+    """Scan days and flag dates when at least min_count (default 4) of [Mercury..Saturn]
+    fit within an arc of width max_span_deg. Returns list of {'type':'alignment','time': dt_utc, 'count': n}.
+    """
+    events = []
+    t = datetime(start.year, start.month, start.day, 0, 0, 0, tzinfo=timezone.utc)
+    while t <= end:
+        longs = list(_planet_longitudes_deg(t).values())
+        longs.sort()
+        best = 0
+        n = len(longs)
+        for i in range(n):
+            for j in range(i, n):
+                # consider arc from longs[i] to longs[j] (direct), and wrap-around arcs
+                span = (longs[j] - longs[i]) if j >= i else (longs[j] + 360 - longs[i])
+                # count how many fall inside this arc
+                cnt = sum(1 for L in longs if 0 <= ((_norm360(L - longs[i])) % 360) <= span)
+                if span <= max_span_deg and cnt > best:
+                    best = cnt
+        if best >= min_count:
+            events.append({'type': 'alignment', 'time': t, 'count': best})
+        t += timedelta(days=1)
+    return events
+
+
 
 def lunar_sign_mix_linear(start: datetime, end: datetime, mode: str = 'tropical'):
     """

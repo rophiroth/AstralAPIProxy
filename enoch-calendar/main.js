@@ -218,8 +218,8 @@ function i18nWord(key) {
     }
   } catch(_){}
   const L = getLang();
-  const es = { labelMoon: 'Luna', labelEvent: 'Evento', labelSign: 'Signo', labelDistance: 'Dist', perigee: 'Perigeo', apogee: 'Apogeo' };
-  const en = { labelMoon: 'Moon', labelEvent: 'Event', labelSign: 'Sign', labelDistance: 'Dist', perigee: 'Perigee', apogee: 'Apogee' };
+  const es = { labelMoon: 'Luna', labelEvent: 'Evento', labelSign: 'Signo', labelDistance: 'Dist', perigee: 'Perigeo', apogee: 'Apogeo', equinox: 'Equinoccio', solstice: 'Solsticio', solarEclipse: 'Eclipse solar', lunarEclipse: 'Eclipse lunar', supermoon: 'Súper luna', alignment: 'Alineación' };
+  const en = { labelMoon: 'Moon', labelEvent: 'Event', labelSign: 'Sign', labelDistance: 'Dist', perigee: 'Perigee', apogee: 'Apogee', equinox: 'Equinox', solstice: 'Solstice', solarEclipse: 'Solar eclipse', lunarEclipse: 'Lunar eclipse', supermoon: 'Supermoon', alignment: 'Alignment' };
   const map = (L === 'en') ? en : es;
   return map[key] || key;
 }
@@ -552,6 +552,19 @@ function buildMoonTooltip(d, lunarMap) {
     return `\n${LblMoon}: ${l}` + (lm.lunarRosh ? (getLang()==='en'?' (Lunar New Year)':' (Año Nuevo lunar)') : '');
   }
   return '';
+}
+
+function buildAstroTooltip(d) {
+  const bits = [];
+  try {
+    if (d.equinox && d.equinox_utc) bits.push(`${i18nWord('equinox')}: ${fmtUtcToLocalShort(d.equinox_utc)}`);
+    if (d.solstice && d.solstice_utc) bits.push(`${i18nWord('solstice')}: ${fmtUtcToLocalShort(d.solstice_utc)}`);
+    if (d.solar_eclipse && d.solar_eclipse_utc) bits.push(`${i18nWord('solarEclipse')}: ${fmtUtcToLocalShort(d.solar_eclipse_utc)}`);
+    if (d.lunar_eclipse && d.lunar_eclipse_utc) bits.push(`${i18nWord('lunarEclipse')}: ${fmtUtcToLocalShort(d.lunar_eclipse_utc)}`);
+    if (d.supermoon && d.supermoon_utc) bits.push(`${i18nWord('supermoon')}: ${fmtUtcToLocalShort(d.supermoon_utc)}`);
+    if (Number(d.alignment) >= 4 && d.alignment_utc) bits.push(`${i18nWord('alignment')}: ${Number(d.alignment)} @ ${fmtUtcToLocalShort(d.alignment_utc)}`);
+  } catch(_){}
+  return bits.length ? ('\n' + bits.join(' • ')) : '';
 }
 
 function resolveCalcYearUrl() {
@@ -1914,10 +1927,11 @@ function renderCalendar(data) {
       const lblStart = window.t ? window.t('labelStart') : 'Starts';
       const lblEnd = window.t ? window.t('labelEnd') : 'Ends';
       const moonLine = buildMoonTooltip(d, lunarMap);
+      const astroLine = buildAstroTooltip(d);
       // Show Gregorian weekday next to the date (localized)
       const gWk = enochWeekdayShortFromDay(d) || gregWeekdayShort(d.gregorian);
       div.title = `${lblDate}: ${d.gregorian}${gWk ? ' (' + gWk + ')' : ''}`
-        + `\n${lblStart}: ${startLocal}\n${lblEnd}: ${endLocal}${festLine}${sefLine}${moonLine}`;
+        + `\n${lblStart}: ${startLocal}\n${lblEnd}: ${endLocal}${festLine}${sefLine}${moonLine}${astroLine}`;
 
       const num = document.createElement('div');
       num.className = 'num';
@@ -1936,12 +1950,14 @@ function renderCalendar(data) {
         if (isNewEvt) div.classList.add('moon-new');
         if (isFullEvt) div.classList.add('moon-full');
         // Perigee/Apogee small badges
-        if (d.perigee) {
-          const b = document.createElement('span'); b.textContent = '↓'; b.title = `${i18nWord('perigee')} ${fmtUtcToLocalShort(d.perigee_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b);
-        }
-        if (d.apogee) {
-          const b = document.createElement('span'); b.textContent = '↑'; b.title = `${i18nWord('apogee')} ${fmtUtcToLocalShort(d.apogee_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b);
-        }
+        if (d.perigee) { const b = document.createElement('span'); b.textContent = 'P'; b.title = `${i18nWord('perigee')} ${fmtUtcToLocalShort(d.perigee_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
+        if (d.apogee) { const b = document.createElement('span'); b.textContent = 'A'; b.title = `${i18nWord('apogee')} ${fmtUtcToLocalShort(d.apogee_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
+        if (d.equinox) { const b = document.createElement('span'); b.textContent = 'EQ'; b.title = `${i18nWord('equinox')} ${fmtUtcToLocalShort(d.equinox_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
+        if (d.solstice) { const b = document.createElement('span'); b.textContent = 'SOL'; b.title = `${i18nWord('solstice')} ${fmtUtcToLocalShort(d.solstice_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
+        if (d.solar_eclipse) { const b = document.createElement('span'); b.textContent = 'SE'; b.title = `${i18nWord('solarEclipse')} ${fmtUtcToLocalShort(d.solar_eclipse_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
+        if (d.lunar_eclipse) { const b = document.createElement('span'); b.textContent = 'LE'; b.title = `${i18nWord('lunarEclipse')} ${fmtUtcToLocalShort(d.lunar_eclipse_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
+        if (d.supermoon) { const b = document.createElement('span'); b.textContent = 'SUP'; b.title = `${i18nWord('supermoon')} ${fmtUtcToLocalShort(d.supermoon_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
+        if (Number(d.alignment) >= 4) { const b = document.createElement('span'); b.textContent = 'AL'; b.title = `${i18nWord('alignment')} (${d.alignment}) ${fmtUtcToLocalShort(d.alignment_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
       }
       const shem = document.createElement('div');
       shem.className = 'shem';
@@ -2004,10 +2020,11 @@ function renderCalendar(data) {
       const lblStart2 = window.t ? window.t('labelStart') : 'Starts';
       const lblEnd2 = window.t ? window.t('labelEnd') : 'Ends';
       const moonLine2 = buildMoonTooltip(d, lunarMap);
+      const astroLine2 = buildAstroTooltip(d);
       // Include Gregorian weekday name for intercalary days too
       const gWk2 = enochWeekdayShortFromDay(d) || gregWeekdayShort(d.gregorian);
       div.title = `${lblDate2}: ${d.gregorian}${gWk2 ? ' (' + gWk2 + ')' : ''}`
-        + `\n${lblStart2}: ${startLocal2}\n${lblEnd2}: ${endLocal2}${f2Line}${moonLine2}`;
+        + `\n${lblStart2}: ${startLocal2}\n${lblEnd2}: ${endLocal2}${f2Line}${moonLine2}${astroLine2}`;
       const num = document.createElement('div');
       num.className = 'num';
       num.textContent = d.enoch_day;
@@ -2026,6 +2043,15 @@ function renderCalendar(data) {
           if (newEvt2) div.classList.add('moon-new');
           if (fullEvt2) div.classList.add('moon-full');
         }
+        // Small badges for additional astronomical events
+        if (d.perigee) { const b = document.createElement('span'); b.textContent = 'P'; b.title = `${i18nWord('perigee')} ${fmtUtcToLocalShort(d.perigee_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
+        if (d.apogee) { const b = document.createElement('span'); b.textContent = 'A'; b.title = `${i18nWord('apogee')} ${fmtUtcToLocalShort(d.apogee_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
+        if (d.equinox) { const b = document.createElement('span'); b.textContent = 'EQ'; b.title = `${i18nWord('equinox')} ${fmtUtcToLocalShort(d.equinox_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
+        if (d.solstice) { const b = document.createElement('span'); b.textContent = 'SOL'; b.title = `${i18nWord('solstice')} ${fmtUtcToLocalShort(d.solstice_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
+        if (d.solar_eclipse) { const b = document.createElement('span'); b.textContent = 'SE'; b.title = `${i18nWord('solarEclipse')} ${fmtUtcToLocalShort(d.solar_eclipse_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
+        if (d.lunar_eclipse) { const b = document.createElement('span'); b.textContent = 'LE'; b.title = `${i18nWord('lunarEclipse')} ${fmtUtcToLocalShort(d.lunar_eclipse_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
+        if (d.supermoon) { const b = document.createElement('span'); b.textContent = 'SUP'; b.title = `${i18nWord('supermoon')} ${fmtUtcToLocalShort(d.supermoon_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
+        if (Number(d.alignment) >= 4) { const b = document.createElement('span'); b.textContent = 'AL'; b.title = `${i18nWord('alignment')} (${d.alignment}) ${fmtUtcToLocalShort(d.alignment_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
       }
       const shem = document.createElement('div');
       shem.className = 'shem';

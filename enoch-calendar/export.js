@@ -13,7 +13,12 @@ function downloadCSV(data) {
     'moon_distance_km','perigee','perigee_utc','apogee','apogee_utc'
   ] : [];
   const hebrewHeader = hasHebrew ? ['he_year','he_month','he_day','he_month_name','is_rosh_chodesh','he_holiday_code','he_holiday_name'] : [];
-  const header = [...baseHeader, ...lunarHeader, ...hebrewHeader].join(',');
+  const astroHeader = [
+    'equinox','equinox_utc','solstice','solstice_utc',
+    'solar_eclipse','solar_eclipse_utc','lunar_eclipse','lunar_eclipse_utc',
+    'supermoon','supermoon_utc','alignment','alignment_utc'
+  ];
+  const header = [...baseHeader, ...lunarHeader, ...astroHeader, ...hebrewHeader].join(',');
   const rows = data.map(d => {
     const base = [
       d.gregorian,
@@ -46,6 +51,14 @@ function downloadCSV(data) {
       (d.apogee ? '1' : ''),
       (d.apogee_utc ?? '')
     ] : [];
+    const astro = [
+      (d.equinox ?? ''), (d.equinox_utc ?? ''),
+      (d.solstice ?? ''), (d.solstice_utc ?? ''),
+      (d.solar_eclipse ? '1' : ''), (d.solar_eclipse_utc ?? ''),
+      (d.lunar_eclipse ? '1' : ''), (d.lunar_eclipse_utc ?? ''),
+      (d.supermoon ? '1' : ''), (d.supermoon_utc ?? ''),
+      (typeof d.alignment !== 'undefined' ? d.alignment : ''), (d.alignment_utc ?? '')
+    ];
     const heb = hasHebrew ? [
       (d.he_year ?? ''),
       (d.he_month ?? ''),
@@ -55,7 +68,7 @@ function downloadCSV(data) {
       (d.he_holiday_code ?? ''),
       (d.he_holiday_name ?? '')
     ] : [];
-    return [...base, ...lunar, ...heb].join(',');
+    return [...base, ...lunar, ...astro, ...heb].join(',');
   });
   const csv = [header, ...rows].join('\n');
   const blob = new Blob([csv], { type: 'text/csv' });

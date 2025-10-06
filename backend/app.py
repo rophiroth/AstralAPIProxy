@@ -11,7 +11,11 @@ from utils.datetime_local import localize_datetime
 from utils.debug import *
 from utils.asc_mc_houses import calculate_asc_mc_and_houses
 from utils.planet_positions import calculate_planets
-from utils.lunar_calc import jd_utc, sun_moon_state, scan_phase_events, scan_perigee_apogee, lunar_sign_from_longitude, lunar_sign_mix, refine_sign_cusp
+from utils.lunar_calc import (
+    jd_utc, sun_moon_state, scan_phase_events, scan_perigee_apogee,
+    lunar_sign_from_longitude, lunar_sign_mix, refine_sign_cusp,
+    solar_cardinal_points_for_year, scan_eclipses_global, scan_alignments_simple
+)
 
 import traceback
 
@@ -698,6 +702,92 @@ def calc_year():
                     if ev['type'] == 'apogee':
                         d['apogee'] = True
                         d['apogee_utc'] = ev['time'].astimezone(timezone.utc).isoformat()
+
+            # Supermoon: full moon within 24h of perigee
+            try:
+                full_times = [ev['time'] for ev in phase_events if ev.get('type') == 'full']
+                perigee_times = [ev['time'] for ev in dist_events if ev.get('type') == 'perigee']
+                from datetime import timedelta
+                for ft in full_times:
+                    if not perigee_times:
+                        continue
+                    nearest = min(perigee_times, key=lambda t: abs(t - ft))
+                    if abs(nearest - ft) <= timedelta(hours=24):
+                        bi = bucket_index(ft)
+                        if bi is not None:
+                            d = days[bi]
+                            d['supermoon'] = True
+                            d['supermoon_utc'] = ft.astimezone(timezone.utc).isoformat()
+            except Exception:
+                pass
+
+            # Equinoxes & solstices mapped into days
+            span_start = None; span_end = None
+            try:
+                from datetime import datetime as _dt
+                def _parse_iso(s):
+                    try:
+                        return _dt.fromisoformat(str(s).replace('Z','+00:00'))
+                    except Exception:
+                        return None
+                for _d in days:
+                    if _d.get('start_utc') and not span_start:
+                        span_start = _parse_iso(_d['start_utc'])
+                    if _d.get('end_utc'):
+                        span_end = _parse_iso(_d['end_utc'])
+            except Exception:
+                span_start = None; span_end = None
+            try:
+                if span_start and span_end:
+                    years = sorted(set([span_start.year, span_end.year]))
+                    sol = []
+                    for y in years:
+                        sol.extend(solar_cardinal_points_for_year(y))
+                    for ev in sol:
+                        bi = bucket_index(ev['time'])
+                        if bi is None:
+                            continue
+                        d = days[bi]
+                        if ev.get('type') == 'equinox':
+                            d['equinox'] = ev.get('season') or 'equinox'
+                            d['equinox_utc'] = ev['time'].astimezone(timezone.utc).isoformat()
+                        elif ev.get('type') == 'solstice':
+                            d['solstice'] = ev.get('season') or 'solstice'
+                            d['solstice_utc'] = ev['time'].astimezone(timezone.utc).isoformat()
+            except Exception:
+                pass
+
+            # Global eclipses (best-effort)
+            try:
+                if span_start and span_end:
+                    ec = scan_eclipses_global(span_start, span_end)
+                    for ev in ec:
+                        bi = bucket_index(ev['time'])
+                        if bi is None:
+                            continue
+                        d = days[bi]
+                        if ev.get('type') == 'solar':
+                            d['solar_eclipse'] = True
+                            d['solar_eclipse_utc'] = ev['time'].astimezone(timezone.utc).isoformat()
+                        elif ev.get('type') == 'lunar':
+                            d['lunar_eclipse'] = True
+                            d['lunar_eclipse_utc'] = ev['time'].astimezone(timezone.utc).isoformat()
+            except Exception:
+                pass
+
+            # Simple planetary alignments
+            try:
+                if span_start and span_end:
+                    al = scan_alignments_simple(span_start, span_end)
+                    for ev in al:
+                        bi = bucket_index(ev['time'])
+                        if bi is None:
+                            continue
+                        d = days[bi]
+                        d['alignment'] = max(int(d.get('alignment') or 0), int(ev.get('count') or 0))
+                        d['alignment_utc'] = ev['time'].astimezone(timezone.utc).isoformat()
+            except Exception:
+                pass
 
         resp = {
             'ok': True,

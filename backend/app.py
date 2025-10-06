@@ -707,7 +707,6 @@ def calc_year():
             try:
                 full_times = [ev['time'] for ev in phase_events if ev.get('type') == 'full']
                 perigee_times = [ev['time'] for ev in dist_events if ev.get('type') == 'perigee']
-                from datetime import timedelta
                 for ft in full_times:
                     if not perigee_times:
                         continue

@@ -532,10 +532,14 @@ function buildMoonTooltip(d, lunarMap) {
       const eps = 0.0005; // ~0.05%
       const delta = Number(d.moon_illum_end) - Number(d.moon_illum_start);
       if (Math.abs(delta) <= eps) {
-        // Equal within epsilon: if an event occurs inside, show valley/peak explicitly
-        if (d.moon_event === 'new') {
+        // Equal within epsilon: infer valley/peak at mid based on phase angle (robust)
+        const a = Number(d.moon_phase_angle_deg);
+        const near = (x, t, tol)=> Number.isFinite(x) && Math.abs(((x - t + 540) % 360) - 180) <= tol;
+        const nearNew = near(a, 0, 15);
+        const nearFull = near(a, 180, 15);
+        if (nearNew || d.moon_event === 'new') {
           pct = `${startPct} ↘ 0% ↗ ${endPct}`;
-        } else if (d.moon_event === 'full') {
+        } else if (nearFull || d.moon_event === 'full') {
           pct = `${startPct} ↗ 100% ↘ ${endPct}`;
         } else {
           pct = `${startPct} ↔ ${endPct}`;

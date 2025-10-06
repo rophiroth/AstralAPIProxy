@@ -1,0 +1,14 @@
+{
+  "name": "Calendario de Enoj",
+  "short_name": "Enoj",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#5e2d91",
+  "icons": [
+    { "src": "logo192x192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "logo512x512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
+

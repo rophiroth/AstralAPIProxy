@@ -797,6 +797,7 @@ let currentYear;
 let currentData = [];
 let isBuilding = false;
 let todayTimerId = null;
+let suppressPickedClear = false; // avoid clearing mapped-info during map flow
 
 console.log('[main] script loaded');
 
@@ -823,12 +824,49 @@ const setYearLabel = (window.setYearLabel) ? window.setYearLabel : function(year
   yl.textContent = approx ? `Year ${year} (≈ ${approx} CE)` : `Year ${year}`;
 };
 
+// Small UI helper: clear the mapped date info box
+function clearPickedInfo() {
+  try {
+    const el = document.getElementById('pickedInfo');
+    if (el) el.textContent = '';
+  } catch(_) {}
+}
+
 // Simple visible version to verify deploy
 const APP_VERSION = 'calendar@2025-09-22T00:00Z';
 try {
   const s = document.getElementById('status');
   if (s) s.textContent = (s.textContent ? s.textContent + ' | ' : '') + APP_VERSION;
 } catch (_) {}
+
+// --- Global loading overlay helpers ---
+let __loadingCount = 0;
+function setLoadingMessage(msg) {
+  try {
+    const t = document.getElementById('loadingText');
+    if (t) t.textContent = msg || (window.t ? window.t('statusLoading') : 'Loading...');
+  } catch(_){}
+}
+function showLoading(message) {
+  try {
+    __loadingCount++;
+    const ov = document.getElementById('loadingOverlay');
+    if (ov) {
+      setLoadingMessage(message || (window.t ? window.t('statusLoading') : 'Loading...'));
+      ov.style.display = 'flex';
+    }
+    document.body && document.body.classList && document.body.classList.add('is-loading');
+  } catch(_){}
+}
+function hideLoading() {
+  try {
+    __loadingCount = Math.max(0, __loadingCount - 1);
+    if (__loadingCount > 0) return;
+    const ov = document.getElementById('loadingOverlay');
+    if (ov) ov.style.display = 'none';
+    document.body && document.body.classList && document.body.classList.remove('is-loading');
+  } catch(_){}
+}
 
 // Surface uncaught errors to the UI to avoid silent stalls
 window.addEventListener('error', (e) => {
@@ -1019,7 +1057,10 @@ function fmtLocal(dt) {
 
 async function loadYearFromCSV(year) {
   console.log('[loadYearFromCSV] trying year', year);
+  showLoading(window.t ? window.t('statusLoading') : 'Loading...');
   try {
+    // Clear any previous map info unless we are in a mapping flow that wants to preserve it
+    if (!suppressPickedClear) clearPickedInfo();
     // 0) Try local cache first
     if (shouldCacheCsv()) {
       const cached = getCsvFromLocal(year);
@@ -1073,6 +1114,7 @@ async function loadYearFromCSV(year) {
         currentYearLength = currentData.length;
         try { window.currentData = currentData; window.currentYear = currentYear; } catch(_){ }
         renderCalendar(currentData);
+        try { suppressPickedClear = false; } catch(_) {}
         setYearLabel(year);
         setStatus('statusLoadedCsv');
         console.log('[loadYearFromCSV] loaded from cache', currentYearLength, 'days');
@@ -1142,6 +1184,7 @@ async function loadYearFromCSV(year) {
     currentYearLength = currentData.length;
     try { window.currentData = currentData; window.currentYear = currentYear; } catch(_){ }
     renderCalendar(currentData);
+    try { suppressPickedClear = false; } catch(_) {}
     setYearLabel(year);
     setStatus('statusLoadedCsv');
     console.log('[loadYearFromCSV] loaded', currentYearLength, 'days');
@@ -1153,7 +1196,7 @@ async function loadYearFromCSV(year) {
   } catch (e) {
     console.warn('[loadYearFromCSV] failed for year', year, e);
     return false;
-  }
+  } finally { hideLoading(); }
 }
 
 async function buildCalendar(referenceDate = new Date(), tryCSV = true, base = null) {
@@ -1165,6 +1208,9 @@ async function buildCalendar(referenceDate = new Date(), tryCSV = true, base = n
   console.log('[buildCalendar] start', referenceDate.toISOString(), 'tryCSV', tryCSV);
   const status = document.getElementById('status');
   setStatus('statusLoading');
+  showLoading(window.t ? window.t('statusLoading') : 'Loading...');
+  // Clear mapped-date info when a calendar build starts unless mapping flow asked to preserve it
+  if (!suppressPickedClear) clearPickedInfo();
   const calendarDiv = document.getElementById('calendar');
   calendarDiv.innerHTML = '';
   try {
@@ -1227,8 +1273,9 @@ async function buildCalendar(referenceDate = new Date(), tryCSV = true, base = n
           } catch(_){ }
           currentYearLength = currentData.length;
           try { window.currentData = currentData; } catch(_){ }
-          renderCalendar(currentData);
-          setYearLabel(j.enoch_year || enoch_year);
+    renderCalendar(currentData);
+    try { suppressPickedClear = false; } catch(_) {}
+    setYearLabel(j.enoch_year || enoch_year);
           status.textContent = '';
           try {
             const csv = buildCsvText(currentData);
@@ -1251,6 +1298,7 @@ async function buildCalendar(referenceDate = new Date(), tryCSV = true, base = n
             currentYearLength = currentData.length;
             try { window.currentData = currentData; } catch(_){ }
             renderCalendar(currentData);
+            try { suppressPickedClear = false; } catch(_) {}
             setYearLabel(j2.enoch_year || enoch_year);
             status.textContent = '';
             try {
@@ -1302,6 +1350,7 @@ async function buildCalendar(referenceDate = new Date(), tryCSV = true, base = n
     try { window.currentData = currentData; } catch(_){ }
 
     renderCalendar(currentData);
+    try { suppressPickedClear = false; } catch(_) {}
     setYearLabel(enoch_year);
     status.textContent = '';
     // Cache and optionally upload CSV representation
@@ -1318,6 +1367,69 @@ async function buildCalendar(referenceDate = new Date(), tryCSV = true, base = n
   } finally {
     isBuilding = false;
     console.log('[buildCalendar] end');
+    hideLoading();
+  }
+}
+
+// --- Offline approximate year builder (no backend) ---
+// Builds a 364-day Enoch year starting at the Wednesday on/after the March equinox
+// using local sunset bounds and simple 30-day months (no intercalary week).
+async function buildCalendarApprox(approxStart, enochYear) {
+  if (isBuilding) {
+    console.log('[buildCalendarApprox] already building, abort');
+    return;
+  }
+  isBuilding = true;
+  console.log('[buildCalendarApprox] start', approxStart.toISOString(), 'enochYear', enochYear);
+  setStatus('statusLoading');
+  showLoading(window.t ? window.t('statusLoading') : 'Loading...');
+  // Clear mapped-date info when switching views unless mapping flow asked to preserve it
+  if (!suppressPickedClear) clearPickedInfo();
+  try {
+    const calendarDiv = document.getElementById('calendar');
+    if (calendarDiv) calendarDiv.innerHTML = '';
+    const { lat, lon } = getUserLatLonTz();
+    const days = [];
+    for (let i = 0; i < 364; i++) {
+      const dt = addDaysUTC(approxStart, i);
+      const ymd = dt.toISOString().slice(0, 10);
+      const { startUTC, endUTC } = sunsetPairForYMD(ymd, lat, lon);
+      const m = Math.floor(i / 30) + 1;
+      const d = (i % 30) + 1;
+      days.push({
+        gregorian: ymd,
+        enoch_year: enochYear,
+        enoch_month: m,
+        enoch_day: d,
+        added_week: false,
+        name: (function(){ try { return getShemEnochiano(m, d, false); } catch(_) { return ''; } })(),
+        day_of_year: i + 1,
+        start_utc: startUTC ? startUTC.toISOString() : '',
+        end_utc: endUTC ? endUTC.toISOString() : ''
+      });
+    }
+    currentData = days;
+    currentYear = enochYear;
+    currentStartDate = approxStart;
+    currentYearLength = days.length;
+    try { window.currentData = currentData; window.currentYear = currentYear; } catch(_){ }
+    renderCalendar(currentData);
+    try { suppressPickedClear = false; } catch(_) {}
+    setYearLabel(enochYear);
+    const s = document.getElementById('status');
+    if (s) s.textContent = '';
+    // Cache CSV locally for fast future loads
+    try {
+      const csv = buildCsvText(currentData);
+      if (csv && shouldCacheCsv()) saveCsvToLocal(enochYear, csv);
+    } catch (e) { console.warn('[buildCalendarApprox] CSV cache skipped', e?.message || e); }
+  } catch (e) {
+    console.error('[buildCalendarApprox] error', e);
+    setStatus('statusBuildError');
+  } finally {
+    isBuilding = false;
+    console.log('[buildCalendarApprox] end');
+    hideLoading();
   }
 }
 
@@ -2190,20 +2302,28 @@ onClick('mapDateBtn', async () => {
     // Build a local noon date to avoid TZ rollover
     const dtLocal = new Date(input.value + 'T12:00:00');
     console.log('[mapDate] local date picked', dtLocal.toISOString());
-    // Guard: avoid calling backend with years far outside its supported range
+    // Always try backend first; fallback to CSV/offline on failure
     const yGreg = dtLocal.getUTCFullYear();
-    if (yGreg < 1 || yGreg > 2099) {
+    if (isBuilding) { console.log('[mapDate] build in progress'); return; }
+    // Preserve the mapping info while we load the mapped calendar
+    suppressPickedClear = true;
+    let base = null;
+    try {
+      base = await fetchEnoch(dtLocal);
+    } catch (e) {
+      console.warn('[mapDate] API failed, trying CSV then offline', e?.message || e);
       const approxEnoch = getApproxEnochYearForDate(new Date(dtLocal.toISOString()));
-      const msg = `El servidor no soporta el año gregoriano ${padYear4(yGreg)}. Usa Go con Año Enoj ${approxEnoch} (≈ ${padYear4(yGreg)} CE) o carga CSV si existe.`;
-      console.warn('[mapDate] out-of-range, skipping API', yGreg);
-      const s = document.getElementById('status'); if (s) s.textContent = msg;
+      if (preferCsv() && await loadYearFromCSV(approxEnoch)) {
+        setYearLabel(approxEnoch, padYear4(yGreg));
+        suppressPickedClear = false;
+        return;
+      }
+      const approxStart = getApproxEnochStartForGregorianYear(yGreg);
+      await buildCalendarApprox(approxStart, approxEnoch);
       setYearLabel(approxEnoch, padYear4(yGreg));
-      // Try CSV for the approximated Enoch year
-      await loadYearFromCSV(approxEnoch);
+      suppressPickedClear = false;
       return;
     }
-    if (isBuilding) { console.log('[mapDate] build in progress'); return; }
-    const base = await fetchEnoch(dtLocal);
     const e = base.enoch;
     const box = document.getElementById('pickedInfo');
     if (box) {
@@ -2217,18 +2337,22 @@ onClick('mapDateBtn', async () => {
     console.log('[mapDate] loading calendar for Enoch year', e.enoch_year);
     if (preferCsv() && await loadYearFromCSV(e.enoch_year)) {
       console.log('[mapDate] calendar loaded from CSV for year', e.enoch_year);
+      suppressPickedClear = false;
       return;
     }
     await buildCalendar(dtLocal, false, base);
+    suppressPickedClear = false;
   } catch (e) {
     console.error('[mapDate] failed', e);
     setStatus('statusMapError');
+    try { suppressPickedClear = false; } catch(_) {}
   }
 });
 
 async function initCalendar() {
   console.log('[initCalendar] start');
   const today = new Date();
+  showLoading(window.t ? window.t('statusLoading') : 'Loading...');
   try {
     await resolveUserLocation();
     // 1) Try local approx to determine the Enoch year and prefer CSV (unless disabled)
@@ -2248,6 +2372,8 @@ async function initCalendar() {
   } catch (e) {
     console.error('[initCalendar] failed', e);
     setStatus('statusInitError');
+  } finally {
+    hideLoading();
   }
 }
 
@@ -2270,6 +2396,8 @@ function scrollToToday() {
 // Jump to today's year with CSV-first and avoid rebuilding if already loaded
 async function goToToday() {
   try {
+    // Clear any previous mapped date hint; focus shifts to today
+    clearPickedInfo();
     if (isBuilding) { console.log('[today] build in progress'); return; }
     const today = new Date();
 

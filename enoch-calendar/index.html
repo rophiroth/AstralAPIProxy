@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Calendario de Enoj</title>
   <meta name="api-url" content="https://astralapiproxy.onrender.com/calculate" />
+  <link rel="manifest" href="manifest.webmanifest" />
   <style>
     :root{
       --bg: #faf7ff;
@@ -162,6 +163,38 @@
       /* Let year label absorb expansion so buttons don't drop */
       #yearLabel { flex: 1 1 auto; min-width: 0; text-align: center; }
     }
+
+    /* Loading overlay */
+    #loadingOverlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.35);
+      backdrop-filter: blur(2px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+    }
+    #loadingOverlay .loading-inner {
+      background: var(--surface);
+      color: var(--text);
+      padding: 12px 16px;
+      border-radius: 10px;
+      box-shadow: var(--shadow);
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 180px;
+      justify-content: center;
+    }
+    #loadingOverlay .spinner {
+      width: 24px; height: 24px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent-2);
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
   <!-- Psyhackers 72 favicon (PNG) -->
   <link rel="icon" type="image/png" href="https://calendar.psyhackers.org/favicon.png?v=1" />
@@ -220,6 +253,13 @@
     <div id="status" data-i18n="statusLoading">Cargando...</div>
     <div id="pickedInfo" style="margin-top:8px; font-size:0.9rem; color:var(--muted);"></div>
     <div id="calendar"></div>
+  </div>
+  <!-- Global loading overlay -->
+  <div id="loadingOverlay" role="status" aria-live="polite" aria-label="Loading">
+    <div class="loading-inner">
+      <div class="spinner" aria-hidden="true"></div>
+      <div id="loadingText">Cargando…</div>
+    </div>
   </div>
   <script>
     // Dynamically load app scripts (i18n first)

@@ -1956,7 +1956,7 @@ function renderCalendar(data) {
         if (d.solstice) { const b = document.createElement('span'); b.textContent = 'SOL'; b.title = `${i18nWord('solstice')} ${fmtUtcToLocalShort(d.solstice_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
         if (d.solar_eclipse) { const b = document.createElement('span'); b.textContent = 'SE'; b.title = `${i18nWord('solarEclipse')} ${fmtUtcToLocalShort(d.solar_eclipse_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
         if (d.lunar_eclipse) { const b = document.createElement('span'); b.textContent = 'LE'; b.title = `${i18nWord('lunarEclipse')} ${fmtUtcToLocalShort(d.lunar_eclipse_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
-        if (d.supermoon) { const b = document.createElement('span'); b.textContent = 'SUP'; b.title = `${i18nWord('supermoon')} ${fmtUtcToLocalShort(d.supermoon_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
+        if (d.supermoon) { const b = document.createElement('span'); b.textContent = 'S'; b.title = `${i18nWord('supermoon')} ${fmtUtcToLocalShort(d.supermoon_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
         if (Number(d.alignment) >= 4) { const b = document.createElement('span'); b.textContent = 'AL'; b.title = `${i18nWord('alignment')} (${d.alignment}) ${fmtUtcToLocalShort(d.alignment_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
       }
       const shem = document.createElement('div');
@@ -2050,7 +2050,7 @@ function renderCalendar(data) {
         if (d.solstice) { const b = document.createElement('span'); b.textContent = 'SOL'; b.title = `${i18nWord('solstice')} ${fmtUtcToLocalShort(d.solstice_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
         if (d.solar_eclipse) { const b = document.createElement('span'); b.textContent = 'SE'; b.title = `${i18nWord('solarEclipse')} ${fmtUtcToLocalShort(d.solar_eclipse_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
         if (d.lunar_eclipse) { const b = document.createElement('span'); b.textContent = 'LE'; b.title = `${i18nWord('lunarEclipse')} ${fmtUtcToLocalShort(d.lunar_eclipse_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
-        if (d.supermoon) { const b = document.createElement('span'); b.textContent = 'SUP'; b.title = `${i18nWord('supermoon')} ${fmtUtcToLocalShort(d.supermoon_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
+        if (d.supermoon) { const b = document.createElement('span'); b.textContent = 'S'; b.title = `${i18nWord('supermoon')} ${fmtUtcToLocalShort(d.supermoon_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
         if (Number(d.alignment) >= 4) { const b = document.createElement('span'); b.textContent = 'AL'; b.title = `${i18nWord('alignment')} (${d.alignment}) ${fmtUtcToLocalShort(d.alignment_utc)||''}`; b.style.marginLeft = '2px'; num.appendChild(b); }
       }
       const shem = document.createElement('div');
@@ -2135,7 +2135,7 @@ function scheduleTodayRollover() {
       box.id = 'dayInfoBox';
       box.style.position = 'fixed';
       box.style.zIndex = '9999';
-      box.style.maxWidth = '280px';
+      box.style.maxWidth = '360px';
       box.style.background = 'rgba(0,0,0,0.9)';
       box.style.color = '#fff';
       box.style.padding = '8px 10px';
@@ -2172,30 +2172,39 @@ function scheduleTodayRollover() {
     const content = box.querySelector('#dayInfoBoxContent');
     const txt = el.getAttribute('title') || '';
     content.innerHTML = txt.replace(/\n/g, '<br/>');
-    // Position near element (bottom-center), with viewport clamping
+    // Position near element with smart anchoring and clamping
     const r = el.getBoundingClientRect();
     const margin = 8;
-    let left = Math.round(r.left + (r.width/2));
+    // Ensure a pleasant width (avoid ultra-narrow boxes near edges)
+    const vw = window.innerWidth || document.documentElement.clientWidth || 320;
+    const desired = Math.min(340, Math.max(240, vw - 2*margin));
+    box.style.width = desired + 'px';
+    let left = Math.round(r.left + (r.width / 2));
     let top = Math.round(r.bottom + margin);
     box.style.display = 'block';
     box.style.opacity = '0';
+    // Default anchor: center
     box.style.transform = 'translate(-50%, 0)';
-    // Temporarily place to measure
     box.style.left = left + 'px';
     box.style.top = top + 'px';
-    // Clamp horizontally within viewport
-    const vw = window.innerWidth;
+    // Measure
     const bw = box.offsetWidth;
-    if (left - bw/2 < margin) {
-      box.style.left = Math.max(margin, bw/2 + margin) + 'px';
-    } else if (left + bw/2 > vw - margin) {
-      box.style.left = Math.min(vw - margin, vw - bw/2 - margin) + 'px';
-    }
-    // Clamp vertically if too low
-    const vh = window.innerHeight;
+    const vh = window.innerHeight || document.documentElement.clientHeight || 600;
     const bh = box.offsetHeight;
+    // Flip horizontally if overflowing right
+    if (left + bw/2 > vw - margin) {
+      box.style.transform = 'translate(-100%, 0)';
+      box.style.left = Math.min(vw - margin, Math.max(r.right, margin)) + 'px';
+    }
+    // Flip to left edge if overflowing left
+    if (left - bw/2 < margin) {
+      box.style.transform = 'translate(0, 0)';
+      box.style.left = Math.max(margin, r.left) + 'px';
+    }
+    // If bottom overflows, place above
     if (top + bh > vh - margin) {
-      box.style.top = Math.max(margin, r.top - bh - margin) + 'px';
+      const above = Math.max(margin, Math.round(r.top - margin));
+      box.style.top = (above - bh) + 'px';
     }
     // Fade in
     requestAnimationFrame(() => { box.style.opacity = '1'; });
@@ -2474,3 +2483,4 @@ async function goToToday() {
 try { window.goToToday = goToToday; window.scrollToToday = scrollToToday; } catch(_){}
 
 initCalendar();
+

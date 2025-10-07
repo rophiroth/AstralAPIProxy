@@ -90,6 +90,8 @@ function parseCSV(text) {
   const INT_FIELDS = new Set(['enoch_year','enoch_month','enoch_day','day_of_year','he_year','he_month','he_day']);
   const BOOL_FIELDS = new Set(['added_week','perigee','apogee','is_rosh_chodesh','solar_eclipse','lunar_eclipse','supermoon']);
   NUM_FIELDS.add('alignment');
+  // Extra numeric fields for alignments/eclipses
+  ['alignment_span_deg','alignment_score','solar_eclipse_mag','lunar_eclipse_mag'].forEach(k => NUM_FIELDS.add(k));
 
   lines.forEach((line) => {
     if (!line || !line.trim()) return;

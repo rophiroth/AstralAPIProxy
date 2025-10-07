@@ -443,20 +443,31 @@ def scan_alignments_simple(
         step = 24.0
     t = datetime(start.year, start.month, start.day, 0, 0, 0, tzinfo=timezone.utc)
     while t <= end:
-        longs = list(_planet_longitudes_deg(t, ids=ids).values())
-        longs.sort()
+        # Keep association to planet ids so we can report which are aligned
+        longs_map = _planet_longitudes_deg(t, ids=ids)
+        items = sorted(longs_map.items(), key=lambda kv: kv[1])  # [(pid, lon), ...]
         best = 0
-        n = len(longs)
+        best_span = None
+        best_pids = []
+        n = len(items)
         for i in range(n):
+            base_lon = items[i][1]
             for j in range(i, n):
-                # consider arc from longs[i] to longs[j] (direct), and wrap-around arcs
-                span = (longs[j] - longs[i]) if j >= i else (longs[j] + 360 - longs[i])
-                # count how many fall inside this arc
-                cnt = sum(1 for L in longs if 0 <= ((_norm360(L - longs[i])) % 360) <= span)
+                lon_j = items[j][1]
+                span = (lon_j - base_lon) if j >= i else (lon_j + 360 - base_lon)
+                # build set inside arc
+                inside = []
+                for pid, L in items:
+                    dlon = (_norm360(L - base_lon)) % 360
+                    if 0 <= dlon <= span:
+                        inside.append(pid)
+                cnt = len(inside)
                 if span <= max_span_deg and cnt > best:
                     best = cnt
+                    best_span = span
+                    best_pids = inside[:]
         if best >= min_count:
-            events.append({'type': 'alignment', 'time': t, 'count': best})
+            events.append({'type': 'alignment', 'time': t, 'count': best, 'pids': best_pids, 'span': float(best_span) if best_span is not None else None, 'total': len(ids)})
         t += timedelta(hours=step)
     return events
 

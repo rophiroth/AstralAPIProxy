@@ -772,7 +772,7 @@ def calc_year():
             except Exception:
                 pass
 
-            # Global eclipses (best-effort)
+            # Global eclipses (best-effort) + local magnitude at user's position
             try:
                 if span_start and span_end:
                     ec = scan_eclipses_global(span_start, span_end)
@@ -784,13 +784,37 @@ def calc_year():
                         if ev.get('type') == 'solar':
                             d['solar_eclipse'] = True
                             d['solar_eclipse_utc'] = ev['time'].astimezone(timezone.utc).isoformat()
+                            # Local magnitude (if available)
+                            try:
+                                geopos = (longitude, latitude, 0)
+                                retflag, attr = swe.sol_eclipse_how(jd_utc(ev['time']), swe.FLG_SWIEPH, geopos)
+                                if isinstance(attr, (list, tuple)) and len(attr) > 0 and attr[0] is not None:
+                                    d['solar_eclipse_mag'] = round(float(attr[0]), 3)
+                            except Exception:
+                                pass
                         elif ev.get('type') == 'lunar':
                             d['lunar_eclipse'] = True
                             d['lunar_eclipse_utc'] = ev['time'].astimezone(timezone.utc).isoformat()
+                            try:
+                                geopos = (longitude, latitude, 0)
+                                retflag, attr = swe.lun_eclipse_how(jd_utc(ev['time']), swe.FLG_SWIEPH, geopos)
+                                # attr[0]=umbral magnitude, attr[2]=penumbral
+                                mag = None
+                                if isinstance(attr, (list, tuple)) and len(attr) > 0:
+                                    try:
+                                        mag = float(attr[0]) if attr[0] is not None else None
+                                    except Exception:
+                                        mag = None
+                                    if mag is None and len(attr) > 2 and attr[2] is not None:
+                                        mag = float(attr[2])
+                                if mag is not None:
+                                    d['lunar_eclipse_mag'] = round(mag, 3)
+                            except Exception:
+                                pass
             except Exception:
                 pass
 
-            # Simple planetary alignments
+            # Simple planetary alignments (add planets, span and score)
             try:
                 if span_start and span_end:
                     al = scan_alignments_simple(
@@ -802,13 +826,47 @@ def calc_year():
                         planet_mode=align_planets,
                         include_outer=align_include_outer
                     )
+                    name_map = {
+                        swe.MERCURY: 'Mercury',
+                        swe.VENUS: 'Venus',
+                        swe.MARS: 'Mars',
+                        swe.JUPITER: 'Jupiter',
+                        swe.SATURN: 'Saturn',
+                    }
+                    # Optional outer planets if present in Swiss
+                    try:
+                        name_map[swe.URANUS] = 'Uranus'
+                        name_map[swe.NEPTUNE] = 'Neptune'
+                        name_map[swe.PLUTO] = 'Pluto'
+                    except Exception:
+                        pass
                     for ev in al:
                         bi = bucket_index(ev['time'])
                         if bi is None:
                             continue
                         d = days[bi]
-                        d['alignment'] = max(int(d.get('alignment') or 0), int(ev.get('count') or 0))
+                        cnt = int(ev.get('count') or 0)
+                        d['alignment'] = max(int(d.get('alignment') or 0), cnt)
                         d['alignment_utc'] = ev['time'].astimezone(timezone.utc).isoformat()
+                        if ev.get('pids'):
+                            try:
+                                d['alignment_planets'] = ','.join([name_map.get(pid, str(pid)) for pid in ev['pids']])
+                            except Exception:
+                                pass
+                        if ev.get('span') is not None:
+                            try:
+                                d['alignment_span_deg'] = float(ev['span'])
+                            except Exception:
+                                pass
+                        # Score (0..1): 50% weight fraction of planets; 50% weight compactness relative to threshold
+                        try:
+                            total = int(ev.get('total') or 0) or max(len((ev.get('pids') or [])), 1)
+                            frac = max(0.0, min(1.0, cnt / float(total)))
+                            span = float(ev.get('span') or 0.0)
+                            comp = max(0.0, min(1.0, 1.0 - span / float(max(1.0, align_span_deg))))
+                            d['alignment_score'] = round(0.5 * frac + 0.5 * comp, 3)
+                        except Exception:
+                            pass
             except Exception:
                 pass
 

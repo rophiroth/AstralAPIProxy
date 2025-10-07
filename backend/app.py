@@ -848,6 +848,12 @@ def calc_year():
                         cnt = int(ev.get('count') or 0)
                         d['alignment'] = max(int(d.get('alignment') or 0), cnt)
                         d['alignment_utc'] = ev['time'].astimezone(timezone.utc).isoformat()
+                        try:
+                            tot = int(ev.get('total') or 0)
+                            if tot > 0:
+                                d['alignment_total'] = tot
+                        except Exception:
+                            pass
                         if ev.get('pids'):
                             try:
                                 d['alignment_planets'] = ','.join([name_map.get(pid, str(pid)) for pid in ev['pids']])

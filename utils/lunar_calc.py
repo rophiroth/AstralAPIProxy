@@ -392,11 +392,12 @@ def scan_eclipses_global(start: datetime, end: datetime) -> list:
     return events
 
 # --- Simple planetary alignment detector ---
-def _planet_longitudes_deg(dt_utc: datetime) -> dict:
+def _planet_longitudes_deg(dt_utc: datetime, ids: list = None) -> dict:
     jd = jd_utc(dt_utc)
     jd_tt = _to_tt(jd)
     flags = swe.FLG_SWIEPH
-    ids = [swe.MERCURY, swe.VENUS, swe.MARS, swe.JUPITER, swe.SATURN]
+    if ids is None:
+        ids = [swe.MERCURY, swe.VENUS, swe.MARS, swe.JUPITER, swe.SATURN]
     longs = {}
     for pid in ids:
         try:
@@ -406,14 +407,43 @@ def _planet_longitudes_deg(dt_utc: datetime) -> dict:
             pass
     return longs
 
-def scan_alignments_simple(start: datetime, end: datetime, max_span_deg: float = 30.0, min_count: int = 4) -> list:
-    """Scan days and flag dates when at least min_count (default 4) of [Mercury..Saturn]
-    fit within an arc of width max_span_deg. Returns list of {'type':'alignment','time': dt_utc, 'count': n}.
+def scan_alignments_simple(
+    start: datetime,
+    end: datetime,
+    max_span_deg: float = 30.0,
+    min_count: int = 4,
+    step_hours: float = 24.0,
+    planet_mode: str = '',
+    include_outer: bool = False,
+) -> list:
+    """Scan window for simple ecliptic alignments.
+
+    - If planet_mode in {'inner'} use Mercury/Venus/Mars.
+    - If 'classic5' (default) use Mercury..Saturn.
+    - If 'seven' or include_outer True use Mercury..Saturn + Uranus/Neptune.
+    - If 'all' include Pluto too.
+    - Sampling every step_hours (default 24h) to reduce misses.
+    Returns list of {'type':'alignment','time': dt_utc, 'count': n}.
     """
     events = []
+    # Pick planet set
+    mode = (planet_mode or '').strip().lower()
+    ids = [swe.MERCURY, swe.VENUS, swe.MARS, swe.JUPITER, swe.SATURN]
+    if mode in ('inner', 'inners'):
+        ids = [swe.MERCURY, swe.VENUS, swe.MARS]
+    elif mode in ('seven', 'outer', 'outers') or include_outer:
+        ids = [swe.MERCURY, swe.VENUS, swe.MARS, swe.JUPITER, swe.SATURN, swe.URANUS, swe.NEPTUNE]
+    elif mode in ('all', 'nine', '8', '9'):
+        ids = [swe.MERCURY, swe.VENUS, swe.MARS, swe.JUPITER, swe.SATURN, swe.URANUS, swe.NEPTUNE, swe.PLUTO]
+
+    # Clamp parameters
+    try:
+        step = max(1.0, float(step_hours))
+    except Exception:
+        step = 24.0
     t = datetime(start.year, start.month, start.day, 0, 0, 0, tzinfo=timezone.utc)
     while t <= end:
-        longs = list(_planet_longitudes_deg(t).values())
+        longs = list(_planet_longitudes_deg(t, ids=ids).values())
         longs.sort()
         best = 0
         n = len(longs)
@@ -427,7 +457,7 @@ def scan_alignments_simple(start: datetime, end: datetime, max_span_deg: float =
                     best = cnt
         if best >= min_count:
             events.append({'type': 'alignment', 'time': t, 'count': best})
-        t += timedelta(days=1)
+        t += timedelta(hours=step)
     return events
 
 

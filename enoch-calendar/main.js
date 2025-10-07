@@ -558,6 +558,33 @@ function buildMoonTooltip(d, lunarMap) {
   return '';
 }
 
+// Planetary alignment helpers
+function getAlignmentThreshold() {
+  try {
+    const q = (getQS().get('align') || '').trim().toLowerCase();
+    if (!q) return 4; // default threshold
+    if (['all','any','on','true','yes'].includes(q)) return 0;
+    const n = parseInt(q, 10);
+    if (isFinite(n) && n >= 0) return Math.min(10, Math.max(0, n));
+  } catch(_) {}
+  return 4;
+}
+function resolveAlignment(d) {
+  try {
+    // Normalize various possible backend keys
+    const candidatesCount = [
+      d.alignment,
+      d.planet_alignment,
+      d.alignment_count,
+      d.alignments,
+      d.alignment_score
+    ];
+    const count = candidatesCount.map(Number).find(x => typeof x === 'number' && isFinite(x)) ?? NaN;
+    const when = d.alignment_utc || d.planet_alignment_utc || d.alignment_time_utc || d.alignment_time || '';
+    return { count, when };
+  } catch(_) { return { count: NaN, when: '' }; }
+}
+
 function buildAstroTooltip(d) {
   const bits = [];
   try {
@@ -566,7 +593,12 @@ function buildAstroTooltip(d) {
     if (d.solar_eclipse && d.solar_eclipse_utc) bits.push(`${i18nWord('solarEclipse')}: ${fmtUtcToLocalShort(d.solar_eclipse_utc)}`);
     if (d.lunar_eclipse && d.lunar_eclipse_utc) bits.push(`${i18nWord('lunarEclipse')}: ${fmtUtcToLocalShort(d.lunar_eclipse_utc)}`);
     if (d.supermoon && d.supermoon_utc) bits.push(`${i18nWord('supermoon')}: ${fmtUtcToLocalShort(d.supermoon_utc)}`);
-    if (Number(d.alignment) >= 4 && d.alignment_utc) bits.push(`${i18nWord('alignment')}: ${Number(d.alignment)} @ ${fmtUtcToLocalShort(d.alignment_utc)}`);
+    const al = resolveAlignment(d);
+    const th = getAlignmentThreshold();
+    if (isFinite(al.count) && al.count >= th) {
+      const whenTxt = al.when ? ` @ ${fmtUtcToLocalShort(al.when)}` : '';
+      bits.push(`${i18nWord('alignment')}: ${al.count}${whenTxt}`);
+    }
   } catch(_){}
   return bits.length ? ('\n' + bits.join(' • ')) : '';
 }
@@ -716,6 +748,14 @@ function buildCsvText(rows) {
   if (!rows || !rows.length) return '';
   const hasLunar = typeof rows[0].moon_phase_angle_deg !== 'undefined';
   const hasHebrew = typeof rows[0].he_year !== 'undefined';
+  const hasAstro = (
+    typeof rows[0].equinox !== 'undefined' ||
+    typeof rows[0].solstice !== 'undefined' ||
+    typeof rows[0].solar_eclipse !== 'undefined' ||
+    typeof rows[0].lunar_eclipse !== 'undefined' ||
+    typeof rows[0].supermoon !== 'undefined' ||
+    typeof rows[0].alignment !== 'undefined'
+  );
   const baseHeader = ['gregorian','enoch_year','enoch_month','enoch_day','day_of_year','added_week','name','start_utc','end_utc'];
   const lunarHeader = hasLunar ? [
     'moon_phase_angle_deg',
@@ -726,8 +766,16 @@ function buildCsvText(rows) {
     'moon_long_start_deg','moon_long_end_deg','moon_long_delta_deg','moon_sign_start','moon_sign_end',
     'moon_distance_km','perigee','perigee_utc','apogee','apogee_utc'
   ] : [];
+  const astroHeader = hasAstro ? [
+    'equinox','equinox_utc',
+    'solstice','solstice_utc',
+    'solar_eclipse','solar_eclipse_utc',
+    'lunar_eclipse','lunar_eclipse_utc',
+    'supermoon','supermoon_utc',
+    'alignment','alignment_utc'
+  ] : [];
   const hebrewHeader = hasHebrew ? ['he_year','he_month','he_day','he_month_name','is_rosh_chodesh','he_holiday_code','he_holiday_name'] : [];
-  const header = [...baseHeader, ...lunarHeader, ...hebrewHeader].join(',');
+  const header = [...baseHeader, ...lunarHeader, ...astroHeader, ...hebrewHeader].join(',');
   const lines = rows.map(d => {
     const base = [
       d.gregorian,
@@ -765,6 +813,14 @@ function buildCsvText(rows) {
       (d.apogee ? '1' : ''),
       (d.apogee_utc ?? '')
     ] : [];
+    const astro = hasAstro ? [
+      (d.equinox ? '1' : ''), (d.equinox_utc ?? ''),
+      (d.solstice ? '1' : ''), (d.solstice_utc ?? ''),
+      (d.solar_eclipse ? '1' : ''), (d.solar_eclipse_utc ?? ''),
+      (d.lunar_eclipse ? '1' : ''), (d.lunar_eclipse_utc ?? ''),
+      (d.supermoon ? '1' : ''), (d.supermoon_utc ?? ''),
+      (typeof d.alignment !== 'undefined' ? d.alignment : ''), (d.alignment_utc ?? '')
+    ] : [];
     const heb = hasHebrew ? [
       (d.he_year ?? ''),
       (d.he_month ?? ''),
@@ -774,7 +830,7 @@ function buildCsvText(rows) {
       (d.he_holiday_code ?? ''),
       (d.he_holiday_name ?? '')
     ] : [];
-    return [...base, ...lunar, ...heb].join(',');
+    return [...base, ...lunar, ...astro, ...heb].join(',');
   });
   return [header, ...lines].join('\n');
 }
@@ -1124,7 +1180,20 @@ async function loadYearFromCSV(year) {
           perigee: !!r.perigee,
           perigee_utc: r.perigee_utc,
           apogee: !!r.apogee,
-          apogee_utc: r.apogee_utc
+          apogee_utc: r.apogee_utc,
+          // Astro special events
+          equinox: !!r.equinox,
+          equinox_utc: r.equinox_utc,
+          solstice: !!r.solstice,
+          solstice_utc: r.solstice_utc,
+          solar_eclipse: !!r.solar_eclipse,
+          solar_eclipse_utc: r.solar_eclipse_utc,
+          lunar_eclipse: !!r.lunar_eclipse,
+          lunar_eclipse_utc: r.lunar_eclipse_utc,
+          supermoon: !!r.supermoon,
+          supermoon_utc: r.supermoon_utc,
+          alignment: (Number.isFinite(r.alignment) ? r.alignment : (r.alignment ? Number(r.alignment) : undefined)),
+          alignment_utc: r.alignment_utc
         }));
         currentYear = year;
         currentStartDate = parseYMDToUTC(currentData[0].gregorian) || new Date(currentData[0].gregorian);
@@ -1182,7 +1251,20 @@ async function loadYearFromCSV(year) {
       perigee: !!r.perigee,
       perigee_utc: r.perigee_utc,
       apogee: !!r.apogee,
-      apogee_utc: r.apogee_utc
+      apogee_utc: r.apogee_utc,
+      // Astro special events
+      equinox: !!r.equinox,
+      equinox_utc: r.equinox_utc,
+      solstice: !!r.solstice,
+      solstice_utc: r.solstice_utc,
+      solar_eclipse: !!r.solar_eclipse,
+      solar_eclipse_utc: r.solar_eclipse_utc,
+      lunar_eclipse: !!r.lunar_eclipse,
+      lunar_eclipse_utc: r.lunar_eclipse_utc,
+      supermoon: !!r.supermoon,
+      supermoon_utc: r.supermoon_utc,
+      alignment: (Number.isFinite(r.alignment) ? r.alignment : (r.alignment ? Number(r.alignment) : undefined)),
+      alignment_utc: r.alignment_utc
     }));
     currentYear = year;
     // Use safe parsing in case CSV uses non-ISO separators
@@ -1252,6 +1334,13 @@ async function buildCalendar(referenceDate = new Date(), tryCSV = true, base = n
     try {
       const { lat: uLat, lon: uLon, tz } = getUserLatLonTz();
       const calcYearUrl = resolveCalcYearUrl();
+      // Alignment tuning via query params (optional)
+      const qs = getQS();
+      const alignSpan = parseFloat((qs.get('align_span') || qs.get('alignSpan') || qs.get('align_deg') || '').trim());
+      const alignCount = parseInt((qs.get('align_count') || qs.get('alignMin') || qs.get('alignN') || '').trim(), 10);
+      const alignStep = parseFloat((qs.get('align_step') || qs.get('align_step_hours') || qs.get('alignStep') || '').trim());
+      const alignPlanets = (qs.get('align_planets') || qs.get('alignPlanets') || '').trim();
+      const alignOuter = (qs.get('align_include_outer') || qs.get('align_outer') || '').trim().toLowerCase();
       const body = {
         datetime: referenceDate.toISOString().slice(0,19),
         latitude: uLat,
@@ -1259,6 +1348,12 @@ async function buildCalendar(referenceDate = new Date(), tryCSV = true, base = n
         timezone: tz,
         zodiac_mode: 'tropical'
       };
+      // Only attach if valid numbers provided
+      if (Number.isFinite(alignSpan) && alignSpan > 0) body.align_span_deg = alignSpan;
+      if (Number.isFinite(alignCount) && alignCount >= 0) body.align_min_count = alignCount;
+      if (Number.isFinite(alignStep) && alignStep > 0) body.align_step_hours = alignStep;
+      if (alignPlanets) body.align_planets = alignPlanets; // e.g., 'inner', 'outer', 'classic5', 'seven', 'all'
+      if (['1','true','yes','on','outer','all'].includes(alignOuter)) body.align_include_outer = true;
       console.log('[buildCalendar] calling /calcYear', calcYearUrl, body);
       const res = await fetch(calcYearUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (res.ok) {
@@ -1968,7 +2063,26 @@ function renderCalendar(data) {
         if (d.solar_eclipse) appendBadge('SE', `${i18nWord('solarEclipse')} ${fmtUtcToLocalShort(d.solar_eclipse_utc)||''}`);
         if (d.lunar_eclipse) appendBadge('LE', `${i18nWord('lunarEclipse')} ${fmtUtcToLocalShort(d.lunar_eclipse_utc)||''}`);
         if (d.supermoon) appendBadge('S', `${i18nWord('supermoon')} ${fmtUtcToLocalShort(d.supermoon_utc)||''}`);
-        if (Number(d.alignment) >= 4) appendBadge('AL', `${i18nWord('alignment')} (${d.alignment}) ${fmtUtcToLocalShort(d.alignment_utc)||''}`);
+        {
+          const al = resolveAlignment(d);
+          if (isFinite(al.count) && al.count >= getAlignmentThreshold()) {
+            const tt = `${i18nWord('alignment')} (${al.count}) ${al.when ? fmtUtcToLocalShort(al.when) : ''}`.trim();
+            appendBadge('AL', tt);
+          }
+        }
+      } else {
+        // No moon icon? Still allow astro badges (alignment, eclipses, etc.)
+        const appendBadge = (label, title) => {
+          if (!label) return;
+          const had = num.querySelectorAll('span.badge').length > 0;
+          if (had) { const s = document.createElement('span'); s.className = 'badge-sep'; s.textContent = '·'; s.style.margin = '0 2px'; num.appendChild(s); }
+          const b = document.createElement('span'); b.className = 'badge'; b.textContent = label; if (title) b.title = title; num.appendChild(b);
+        };
+        const al = resolveAlignment(d);
+        if (isFinite(al.count) && al.count >= getAlignmentThreshold()) {
+          const tt = `${i18nWord('alignment')} (${al.count}) ${al.when ? fmtUtcToLocalShort(al.when) : ''}`.trim();
+          appendBadge('AL', tt);
+        }
       }
       const shem = document.createElement('div');
       shem.className = 'shem';
@@ -2068,7 +2182,13 @@ function renderCalendar(data) {
         if (d.solar_eclipse) appendBadge2('SE', `${i18nWord('solarEclipse')} ${fmtUtcToLocalShort(d.solar_eclipse_utc)||''}`);
         if (d.lunar_eclipse) appendBadge2('LE', `${i18nWord('lunarEclipse')} ${fmtUtcToLocalShort(d.lunar_eclipse_utc)||''}`);
         if (d.supermoon) appendBadge2('S', `${i18nWord('supermoon')} ${fmtUtcToLocalShort(d.supermoon_utc)||''}`);
-        if (Number(d.alignment) >= 4) appendBadge2('AL', `${i18nWord('alignment')} (${d.alignment}) ${fmtUtcToLocalShort(d.alignment_utc)||''}`);
+        {
+          const al2 = resolveAlignment(d);
+          if (isFinite(al2.count) && al2.count >= getAlignmentThreshold()) {
+            const tt2 = `${i18nWord('alignment')} (${al2.count}) ${al2.when ? fmtUtcToLocalShort(al2.when) : ''}`.trim();
+            appendBadge2('AL', tt2);
+          }
+        }
       }
       const shem = document.createElement('div');
       shem.className = 'shem';

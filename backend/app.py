@@ -336,6 +336,21 @@ def calc_year():
         longitude = float(data.get("longitude"))
         tz_str = data.get("timezone", "UTC")
         zodiac_mode = (data.get("zodiac_mode") or "tropical").lower()
+        # Optional alignment tuning
+        try:
+            align_min_count = int(data.get('align_min_count') if data.get('align_min_count') is not None else (data.get('align_count') if data.get('align_count') is not None else 4))
+        except Exception:
+            align_min_count = 4
+        try:
+            align_span_deg = float(data.get('align_span_deg') if data.get('align_span_deg') is not None else (data.get('align_span') if data.get('align_span') is not None else 30.0))
+        except Exception:
+            align_span_deg = 30.0
+        try:
+            align_step_hours = float(data.get('align_step_hours') if data.get('align_step_hours') is not None else (data.get('align_step') if data.get('align_step') is not None else 24.0))
+        except Exception:
+            align_step_hours = 24.0
+        align_planets = str(data.get('align_planets') or '').strip().lower()  # e.g., 'inner','outer','classic5','seven','all'
+        align_include_outer = str(data.get('align_include_outer') or data.get('align_outer') or '').strip().lower() in ('1','true','yes','on','outer','all')
         # Force approximate mode if requested (avoids any Swiss-dependent calls except julday/revjul)
         approx_flag_raw = str(data.get('approx') or data.get('mode') or '').strip().lower()
         approx_mode = approx_flag_raw in ('1','true','yes','on','approx')
@@ -778,7 +793,15 @@ def calc_year():
             # Simple planetary alignments
             try:
                 if span_start and span_end:
-                    al = scan_alignments_simple(span_start, span_end)
+                    al = scan_alignments_simple(
+                        span_start,
+                        span_end,
+                        max_span_deg=max(1.0, min(60.0, align_span_deg)),
+                        min_count=max(0, min(10, align_min_count)),
+                        step_hours=max(1.0, min(24.0, align_step_hours)),
+                        planet_mode=align_planets,
+                        include_outer=align_include_outer
+                    )
                     for ev in al:
                         bi = bucket_index(ev['time'])
                         if bi is None:

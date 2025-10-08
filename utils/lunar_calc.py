@@ -538,6 +538,103 @@ def scan_alignments_simple(
 
 
 
+def scan_pair_aspects(
+    start: datetime,
+    end: datetime,
+    step_hours: float = 6.0,
+    planet_mode: str = '',
+    include_outer: bool = False,
+    include_moon: bool = False,
+    include_sun: bool = False,
+    include_oppositions: bool = True,
+    orbs: dict = None,
+) -> list:
+    """Scan window for classical 2‑body aspects regardless of compactness span.
+
+    Returns list of events with shape similar to scan_alignments_simple entries:
+      {'type':'aspect','time': dt_utc, 'count': 2, 'pids': [pid1,pid2], 'span': sep_deg, 'total': totalPlanets}
+
+    Notes:
+    - Uses minimal angular separation in [0,180].
+    - Default orbs (deg): conj 10, opp 10, sqr 8, tri 7, sex 5.
+    - If include_oppositions is False, 180° aspects are skipped.
+    - Planet set configured like scan_alignments_simple.
+    """
+    events = []
+    # Pick planet set (mirror logic from scan_alignments_simple)
+    mode = (planet_mode or '').strip().lower()
+    ids = [swe.MERCURY, swe.VENUS, swe.MARS, swe.JUPITER, swe.SATURN]
+    if mode in ('inner', 'inners'):
+        ids = [swe.MERCURY, swe.VENUS, swe.MARS]
+    elif mode in ('seven', '7'):
+        ids = [swe.SUN, swe.MOON, swe.MERCURY, swe.VENUS, swe.MARS, swe.JUPITER, swe.SATURN]
+    elif mode in ('all', 'nine', '8', '9'):
+        ids = [swe.SUN, swe.MOON, swe.MERCURY, swe.VENUS, swe.MARS, swe.JUPITER, swe.SATURN, swe.URANUS, swe.NEPTUNE]
+    if include_moon and swe.MOON not in ids:
+        ids = [swe.MOON] + ids
+    if include_sun and swe.SUN not in ids:
+        ids = [swe.SUN] + ids
+    if include_outer:
+        for pid in (getattr(swe, 'URANUS', None), getattr(swe, 'NEPTUNE', None)):
+            if pid is not None and pid not in ids:
+                ids.append(pid)
+
+    # Orbs
+    if orbs is None:
+        orbs = {'conj': 10.0, 'opp': 10.0, 'sqr': 8.0, 'tri': 7.0, 'sex': 5.0}
+
+    def min_sep(a: float, b: float) -> float:
+        d = abs((a - b) % 360.0)
+        return d if d <= 180.0 else 360.0 - d
+
+    def aspect_ok(sep: float) -> bool:
+        # Accept when separation lies within any configured orb window
+        if sep <= orbs.get('conj', 0.0):
+            return True
+        if include_oppositions and abs(sep - 180.0) <= orbs.get('opp', 0.0):
+            return True
+        if abs(sep - 90.0) <= orbs.get('sqr', 0.0):
+            return True
+        if abs(sep - 120.0) <= orbs.get('tri', 0.0):
+            return True
+        if abs(sep - 60.0) <= orbs.get('sex', 0.0):
+            return True
+        return False
+
+    # Clamp step
+    try:
+        step = max(1.0, float(step_hours))
+    except Exception:
+        step = 6.0
+
+    t = datetime(start.year, start.month, start.day, 0, 0, 0, tzinfo=timezone.utc)
+    total = len(ids)
+    while t <= end:
+        longs_map = _planet_longitudes_deg(t, ids=ids)
+        items = list(longs_map.items())  # [(pid, lon)]
+        n = len(items)
+        seen = set()
+        for i in range(n):
+            pid_i, Li = items[i]
+            for j in range(i + 1, n):
+                pid_j, Lj = items[j]
+                key = (min(pid_i, pid_j), max(pid_i, pid_j))
+                if key in seen:
+                    continue
+                sep = min_sep(Li, Lj)
+                if aspect_ok(sep):
+                    events.append({
+                        'type': 'aspect',
+                        'time': t,
+                        'count': 2,
+                        'pids': [pid_i, pid_j],
+                        'span': float(sep),
+                        'total': total,
+                    })
+                    seen.add(key)
+        t += timedelta(hours=step)
+    return events
+
 def lunar_sign_mix_linear(start: datetime, end: datetime, mode: str = 'tropical'):
     """
     Fast, simple mix estimator based only on lunar longitude at day start/end.

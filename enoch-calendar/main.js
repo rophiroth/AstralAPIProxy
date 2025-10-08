@@ -1,3 +1,4 @@
+/* global parseCSV, downloadCSV, downloadICS, getShemEnochiano */
 // Resolve API endpoint with flexible overrides for debug and prod
 function resolveApiUrl() {
   try {
@@ -30,6 +31,13 @@ function resolveApiUrl() {
 }
 
 const API_URL = resolveApiUrl();
+
+// Simple visible version to verify deploy (moved up so functions can reference it)
+const APP_VERSION = 'calendar@2025-10-08T01:34Z';
+try {
+  const s = document.getElementById('status');
+  if (s) s.textContent = (s.textContent ? s.textContent + ' | ' : '') + APP_VERSION;
+} catch (_) {}
 
 // --- User location (lat/lon/tz) resolution ---
 // Initialize with sane defaults (do not reference LATITUDE/LONGITUDE before they are declared)
@@ -448,6 +456,15 @@ function snapIconFromAngle(deg) {
 }
 
 // --- Minimal moon icon logic (centralized) ---
+// Global toggle for using backend-provided lunar events
+function useServerEvents() {
+  try {
+    const q = (getQS().get('events') || '').toLowerCase();
+    if (['server','backend','on','1','yes','true'].includes(q)) return true;
+    if (['client','local','off','0','no','false'].includes(q)) return false;
+  } catch(_) {}
+  return false; // default: client-side event derivation
+}
 function normalizeIllum(val) {
   const n = Number(val);
   if (!Number.isFinite(n)) return NaN;
@@ -727,11 +744,16 @@ function buildAstroTooltip(d) {
       } catch(_) {}
       const plist = planetsLabel ? ` (${planetsLabel})` : '';
       const spanTxt = (typeof d.alignment_span_deg === 'number' && isFinite(d.alignment_span_deg)) ? `, span ${Math.round(d.alignment_span_deg*10)/10}°` : '';
+      // Add aspect name in summary if available
+      const aspectTxt = (typeof d.alignment_span_deg === 'number' && isFinite(d.alignment_span_deg)) ? (() => {
+        const nm = aspectNameFromSpan(d.alignment_span_deg, al.count);
+        return nm ? `, ${nm}` : '';
+      })() : '';
       const sc = (typeof d.alignment_score === 'number' && isFinite(d.alignment_score)) ? `, score ${Math.round(d.alignment_score*100)}%` : '';
       const totalTxt = (typeof d.alignment_total === 'number' && isFinite(d.alignment_total) && d.alignment_total > 0)
         ? `${al.count}/${d.alignment_total}`
         : `${al.count}`;
-      bits.push(`${i18nWord('alignment')}: ${totalTxt}${plist}${spanTxt}${sc}${whenTxt}`);
+      bits.push(`${i18nWord('alignment')}: ${totalTxt}${plist}${spanTxt}${aspectTxt}${sc}${whenTxt}`);
     }
   } catch(_){}
   // Join each info bit on a new line so the info box can render them clearly
@@ -743,12 +765,14 @@ function getSpanScoreMin(count, spanDeg) {
     const c = Number(count)||0;
     const s = Number(spanDeg);
     if (!isFinite(s)) return null;
-    // Allow opt-out via query
+    // Default: OFF unless explicitly enabled via query
     try {
       const qs = getQS();
       const policy = (qs.get('align_span_policy') || qs.get('span_policy') || '').trim().toLowerCase();
-      if (policy && ['off','none','no','0','false'].includes(policy)) return null;
-    } catch(_){}
+      if (!policy || ['off','none','no','0','false'].includes(policy)) return null;
+      // Only proceed when policy explicitly requests gating
+      if (!['on','yes','true','1','strict','hard'].includes(policy)) return null;
+    } catch(_){ return null; }
     if (c <= 2) {
       if (s <= 1) return 0.55;
       if (s <= 2) return 0.65;
@@ -804,10 +828,10 @@ function aspectNameFromSpan(spanDeg, count) {
       if (near(a, 60, 5)) return W.sex;
       return W.pair;
     }
-    // Multi-body heuristics: only tag clear axes or tight clusters
+    // Multi-body heuristics: only tag clear axes or tight clusters; otherwise generic group
     if (near(a, 0, 12)) return W.conj;           // tight cluster
     if (near(a, 180, 12)) return W.opp;          // opposition axis (two lobes)
-    return ''; // otherwise omit to avoid over-claiming
+    return W.group; // generic label for wider multi-body groupings
   } catch(_) { return ''; }
 }
 
@@ -1119,12 +1143,7 @@ function clearPickedInfo() {
   } catch(_) {}
 }
 
-// Simple visible version to verify deploy
-const APP_VERSION = 'calendar@2025-10-08T01:34Z';
-try {
-  const s = document.getElementById('status');
-  if (s) s.textContent = (s.textContent ? s.textContent + ' | ' : '') + APP_VERSION;
-} catch (_) {}
+// (APP_VERSION already declared above)
 
 // --- Global loading overlay helpers ---
 let __loadingCount = 0;
@@ -2339,24 +2358,40 @@ function renderCalendar(data) {
         {
           const al = resolveAlignment(d);
           let pass = (isFinite(al.count) && al.count >= getAlignmentThreshold());
+          // Fallback: if detailed alignments exist, surface AL regardless of al.count
+          if (!pass && Array.isArray(d.alignments) && d.alignments.length) pass = true;
           if (pass) {
+            // Score/Span gating (only enforce when a requirement exists)
             const gate = getAlignmentScoreMin(al.count, d.alignment_total);
-            if (gate != null) {
-              // Prefer using top detailed alignment score if present
-              let sc = Number(d.alignment_score);
-              try {
-                if (Array.isArray(d.alignments) && d.alignments.length) {
-                  let bestScore = NaN; let bestSpan = (typeof d.alignment_span_deg === 'number' && isFinite(d.alignment_span_deg)) ? d.alignment_span_deg : NaN; for (const it of d.alignments) { const sIt = Number(it.score); if (isFinite(sIt) && (isNaN(bestScore) || sIt > bestScore)) { bestScore = sIt; bestSpan = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? it.span_deg : bestSpan; } } if (isFinite(bestScore)) sc = bestScore;
+            let bestSpan = (typeof d.alignment_span_deg === 'number' && isFinite(d.alignment_span_deg)) ? d.alignment_span_deg : NaN;
+            let sc = Number(d.alignment_score);
+            try {
+              if (Array.isArray(d.alignments) && d.alignments.length) {
+                let bestScore = NaN;
+                for (const it of d.alignments) {
+                  const sIt = Number(it.score);
+                  if (isFinite(sIt) && (isNaN(bestScore) || sIt > bestScore)) {
+                    bestScore = sIt;
+                    bestSpan = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? it.span_deg : bestSpan;
+                  }
                 }
-              } catch(_){}
-              const spanGate = isFinite(bestSpan) ? getSpanScoreMin(al.count, bestSpan) : null; const req = Math.max(gate ?? 0, spanGate ?? 0); if (!isFinite(sc) || (req > 0 && sc < req)) pass = false;
-            }
+                if (isFinite(bestScore)) sc = bestScore;
+              }
+            } catch(_) {}
+            const spanGate = isFinite(bestSpan) ? getSpanScoreMin(al.count, bestSpan) : null;
+            const req = Math.max(gate ?? 0, spanGate ?? 0);
+            if (req > 0 && (!isFinite(sc) || sc < req)) pass = false;
           }
           if (pass) {
             const totalTxt = (typeof d.alignment_total === 'number' && isFinite(d.alignment_total) && d.alignment_total > 0)
               ? `${al.count}/${d.alignment_total}`
               : `${al.count}`;
-            let tt = `${i18nWord('alignment')} (${totalTxt}) ${al.when ? fmtUtcToLocalShort(al.when) : ''}`.trim();
+            // Add aspect name in summary (when available)
+            const aspectTxt = (typeof d.alignment_span_deg === 'number' && isFinite(d.alignment_span_deg)) ? (() => {
+              const nm = aspectNameFromSpan(d.alignment_span_deg, al.count);
+              return nm ? `, ${nm}` : '';
+            })() : '';
+            let tt = `${i18nWord('alignment')} (${totalTxt})${aspectTxt} ${al.when ? fmtUtcToLocalShort(al.when) : ''}`.trim();
             try {
               if (Array.isArray(d.alignments) && d.alignments.length) {
                 const lines = d.alignments.map(it => {
@@ -2381,11 +2416,77 @@ function renderCalendar(data) {
         const appendBadge = (label, title) => {
           if (!label) return;
           const had = num.querySelectorAll('span.badge').length > 0;
-          if (had) { const s = document.createElement('span'); s.className = 'badge-sep'; s.textContent = '·'; s.style.margin = '0 2px'; num.appendChild(s); }
-          const b = document.createElement('span'); b.className = 'badge'; b.textContent = label; if (title) b.title = title; num.appendChild(b);
+          if (had) {
+            const s = document.createElement('span');
+            s.className = 'badge-sep';
+            s.textContent = '·';
+            s.style.margin = '0 2px';
+            num.appendChild(s);
+          }
+          const b = document.createElement('span');
+          b.className = 'badge';
+          b.textContent = label;
+          if (title) b.title = title;
+          num.appendChild(b);
         };
+        // Alignment badge logic even when no moon icon is drawn
+        let pass = false;
         const al = resolveAlignment(d);
-         try { if (Array.isArray(d.alignments) && d.alignments.length) { let bestScore = NaN; let bestSpan = (typeof d.alignment_span_deg === 'number' && isFinite(d.alignment_span_deg)) ? d.alignment_span_deg : NaN; for (const it of d.alignments) { const sIt = Number(it.score); if (isFinite(sIt) && (isNaN(bestScore) || sIt > bestScore)) { bestScore = sIt; bestSpan = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? it.span_deg : bestSpan; } } if (isFinite(bestScore)) sc = bestScore; const spanGate = isFinite(bestSpan) ? getSpanScoreMin(al.count, bestSpan) : null; const req = Math.max(gate ?? 0, spanGate ?? 0); if (!isFinite(sc) || (req > 0 && sc < req)) pass = false; } } catch(_){} } if (pass) {
+        if (isFinite(al.count) && al.count >= getAlignmentThreshold()) pass = true;
+        if (!pass && Array.isArray(d.alignments) && d.alignments.length) pass = true;
+        if (pass) {
+          const gate = getAlignmentScoreMin(al.count, d.alignment_total);
+          if (gate != null) {
+            let sc = Number(d.alignment_score);
+            let bestSpan = (typeof d.alignment_span_deg === 'number' && isFinite(d.alignment_span_deg)) ? d.alignment_span_deg : NaN;
+            try {
+              if (Array.isArray(d.alignments) && d.alignments.length) {
+                let bestScore = NaN;
+                for (const it of d.alignments) {
+                  const sIt = Number(it.score);
+                  if (isFinite(sIt) && (isNaN(bestScore) || sIt > bestScore)) {
+                    bestScore = sIt;
+                    bestSpan = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? it.span_deg : bestSpan;
+                  }
+                }
+                if (isFinite(bestScore)) sc = bestScore;
+              }
+            } catch(_) {}
+            const spanGate = isFinite(bestSpan) ? getSpanScoreMin(al.count, bestSpan) : null;
+            const req = Math.max(gate ?? 0, spanGate ?? 0);
+            if (req > 0 && (!isFinite(sc) || sc < req)) pass = false;
+          }
+        }
+        if (pass) {
+          let tt = `${i18nWord('alignment')} (${al.count}`;
+          try {
+            if (typeof d.alignment_total === 'number' && isFinite(d.alignment_total) && d.alignment_total > 0) {
+              tt = `${i18nWord('alignment')} (${al.count}/${d.alignment_total})`;
+            }
+          } catch(_) {}
+          // Add aspect name in summary (when available)
+          const aspectTxt = (typeof d.alignment_span_deg === 'number' && isFinite(d.alignment_span_deg)) ? (() => {
+            const nm = aspectNameFromSpan(d.alignment_span_deg, al.count);
+            return nm ? `, ${nm}` : '';
+          })() : '';
+          tt += `${aspectTxt}` + (al.when ? ` ${fmtUtcToLocalShort(al.when)}` : '');
+          try {
+            if (Array.isArray(d.alignments) && d.alignments.length) {
+              const lines = d.alignments.map(it => {
+                const c = Number(it.count)||0;
+                const ttl2 = Number(it.total)||Number(d.alignment_total)||0;
+                const whenTxt = it.utc ? ` @ ${fmtUtcToLocalShort(it.utc)}` : '';
+                const planets = it.planets ? ` (${it.planets})` : '';
+                const spanTxt = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? `, span ${Math.round(it.span_deg*10)/10}°` : '';
+                const aspectTxt = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? (() => { const nm = aspectNameFromSpan(it.span_deg, c); return nm ? `, ${nm}` : ''; })() : '';
+                const scv = (typeof it.score === 'number' && isFinite(it.score)) ? it.score : (typeof d.alignment_score === 'number' ? d.alignment_score : NaN);
+                const scoreTxt = (isFinite(scv)) ? `, score ${Math.round(scv*100)}%` : '';
+                return `${c}${ttl2?`/${ttl2}`:''}${planets}${spanTxt}${aspectTxt}${scoreTxt}${whenTxt}`;
+              });
+              if (lines.length) tt += `\n- ${lines.join('\n- ')}`;
+            }
+          } catch(_) {}
+          appendBadge('AL', tt);
         }
       }
       const shem = document.createElement('div');
@@ -2599,8 +2700,8 @@ function scheduleTodayRollover() {
         box.id = 'dayInfoBox';
         box.style.position = 'fixed';
         box.style.zIndex = '9999';
-        box.style.maxWidth = '360px';
-        box.style.maxHeight = '75vh';
+        box.style.maxWidth = '520px';
+        box.style.maxHeight = '80vh';
         box.style.overflowY = 'auto';
         box.style.background = 'rgba(0,0,0,0.9)';
         box.style.color = '#fff';
@@ -2648,7 +2749,8 @@ function scheduleTodayRollover() {
     const margin = 8;
     // Ensure a pleasant width (avoid ultra-narrow boxes near edges)
     const vw = window.innerWidth || document.documentElement.clientWidth || 320;
-    const desired = Math.min(340, Math.max(240, vw - 2*margin));
+    // Allow a bit wider box for long content while clamping to viewport
+    const desired = Math.min(480, Math.max(260, vw - 2*margin));
     box.style.width = desired + 'px';
     let left = Math.round(r.left + (r.width / 2));
     let top = Math.round(r.bottom + margin);
@@ -2847,7 +2949,7 @@ onClick('mapDateBtn', async () => {
       if ((window.lang||'es') === 'en') {
         box.textContent = `Gregorian ${input.value} → Enoch Year ${e.enoch_year}, Month ${e.enoch_month}, Day ${e.enoch_day} (day ${e.enoch_day_of_year})`;
       } else {
-        box.textContent = `Gregoriano ${input.value} → Enoj Año ${e.enoch_year}, Mes ${e.enoch_month}, Día ${e.enoch_day} (día ${e.enoch_day_of_year})`;
+        box.textContent = `Gregoriano ${input.value} → Enoch Año ${e.enoch_year}, Mes ${e.enoch_month}, Día ${e.enoch_day} (día ${e.enoch_day_of_year})`;
       }
     }
     // Load the calendar of that Enoch year (CSV-first), otherwise build from this date

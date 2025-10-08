@@ -14,7 +14,8 @@ from utils.planet_positions import calculate_planets
 from utils.lunar_calc import (
     jd_utc, sun_moon_state, scan_phase_events, scan_perigee_apogee,
     lunar_sign_from_longitude, lunar_sign_mix, refine_sign_cusp,
-    solar_cardinal_points_for_year, scan_eclipses_global, scan_alignments_simple
+    solar_cardinal_points_for_year, scan_eclipses_global, scan_alignments_simple,
+    scan_pair_aspects
 )
 
 import traceback
@@ -357,6 +358,9 @@ def calc_year():
         if align_planets in ('seven','all'):
             align_include_moon = True
             align_include_sun = True
+        # Independent pair-aspect detection flags
+        align_detect_aspects = str(data.get('align_detect_aspects') or data.get('align_aspects') or '').strip().lower() in ('1','true','yes','on','all','full','opp','oppositions')
+        align_include_oppositions = str(data.get('align_include_oppositions') or data.get('align_oppositions') or '').strip().lower() in ('1','true','yes','on','opp','oppositions','all','full')
         # Force approximate mode if requested (avoids any Swiss-dependent calls except julday/revjul)
         approx_flag_raw = str(data.get('approx') or data.get('mode') or '').strip().lower()
         approx_mode = approx_flag_raw in ('1','true','yes','on','approx')
@@ -956,6 +960,47 @@ def calc_year():
                                 'span': span,
                                 'score': score,
                             }
+                    # Optional: add 2-body classical aspects irrespective of span (conj/sqr/tri/sex and optionally opp)
+                    try:
+                        if align_detect_aspects:
+                            asp = scan_pair_aspects(
+                                span_start,
+                                span_end,
+                                step_hours=max(1.0, min(24.0, align_step_hours)),
+                                planet_mode=align_planets,
+                                include_outer=align_include_outer,
+                                include_moon=align_include_moon,
+                                include_sun=align_include_sun,
+                                include_oppositions=align_include_oppositions,
+                            )
+                            for ev in asp:
+                                bi = bucket_index(ev['time'])
+                                if bi is None:
+                                    continue
+                                recs = per_day.setdefault(bi, {})
+                                key = tuple(sorted(ev.get('pids') or []))
+                                prev = recs.get(key)
+                                cnt = 2
+                                span = float(ev.get('span') or 1e9)
+                                total = int(ev.get('total') or 0) or 2
+                                planets_label = None
+                                try:
+                                    planets_label = ','.join([name_map.get(pid, str(pid)) for pid in ev.get('pids') or []])
+                                except Exception:
+                                    planets_label = None
+                                # For pure aspects we don't compute our blended score; leave None
+                                better = (prev is None) or (cnt > prev['count']) or (cnt == prev['count'] and span < prev['span'])
+                                if better:
+                                    recs[key] = {
+                                        'time': ev['time'],
+                                        'count': cnt,
+                                        'total': total,
+                                        'planets': planets_label,
+                                        'span': span,
+                                        'score': prev['score'] if (prev and 'score' in prev) else None,
+                                    }
+                    except Exception:
+                        pass
                     # Flush aggregates into day dicts
                     for bi, recs in per_day.items():
                         d = days[bi]

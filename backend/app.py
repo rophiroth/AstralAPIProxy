@@ -784,31 +784,65 @@ def calc_year():
                         if ev.get('type') == 'solar':
                             d['solar_eclipse'] = True
                             d['solar_eclipse_utc'] = ev['time'].astimezone(timezone.utc).isoformat()
-                            # Local magnitude (if available)
+                            try:
+                                kind = ev.get('subtype') or ''
+                                if kind:
+                                    d['solar_eclipse_kind'] = str(kind)
+                            except Exception:
+                                pass
+                            # Local magnitude/obscuration (if available)
                             try:
                                 geopos = (longitude, latitude, 0)
                                 retflag, attr = swe.sol_eclipse_how(jd_utc(ev['time']), swe.FLG_SWIEPH, geopos)
-                                if isinstance(attr, (list, tuple)) and len(attr) > 0 and attr[0] is not None:
-                                    d['solar_eclipse_mag'] = round(float(attr[0]), 3)
+                                if isinstance(attr, (list, tuple)) and len(attr) > 0:
+                                    # attr[0] = magnitude (fraction of diameter)
+                                    # attr[1] = obscuration (fraction of solar disc area)
+                                    try:
+                                        if attr[0] is not None:
+                                            d['solar_eclipse_mag'] = round(float(attr[0]), 3)
+                                    except Exception:
+                                        pass
+                                    try:
+                                        if len(attr) > 1 and attr[1] is not None:
+                                            d['solar_eclipse_obsc'] = round(float(attr[1]), 3)
+                                    except Exception:
+                                        pass
                             except Exception:
                                 pass
                         elif ev.get('type') == 'lunar':
                             d['lunar_eclipse'] = True
                             d['lunar_eclipse_utc'] = ev['time'].astimezone(timezone.utc).isoformat()
                             try:
+                                kind = ev.get('subtype') or ''
+                                if kind:
+                                    d['lunar_eclipse_kind'] = str(kind)
+                            except Exception:
+                                pass
+                            try:
                                 geopos = (longitude, latitude, 0)
                                 retflag, attr = swe.lun_eclipse_how(jd_utc(ev['time']), swe.FLG_SWIEPH, geopos)
                                 # attr[0]=umbral magnitude, attr[2]=penumbral
-                                mag = None
                                 if isinstance(attr, (list, tuple)) and len(attr) > 0:
+                                    mag_umbral = None
+                                    mag_penumbral = None
                                     try:
-                                        mag = float(attr[0]) if attr[0] is not None else None
+                                        if attr[0] is not None:
+                                            mag_umbral = float(attr[0])
                                     except Exception:
-                                        mag = None
-                                    if mag is None and len(attr) > 2 and attr[2] is not None:
-                                        mag = float(attr[2])
-                                if mag is not None:
-                                    d['lunar_eclipse_mag'] = round(mag, 3)
+                                        mag_umbral = None
+                                    try:
+                                        if len(attr) > 2 and attr[2] is not None:
+                                            mag_penumbral = float(attr[2])
+                                    except Exception:
+                                        mag_penumbral = None
+                                    # Preferred display magnitude
+                                    mag = mag_umbral if mag_umbral is not None else mag_penumbral
+                                    if mag is not None:
+                                        d['lunar_eclipse_mag'] = round(mag, 3)
+                                    if mag_umbral is not None:
+                                        d['lunar_eclipse_mag_umbral'] = round(mag_umbral, 3)
+                                    if mag_penumbral is not None:
+                                        d['lunar_eclipse_mag_penumbral'] = round(mag_penumbral, 3)
                             except Exception:
                                 pass
             except Exception:
@@ -840,31 +874,85 @@ def calc_year():
                         name_map[swe.PLUTO] = 'Pluto'
                     except Exception:
                         pass
+                    # Aggregate multiple alignments per day: dedupe by planet set, keep tightest and/or highest count
+                    per_day = {}
                     for ev in al:
                         bi = bucket_index(ev['time'])
                         if bi is None:
                             continue
-                        d = days[bi]
+                        recs = per_day.setdefault(bi, {})
+                        key = tuple(sorted(ev.get('pids') or [])) or (('t', ev['time'].isoformat()),)
+                        prev = recs.get(key)
                         cnt = int(ev.get('count') or 0)
-                        d['alignment'] = max(int(d.get('alignment') or 0), cnt)
-                        d['alignment_utc'] = ev['time'].astimezone(timezone.utc).isoformat()
-                        if ev.get('pids'):
-                            try:
-                                d['alignment_planets'] = ','.join([name_map.get(pid, str(pid)) for pid in ev['pids']])
-                            except Exception:
-                                pass
-                        if ev.get('span') is not None:
-                            try:
-                                d['alignment_span_deg'] = float(ev['span'])
-                            except Exception:
-                                pass
-                        # Score (0..1): 50% weight fraction of planets; 50% weight compactness relative to threshold
+                        span = float(ev.get('span') or 1e9)
+                        total = int(ev.get('total') or 0) or max(len(key), 1)
+                        # Score: 50% fraction + 50% compactness
                         try:
-                            total = int(ev.get('total') or 0) or max(len((ev.get('pids') or [])), 1)
                             frac = max(0.0, min(1.0, cnt / float(total)))
-                            span = float(ev.get('span') or 0.0)
                             comp = max(0.0, min(1.0, 1.0 - span / float(max(1.0, align_span_deg))))
-                            d['alignment_score'] = round(0.5 * frac + 0.5 * comp, 3)
+                            score = round(0.5 * frac + 0.5 * comp, 3)
+                        except Exception:
+                            score = None
+                        better = (prev is None)
+                        if prev is not None:
+                            if cnt > prev['count']:
+                                better = True
+                            elif cnt == prev['count'] and span < prev['span']:
+                                better = True
+                            elif cnt == prev['count'] and abs(span - prev['span']) < 1e-9 and ev['time'] < prev['time']:
+                                better = True
+                        if better:
+                            planets_label = None
+                            try:
+                                if ev.get('pids'):
+                                    planets_label = ','.join([name_map.get(pid, str(pid)) for pid in ev['pids']])
+                            except Exception:
+                                planets_label = None
+                            recs[key] = {
+                                'time': ev['time'],
+                                'count': cnt,
+                                'total': total,
+                                'planets': planets_label,
+                                'span': span,
+                                'score': score,
+                            }
+                    # Flush aggregates into day dicts
+                    for bi, recs in per_day.items():
+                        d = days[bi]
+                        # summary from the best item
+                        best = None
+                        for r in recs.values():
+                            if best is None or r['count'] > best['count'] or (r['count'] == best['count'] and r['span'] < best['span']):
+                                best = r
+                        if best:
+                            try:
+                                d['alignment'] = max(int(d.get('alignment') or 0), int(best['count']))
+                                d['alignment_utc'] = best['time'].astimezone(timezone.utc).isoformat()
+                                d['alignment_total'] = int(best['total'])
+                                if best.get('planets'):
+                                    d['alignment_planets'] = best['planets']
+                                d['alignment_span_deg'] = float(best['span'])
+                                if best.get('score') is not None:
+                                    d['alignment_score'] = best['score']
+                            except Exception:
+                                pass
+                        # detailed list of all distinct alignments for the day
+                        try:
+                            items = []
+                            for r in sorted(recs.values(), key=lambda x: (-(x['count']), x['span'], x['time'])):
+                                item = {
+                                    'utc': r['time'].astimezone(timezone.utc).isoformat(),
+                                    'count': r['count'],
+                                    'total': r['total'],
+                                    'span_deg': r['span'],
+                                }
+                                if r.get('planets'):
+                                    item['planets'] = r['planets']
+                                if r.get('score') is not None:
+                                    item['score'] = r['score']
+                                items.append(item)
+                            if items:
+                                d['alignments'] = items
                         except Exception:
                             pass
             except Exception:

@@ -353,12 +353,26 @@ def scan_eclipses_global(start: datetime, end: datetime) -> list:
                 # flags: 0 forward
                 r = swe.sol_eclipse_when_glob(jd, swe.FLG_SWIEPH, 0)
                 if isinstance(r, tuple) and len(r) >= 2:
+                    retflag = r[0] if len(r) > 0 else 0
                     tret = r[1]
                     if tret and len(tret) > 0 and tret[0] > 0:
                         t = tret[0]
                         dt = swe.revjul(t)
                         dt_utc = datetime(int(dt[0]), int(dt[1]), int(dt[2]), int(dt[3]) % 24, int((dt[3] % 1)*60), 0, tzinfo=timezone.utc)
-                        events.append({'type': 'solar', 'time': dt_utc, 'subtype': 'eclipse'})
+                        kind = 'eclipse'
+                        try:
+                            # Classify
+                            if retflag & swe.ECL_TOTAL:
+                                kind = 'total'
+                            elif retflag & swe.ECL_ANNULAR:
+                                kind = 'annular'
+                            elif retflag & swe.ECL_ANNULAR_TOTAL:
+                                kind = 'hybrid'
+                            elif retflag & swe.ECL_PARTIAL:
+                                kind = 'partial'
+                        except Exception:
+                            pass
+                        events.append({'type': 'solar', 'time': dt_utc, 'subtype': kind})
                         jd = t + 5  # skip ahead some days
                     else:
                         jd += 20
@@ -372,12 +386,23 @@ def scan_eclipses_global(start: datetime, end: datetime) -> list:
             while jd < jd_end:
                 r = swe.lun_eclipse_when(jd, swe.FLG_SWIEPH, 0)
                 if isinstance(r, tuple) and len(r) >= 2:
+                    retflag = r[0] if len(r) > 0 else 0
                     tret = r[1]
                     if tret and len(tret) > 0 and tret[0] > 0:
                         t = tret[0]
                         dt = swe.revjul(t)
                         dt_utc = datetime(int(dt[0]), int(dt[1]), int(dt[2]), int(dt[3]) % 24, int((dt[3] % 1)*60), 0, tzinfo=timezone.utc)
-                        events.append({'type': 'lunar', 'time': dt_utc, 'subtype': 'eclipse'})
+                        kind = 'eclipse'
+                        try:
+                            if retflag & swe.ECL_TOTAL:
+                                kind = 'total'
+                            elif retflag & swe.ECL_PARTIAL:
+                                kind = 'partial'
+                            elif retflag & swe.ECL_PENUMBRAL:
+                                kind = 'penumbral'
+                        except Exception:
+                            pass
+                        events.append({'type': 'lunar', 'time': dt_utc, 'subtype': kind})
                         jd = t + 5
                     else:
                         jd += 20
@@ -423,7 +448,10 @@ def scan_alignments_simple(
     - If 'seven' or include_outer True use Mercury..Saturn + Uranus/Neptune.
     - If 'all' include Pluto too.
     - Sampling every step_hours (default 24h) to reduce misses.
-    Returns list of {'type':'alignment','time': dt_utc, 'count': n}.
+
+    Returns list of events. Each event:
+      {'type':'alignment','time': dt_utc, 'count': n, 'pids': [...], 'span': deg, 'total': totalPlanets}
+    Multiple events can occur at the same timestamp (distinct planet sets).
     """
     events = []
     # Pick planet set
@@ -446,28 +474,51 @@ def scan_alignments_simple(
         # Keep association to planet ids so we can report which are aligned
         longs_map = _planet_longitudes_deg(t, ids=ids)
         items = sorted(longs_map.items(), key=lambda kv: kv[1])  # [(pid, lon), ...]
-        best = 0
-        best_span = None
-        best_pids = []
         n = len(items)
+        total = len(ids)
+        # Collect all clusters meeting criteria; dedupe by pid set; prefer smaller span on ties
+        by_set = {}
         for i in range(n):
             base_lon = items[i][1]
-            for j in range(i, n):
-                lon_j = items[j][1]
-                span = (lon_j - base_lon) if j >= i else (lon_j + 360 - base_lon)
-                # build set inside arc
+            # walk forward across wrap: consider n points ahead including wrap-around
+            for k in range(n):
+                j = (i + k) % n
+                lon_j = items[j][1] + (360.0 if j < i else 0.0)
+                span = lon_j - base_lon
+                if span < 0:
+                    continue
+                if span > max_span_deg:
+                    break
                 inside = []
-                for pid, L in items:
-                    dlon = (_norm360(L - base_lon)) % 360
+                for idx in range(n):
+                    pid, L = items[idx]
+                    Lf = L + (360.0 if idx < i else 0.0)
+                    dlon = Lf - base_lon
                     if 0 <= dlon <= span:
                         inside.append(pid)
                 cnt = len(inside)
-                if span <= max_span_deg and cnt > best:
-                    best = cnt
-                    best_span = span
-                    best_pids = inside[:]
-        if best >= min_count:
-            events.append({'type': 'alignment', 'time': t, 'count': best, 'pids': best_pids, 'span': float(best_span) if best_span is not None else None, 'total': len(ids)})
+                if cnt >= min_count:
+                    key = tuple(sorted(inside))
+                    prev = by_set.get(key)
+                    if prev is None or span < prev['span'] - 1e-9:
+                        by_set[key] = {'type': 'alignment', 'time': t, 'count': cnt, 'pids': inside[:], 'span': float(span), 'total': total}
+        # If none met min_count, still record the tightest pair when min_count==2 to support pair searches
+        if not by_set and min_count <= 2:
+            best_pair = None
+            best_span = None
+            for i in range(n):
+                for k in range(1, n):
+                    j = (i + k) % n
+                    base = items[i][1]
+                    lon_j = items[j][1] + (360.0 if j < i else 0.0)
+                    span = lon_j - base
+                    if best_span is None or span < best_span:
+                        best_span = span
+                        best_pair = (items[i][0], items[j][0])
+            if best_pair is not None and (best_span is not None) and best_span <= max_span_deg:
+                by_set[tuple(sorted(best_pair))] = {'type': 'alignment', 'time': t, 'count': 2, 'pids': list(best_pair), 'span': float(best_span), 'total': total}
+        # Flush
+        events.extend(by_set.values())
         t += timedelta(hours=step)
     return events
 

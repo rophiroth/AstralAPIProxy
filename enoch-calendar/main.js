@@ -681,7 +681,7 @@ function buildAstroTooltip(d) {
     // If detailed alignments array present, list up to 3 entries with span/score
     if (Array.isArray(d.alignments) && d.alignments.length) {
       const lines = [];
-      for (const it of d.alignments.slice(0, 3)) {
+      for (const it of d.alignments) {
         const c = Number(it.count)||0;
         const ttl = Number(it.total)||Number(d.alignment_total)||0;
         if (c < th) continue;

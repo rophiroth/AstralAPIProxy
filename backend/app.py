@@ -852,66 +852,85 @@ def calc_year():
                         name_map[swe.PLUTO] = 'Pluto'
                     except Exception:
                         pass
-                    # Aggregate multiple alignments per day
+                    # Aggregate multiple alignments per day: dedupe by planet set, keep tightest and/or highest count
+                    per_day = {}
                     for ev in al:
                         bi = bucket_index(ev['time'])
                         if bi is None:
                             continue
-                        d = days[bi]
+                        recs = per_day.setdefault(bi, {})
+                        key = tuple(sorted(ev.get('pids') or [])) or (('t', ev['time'].isoformat()),)
+                        prev = recs.get(key)
                         cnt = int(ev.get('count') or 0)
-                        # Maximal count for summary field
-                        d['alignment'] = max(int(d.get('alignment') or 0), cnt)
-                        d['alignment_utc'] = ev['time'].astimezone(timezone.utc).isoformat()
+                        span = float(ev.get('span') or 1e9)
+                        total = int(ev.get('total') or 0) or max(len(key), 1)
+                        # Score: 50% fraction + 50% compactness
                         try:
-                            tot = int(ev.get('total') or 0)
-                            if tot > 0:
-                                d['alignment_total'] = tot
-                        except Exception:
-                            pass
-                        # Name list for this event
-                        planets_label = None
-                        if ev.get('pids'):
-                            try:
-                                planets_label = ','.join([name_map.get(pid, str(pid)) for pid in ev['pids']])
-                                d['alignment_planets'] = planets_label
-                            except Exception:
-                                pass
-                        if ev.get('span') is not None:
-                            try:
-                                d['alignment_span_deg'] = float(ev['span'])
-                            except Exception:
-                                pass
-                        # Score (0..1): 50% weight fraction of planets; 50% weight compactness relative to threshold
-                        try:
-                            total = int(ev.get('total') or 0) or max(len((ev.get('pids') or [])), 1)
                             frac = max(0.0, min(1.0, cnt / float(total)))
-                            span = float(ev.get('span') or 0.0)
                             comp = max(0.0, min(1.0, 1.0 - span / float(max(1.0, align_span_deg))))
                             score = round(0.5 * frac + 0.5 * comp, 3)
-                            d['alignment_score'] = score
                         except Exception:
-                            pass
-                        # Append detailed item to per-day list
-                        try:
-                            item = {
-                                'utc': ev['time'].astimezone(timezone.utc).isoformat(),
+                            score = None
+                        better = (prev is None)
+                        if prev is not None:
+                            if cnt > prev['count']:
+                                better = True
+                            elif cnt == prev['count'] and span < prev['span']:
+                                better = True
+                            elif cnt == prev['count'] and abs(span - prev['span']) < 1e-9 and ev['time'] < prev['time']:
+                                better = True
+                        if better:
+                            planets_label = None
+                            try:
+                                if ev.get('pids'):
+                                    planets_label = ','.join([name_map.get(pid, str(pid)) for pid in ev['pids']])
+                            except Exception:
+                                planets_label = None
+                            recs[key] = {
+                                'time': ev['time'],
                                 'count': cnt,
-                                'total': int(ev.get('total') or 0) or None,
-                                'planets': planets_label or None,
-                                'span_deg': float(ev.get('span')) if ev.get('span') is not None else None,
-                                'score': d.get('alignment_score')
+                                'total': total,
+                                'planets': planets_label,
+                                'span': span,
+                                'score': score,
                             }
-                            if item['total'] is None:
-                                item.pop('total')
-                            if item['planets'] is None:
-                                item.pop('planets')
-                            if item['span_deg'] is None:
-                                item.pop('span_deg')
-                            if item['score'] is None:
-                                item.pop('score')
-                            if 'alignments' not in d or not isinstance(d['alignments'], list):
-                                d['alignments'] = []
-                            d['alignments'].append(item)
+                    # Flush aggregates into day dicts
+                    for bi, recs in per_day.items():
+                        d = days[bi]
+                        # summary from the best item
+                        best = None
+                        for r in recs.values():
+                            if best is None or r['count'] > best['count'] or (r['count'] == best['count'] and r['span'] < best['span']):
+                                best = r
+                        if best:
+                            try:
+                                d['alignment'] = max(int(d.get('alignment') or 0), int(best['count']))
+                                d['alignment_utc'] = best['time'].astimezone(timezone.utc).isoformat()
+                                d['alignment_total'] = int(best['total'])
+                                if best.get('planets'):
+                                    d['alignment_planets'] = best['planets']
+                                d['alignment_span_deg'] = float(best['span'])
+                                if best.get('score') is not None:
+                                    d['alignment_score'] = best['score']
+                            except Exception:
+                                pass
+                        # detailed list of all distinct alignments for the day
+                        try:
+                            items = []
+                            for r in sorted(recs.values(), key=lambda x: (-(x['count']), x['span'], x['time'])):
+                                item = {
+                                    'utc': r['time'].astimezone(timezone.utc).isoformat(),
+                                    'count': r['count'],
+                                    'total': r['total'],
+                                    'span_deg': r['span'],
+                                }
+                                if r.get('planets'):
+                                    item['planets'] = r['planets']
+                                if r.get('score') is not None:
+                                    item['score'] = r['score']
+                                items.append(item)
+                            if items:
+                                d['alignments'] = items
                         except Exception:
                             pass
             except Exception:

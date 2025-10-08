@@ -817,6 +817,50 @@ function getSpanScoreMin(count, spanDeg) {
   } catch(_) { return null; }
 }
 
+// Configurable orbs (tolerances) for 2-body aspect naming
+function getAspectOrbs() {
+  try {
+    const qs = getQS();
+    // New tighter defaults (deg): Conj 6, Opp 6, Square 5, Trine 4, Sextile 3
+    const base = { conj: 6, opp: 6, sqr: 5, tri: 4, sex: 3 };
+    let o = { ...base };
+    // Compact list: ?orbs=6,6,5,4,3 (order: conj,opp,sqr,tri,sex)
+    const listRaw = (qs.get('orbs') || qs.get('aspect_orbs') || '').trim();
+    if (listRaw) {
+      const nums = listRaw.split(/[;,\s]+/).map(x => parseFloat(x)).filter(x => isFinite(x));
+      if (nums.length >= 5) {
+        o = { conj: nums[0], opp: nums[1], sqr: nums[2], tri: nums[3], sex: nums[4] };
+      }
+    }
+    // Individual overrides: ?orb_conj=..&orb_opp=..&orb_square=..&orb_trine=..&orb_sextile=..
+    const num = (k) => {
+      const v = (qs.get(k) || '').trim();
+      const n = parseFloat(v);
+      return isFinite(n) ? n : null;
+    };
+    const oConj = num('orb_conj');
+    const oOpp = num('orb_opp');
+    const oSqr = num('orb_square') ?? num('orb_sqr');
+    const oTri = num('orb_trine') ?? num('orb_tri');
+    const oSex = num('orb_sextile') ?? num('orb_sex');
+    if (oConj != null) o.conj = oConj;
+    if (oOpp != null) o.opp = oOpp;
+    if (oSqr != null) o.sqr = oSqr;
+    if (oTri != null) o.tri = oTri;
+    if (oSex != null) o.sex = oSex;
+    // Optional global scaling: ?orb_scale=0.5 (applies after overrides)
+    const sc = parseFloat((qs.get('orb_scale') || '').trim());
+    if (isFinite(sc) && sc > 0) {
+      o = { conj: o.conj * sc, opp: o.opp * sc, sqr: o.sqr * sc, tri: o.tri * sc, sex: o.sex * sc };
+    }
+    // Clamp to sane bounds
+    const clamp = (x) => Math.max(0.1, Math.min(30, x));
+    return { conj: clamp(o.conj), opp: clamp(o.opp), sqr: clamp(o.sqr), tri: clamp(o.tri), sex: clamp(o.sex) };
+  } catch(_) {
+    return { conj: 6, opp: 6, sqr: 5, tri: 4, sex: 3 };
+  }
+}
+
 // Infer classical 2-body aspect name from angular separation (deg)
 function aspectNameFromSpan(spanDeg, count) {
   try {
@@ -832,13 +876,14 @@ function aspectNameFromSpan(spanDeg, count) {
     const es = { conj: 'Conjunción', opp: 'Oposición', sqr: 'Cuadratura', tri: 'Trígono', sex: 'Sextil', pair: 'Par', group: 'Grupo' };
     const en = { conj: 'Conjunction', opp: 'Opposition', sqr: 'Square', tri: 'Trine', sex: 'Sextile', pair: 'Pair', group: 'Group' };
     const W = (L === 'en') ? en : es;
+    const orbs = getAspectOrbs();
     // Detailed aspects for pairs
     if (n === 2) {
-      if (near(a, 0, 10)) return W.conj;
-      if (near(a, 180, 10)) return W.opp;
-      if (near(a, 90, 8)) return W.sqr;
-      if (near(a, 120, 7)) return W.tri;
-      if (near(a, 60, 5)) return W.sex;
+      if (near(a, 0, orbs.conj)) return W.conj;
+      if (near(a, 180, orbs.opp)) return W.opp;
+      if (near(a, 90, orbs.sqr)) return W.sqr;
+      if (near(a, 120, orbs.tri)) return W.tri;
+      if (near(a, 60, orbs.sex)) return W.sex;
       return W.pair;
     }
     // Multi-body heuristics: only tag clear axes or tight clusters; otherwise generic group

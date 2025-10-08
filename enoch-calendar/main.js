@@ -1035,7 +1035,7 @@ function clearPickedInfo() {
 }
 
 // Simple visible version to verify deploy
-const APP_VERSION = 'calendar@2025-09-22T00:00Z';
+const APP_VERSION = 'calendar@2025-10-08T01:34Z';
 try {
   const s = document.getElementById('status');
   if (s) s.textContent = (s.textContent ? s.textContent + ' | ' : '') + APP_VERSION;

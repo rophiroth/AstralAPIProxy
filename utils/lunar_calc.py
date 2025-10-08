@@ -581,25 +581,35 @@ def scan_pair_aspects(
 
     # Orbs
     if orbs is None:
-        orbs = {'conj': 10.0, 'opp': 10.0, 'sqr': 8.0, 'tri': 7.0, 'sex': 5.0}
+        # Tighter default orbs so minor aspects are more selective
+        orbs = {
+            'conj': 8.0,
+            'opp': 8.0,
+            'sqr': 5.0,
+            'tri': 4.0,
+            'sex': 3.0,
+        }
 
     def min_sep(a: float, b: float) -> float:
         d = abs((a - b) % 360.0)
         return d if d <= 180.0 else 360.0 - d
 
-    def aspect_ok(sep: float) -> bool:
-        # Accept when separation lies within any configured orb window
-        if sep <= orbs.get('conj', 0.0):
-            return True
-        if include_oppositions and abs(sep - 180.0) <= orbs.get('opp', 0.0):
-            return True
-        if abs(sep - 90.0) <= orbs.get('sqr', 0.0):
-            return True
-        if abs(sep - 120.0) <= orbs.get('tri', 0.0):
-            return True
-        if abs(sep - 60.0) <= orbs.get('sex', 0.0):
-            return True
-        return False
+    def best_aspect_match(sep: float):
+        """Return (target_deg, delta) for the best aspect within its orb, else (None, None)."""
+        candidates = [(0.0, 'conj'), (60.0, 'sex'), (90.0, 'sqr'), (120.0, 'tri')]
+        if include_oppositions:
+            candidates.append((180.0, 'opp'))
+        best_tgt = None
+        best_delta = float('inf')
+        for tgt, code in candidates:
+            orb = orbs.get(code, 0.0)
+            delta = abs(sep - tgt)
+            if delta <= orb and delta < best_delta:
+                best_delta = delta
+                best_tgt = tgt
+        if best_tgt is None:
+            return None, None
+        return best_tgt, best_delta
 
     # Clamp step
     try:
@@ -622,13 +632,15 @@ def scan_pair_aspects(
                 if key in seen:
                     continue
                 sep = min_sep(Li, Lj)
-                if aspect_ok(sep):
+                tgt, delta = best_aspect_match(sep)
+                if tgt is not None:
                     events.append({
                         'type': 'aspect',
                         'time': t,
                         'count': 2,
                         'pids': [pid_i, pid_j],
-                        'span': float(sep),
+                        'span': float(sep),  # store separation for compatibility
+                        'offset': float(delta),  # deviation to exact aspect
                         'total': total,
                     })
                     seen.add(key)

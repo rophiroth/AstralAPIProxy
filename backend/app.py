@@ -983,6 +983,7 @@ def calc_year():
                                 cnt = 2
                                 span = float(ev.get('span') or 1e9)
                                 total = int(ev.get('total') or 0) or 2
+                                offset = ev.get('offset')
                                 planets_label = None
                                 try:
                                     planets_label = ','.join([name_map.get(pid, str(pid)) for pid in ev.get('pids') or []])
@@ -998,6 +999,7 @@ def calc_year():
                                         'planets': planets_label,
                                         'span': span,
                                         'score': prev['score'] if (prev and 'score' in prev) else None,
+                                        'offset': float(offset) if (offset is not None) else None,
                                     }
                     except Exception:
                         pass
@@ -1035,6 +1037,8 @@ def calc_year():
                                     item['planets'] = r['planets']
                                 if r.get('score') is not None:
                                     item['score'] = r['score']
+                                if r.get('offset') is not None:
+                                    item['offset_deg'] = r['offset']
                                 items.append(item)
                             if items:
                                 d['alignments'] = items

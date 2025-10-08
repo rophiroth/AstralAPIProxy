@@ -710,7 +710,13 @@ function buildAstroTooltip(d) {
         if (req > 0 && isFinite(scv) && scv < req) continue;
         const whenTxt = it.utc ? ` @ ${fmtUtcToLocalShort(it.utc)}` : '';
         const planets = it.planets ? ` (${it.planets})` : '';
-        const spanTxt = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? `, span ${Math.round(it.span_deg*10)/10}°` : '';
+        const isPair = (c === 2);
+        const spanTxt = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? (
+          isPair ? (() => {
+            const dlt = (typeof it.offset_deg === 'number' && isFinite(it.offset_deg)) ? it.offset_deg : aspectDeltaForPair(it.span_deg);
+            return `, Δ ${Math.round(dlt*10)/10}°`;
+          })() : `, span ${Math.round(it.span_deg*10)/10}°`
+        ) : '';
         const aspectTxt = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? (() => {
           const nm = aspectNameFromSpan(it.span_deg, c);
           return nm ? `, ${nm}` : '';
@@ -743,7 +749,14 @@ function buildAstroTooltip(d) {
         }
       } catch(_) {}
       const plist = planetsLabel ? ` (${planetsLabel})` : '';
-      const spanTxt = (typeof d.alignment_span_deg === 'number' && isFinite(d.alignment_span_deg)) ? `, span ${Math.round(d.alignment_span_deg*10)/10}°` : '';
+      const spanTxt = (typeof d.alignment_span_deg === 'number' && isFinite(d.alignment_span_deg)) ? (() => {
+        const isPair = (al.count === 2);
+        if (isPair) {
+          const dlt = aspectDeltaForPair(d.alignment_span_deg);
+          return `, Δ ${Math.round(dlt*10)/10}°`;
+        }
+        return `, span ${Math.round(d.alignment_span_deg*10)/10}°`;
+      })() : '';
       // Add aspect name in summary if available
       const aspectTxt = (typeof d.alignment_span_deg === 'number' && isFinite(d.alignment_span_deg)) ? (() => {
         const nm = aspectNameFromSpan(d.alignment_span_deg, al.count);
@@ -833,6 +846,21 @@ function aspectNameFromSpan(spanDeg, count) {
     if (near(a, 180, 12)) return W.opp;          // opposition axis (two lobes)
     return W.group; // generic label for wider multi-body groupings
   } catch(_) { return ''; }
+}
+
+// Compute deviation to nearest classical aspect for pairs
+function aspectDeltaForPair(spanDeg) {
+  try {
+    const s = Number(spanDeg);
+    if (!Number.isFinite(s)) return NaN;
+    const targets = [0, 60, 90, 120, 180];
+    let best = Infinity;
+    for (const t of targets) {
+      const d = Math.abs(s - t);
+      if (d < best) best = d;
+    }
+    return Math.round(best * 10) / 10;
+  } catch(_) { return NaN; }
 }
 
 function resolveCalcYearUrl() {
@@ -2399,7 +2427,13 @@ function renderCalendar(data) {
                   const ttl2 = Number(it.total)||Number(d.alignment_total)||0;
                   const whenTxt = it.utc ? ` @ ${fmtUtcToLocalShort(it.utc)}` : '';
                   const planets = it.planets ? ` (${it.planets})` : '';
-                  const spanTxt = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? `, span ${Math.round(it.span_deg*10)/10}°` : '';
+                  const isPair2 = (c === 2);
+                  const spanTxt = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? (
+                    isPair2 ? (() => {
+                      const dlt2 = (typeof it.offset_deg === 'number' && isFinite(it.offset_deg)) ? it.offset_deg : aspectDeltaForPair(it.span_deg);
+                      return `, Δ ${Math.round(dlt2*10)/10}°`;
+                    })() : `, span ${Math.round(it.span_deg*10)/10}°`
+                  ) : '';
                   const aspectTxt = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? (() => { const nm = aspectNameFromSpan(it.span_deg, c); return nm ? `, ${nm}` : ''; })() : '';
                   const scv = (typeof it.score === 'number' && isFinite(it.score)) ? it.score : (typeof d.alignment_score === 'number' ? d.alignment_score : NaN);
                   const scoreTxt = (isFinite(scv)) ? `, score ${Math.round(scv*100)}%` : '';
@@ -2477,7 +2511,14 @@ function renderCalendar(data) {
                 const ttl2 = Number(it.total)||Number(d.alignment_total)||0;
                 const whenTxt = it.utc ? ` @ ${fmtUtcToLocalShort(it.utc)}` : '';
                 const planets = it.planets ? ` (${it.planets})` : '';
-                const spanTxt = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? `, span ${Math.round(it.span_deg*10)/10}°` : '';
+                const spanTxt = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? (()=>{
+                  const isPair = (c === 2);
+                  if (isPair) {
+                    const dlt = (typeof it.offset_deg === 'number' && isFinite(it.offset_deg)) ? it.offset_deg : aspectDeltaForPair(it.span_deg);
+                    return `, Δ ${Math.round(dlt*10)/10}°`;
+                  }
+                  return `, span ${Math.round(it.span_deg*10)/10}°`;
+                })() : '';
                 const aspectTxt = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? (() => { const nm = aspectNameFromSpan(it.span_deg, c); return nm ? `, ${nm}` : ''; })() : '';
                 const scv = (typeof it.score === 'number' && isFinite(it.score)) ? it.score : (typeof d.alignment_score === 'number' ? d.alignment_score : NaN);
                 const scoreTxt = (isFinite(scv)) ? `, score ${Math.round(scv*100)}%` : '';
@@ -2605,7 +2646,14 @@ function renderCalendar(data) {
                   const ttl3 = Number(it.total)||Number(d.alignment_total)||0;
                   const whenTxt = it.utc ? ` @ ${fmtUtcToLocalShort(it.utc)}` : '';
                   const planets = it.planets ? ` (${it.planets})` : '';
-                  const spanTxt = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? `, span ${Math.round(it.span_deg*10)/10}°` : '';
+                  const spanTxt = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? (()=>{
+                    const isPair = (c === 2);
+                    if (isPair) {
+                      const dlt = (typeof it.offset_deg === 'number' && isFinite(it.offset_deg)) ? it.offset_deg : aspectDeltaForPair(it.span_deg);
+                      return `, Δ ${Math.round(dlt*10)/10}°`;
+                    }
+                    return `, span ${Math.round(it.span_deg*10)/10}°`;
+                  })() : '';
                   const aspectTxt = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? (() => { const nm = aspectNameFromSpan(it.span_deg, c); return nm ? `, ${nm}` : ''; })() : '';
                   const scv = (typeof it.score === 'number' && isFinite(it.score)) ? it.score : (typeof d.alignment_score === 'number' ? d.alignment_score : NaN);
                   const scoreTxt = (isFinite(scv)) ? `, score ${Math.round(scv*100)}%` : '';

@@ -440,13 +440,16 @@ def scan_alignments_simple(
     step_hours: float = 24.0,
     planet_mode: str = '',
     include_outer: bool = False,
+    include_moon: bool = False,
+    include_sun: bool = False,
 ) -> list:
     """Scan window for simple ecliptic alignments.
 
     - If planet_mode in {'inner'} use Mercury/Venus/Mars.
     - If 'classic5' (default) use Mercury..Saturn.
-    - If 'seven' or include_outer True use Mercury..Saturn + Uranus/Neptune.
-    - If 'all' include Pluto too.
+    - If 'seven' include Sun+Moon+Mercury..Saturn.
+    - If include_outer True add Uranus/Neptune to the current set.
+    - If 'all' include Sun+Moon+Mercury..Pluto (adds outer + Pluto).
     - Sampling every step_hours (default 24h) to reduce misses.
 
     Returns list of events. Each event:
@@ -459,10 +462,20 @@ def scan_alignments_simple(
     ids = [swe.MERCURY, swe.VENUS, swe.MARS, swe.JUPITER, swe.SATURN]
     if mode in ('inner', 'inners'):
         ids = [swe.MERCURY, swe.VENUS, swe.MARS]
-    elif mode in ('seven', 'outer', 'outers') or include_outer:
-        ids = [swe.MERCURY, swe.VENUS, swe.MARS, swe.JUPITER, swe.SATURN, swe.URANUS, swe.NEPTUNE]
+    elif mode in ('seven', '7'):
+        ids = [swe.SUN, swe.MOON, swe.MERCURY, swe.VENUS, swe.MARS, swe.JUPITER, swe.SATURN]
     elif mode in ('all', 'nine', '8', '9'):
-        ids = [swe.MERCURY, swe.VENUS, swe.MARS, swe.JUPITER, swe.SATURN, swe.URANUS, swe.NEPTUNE, swe.PLUTO]
+        # start from full classic set and add outers+pluto and luminaries
+        ids = [swe.SUN, swe.MOON, swe.MERCURY, swe.VENUS, swe.MARS, swe.JUPITER, swe.SATURN, swe.URANUS, swe.NEPTUNE, swe.PLUTO]
+    # Optional flags can add luminaries/outers on top of chosen mode
+    if include_moon and swe.MOON not in ids:
+        ids = [swe.MOON] + ids
+    if include_sun and swe.SUN not in ids:
+        ids = [swe.SUN] + ids
+    if include_outer:
+        for pid in (getattr(swe, 'URANUS', None), getattr(swe, 'NEPTUNE', None)):
+            if pid is not None and pid not in ids:
+                ids.append(pid)
 
     # Clamp parameters
     try:

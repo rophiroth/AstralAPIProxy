@@ -349,8 +349,14 @@ def calc_year():
             align_step_hours = float(data.get('align_step_hours') if data.get('align_step_hours') is not None else (data.get('align_step') if data.get('align_step') is not None else 24.0))
         except Exception:
             align_step_hours = 24.0
-        align_planets = str(data.get('align_planets') or '').strip().lower()  # e.g., 'inner','outer','classic5','seven','all'
+        align_planets = str(data.get('align_planets') or '').strip().lower()  # e.g., 'inner','classic5','seven','all'
         align_include_outer = str(data.get('align_include_outer') or data.get('align_outer') or '').strip().lower() in ('1','true','yes','on','outer','all')
+        # Allow luminaries: via explicit flags or implied by planet mode
+        align_include_moon = str(data.get('align_include_moon') or data.get('align_moon') or '').strip().lower() in ('1','true','yes','on','moon','seven','all')
+        align_include_sun = str(data.get('align_include_sun') or data.get('align_sun') or '').strip().lower() in ('1','true','yes','on','sun','seven','all')
+        if align_planets in ('seven','all'):
+            align_include_moon = True
+            align_include_sun = True
         # Force approximate mode if requested (avoids any Swiss-dependent calls except julday/revjul)
         approx_flag_raw = str(data.get('approx') or data.get('mode') or '').strip().lower()
         approx_mode = approx_flag_raw in ('1','true','yes','on','approx')
@@ -858,7 +864,9 @@ def calc_year():
                         min_count=max(0, min(10, align_min_count)),
                         step_hours=max(1.0, min(24.0, align_step_hours)),
                         planet_mode=align_planets,
-                        include_outer=align_include_outer
+                        include_outer=align_include_outer,
+                        include_moon=align_include_moon,
+                        include_sun=align_include_sun
                     )
                     name_map = {
                         swe.MERCURY: 'Mercury',
@@ -872,6 +880,12 @@ def calc_year():
                         name_map[swe.URANUS] = 'Uranus'
                         name_map[swe.NEPTUNE] = 'Neptune'
                         name_map[swe.PLUTO] = 'Pluto'
+                    except Exception:
+                        pass
+                    # Luminaries
+                    try:
+                        name_map[swe.SUN] = 'Sun'
+                        name_map[swe.MOON] = 'Moon'
                     except Exception:
                         pass
                     # Aggregate multiple alignments per day: dedupe by planet set, keep tightest and/or highest count

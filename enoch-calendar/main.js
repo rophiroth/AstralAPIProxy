@@ -679,7 +679,8 @@ function buildAstroTooltip(d) {
     if (d.supermoon && d.supermoon_utc) bits.push(`${i18nWord('supermoon')}: ${fmtUtcToLocalShort(d.supermoon_utc)}`);
     const al = resolveAlignment(d);
     const th = getAlignmentThreshold();
-    // If detailed alignments array present, list all entries with span/score
+    let hasDetailed = false;
+    // If detailed alignments array present, list all entries with span/score, one per line
     if (Array.isArray(d.alignments) && d.alignments.length) {
       const lines = [];
       for (const it of d.alignments) {
@@ -687,16 +688,26 @@ function buildAstroTooltip(d) {
         const ttl = Number(it.total)||Number(d.alignment_total)||0;
         const gate = getAlignmentScoreMin(c, ttl);
         const scv = (typeof it.score === 'number' && isFinite(it.score)) ? it.score : (typeof d.alignment_score === 'number' ? d.alignment_score : NaN);
-        if (gate != null && isFinite(scv) && scv < gate) continue;
+        const spanGate = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? getSpanScoreMin(c, it.span_deg) : null;
+        const req = Math.max(gate ?? 0, spanGate ?? 0);
+        if (req > 0 && isFinite(scv) && scv < req) continue;
         const whenTxt = it.utc ? ` @ ${fmtUtcToLocalShort(it.utc)}` : '';
         const planets = it.planets ? ` (${it.planets})` : '';
         const spanTxt = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? `, span ${Math.round(it.span_deg*10)/10}°` : '';
+        const aspectTxt = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? (() => {
+          const nm = aspectNameFromSpan(it.span_deg, c);
+          return nm ? `, ${nm}` : '';
+        })() : '';
         const scoreTxt = (isFinite(scv)) ? `, score ${Math.round(scv*100)}%` : '';
-        lines.push(`${c}${ttl?`/${ttl}`:''}${planets}${spanTxt}${scoreTxt}${whenTxt}`);
+        lines.push(`${c}${ttl?`/${ttl}`:''}${planets}${spanTxt}${aspectTxt}${scoreTxt}${whenTxt}`);
       }
-      if (lines.length) bits.push(`${i18nWord('alignment')}: ${lines.join(' | ')}`);
+      if (lines.length) {
+        hasDetailed = true;
+        bits.push(`${i18nWord('alignment')}:`);
+        lines.forEach(l => bits.push(`- ${l}`));
+      }
     }
-    if (isFinite(al.count) && al.count >= th) {
+  if (!hasDetailed && isFinite(al.count) && al.count >= th) {
       const whenTxt = al.when ? ` @ ${fmtUtcToLocalShort(al.when)}` : '';
       // Normalize planet list: support array, JSON string, or CSV string
       let planetsLabel = '';
@@ -723,7 +734,81 @@ function buildAstroTooltip(d) {
       bits.push(`${i18nWord('alignment')}: ${totalTxt}${plist}${spanTxt}${sc}${whenTxt}`);
     }
   } catch(_){}
-  return bits.length ? ('\n' + bits.join(' • ')) : '';
+  // Join each info bit on a new line so the info box can render them clearly
+  return bits.length ? ('\n' + bits.join('\n')) : '';
+}
+// Additional span-demand: raise required score as span widens (stricter for minor counts)
+function getSpanScoreMin(count, spanDeg) {
+  try {
+    const c = Number(count)||0;
+    const s = Number(spanDeg);
+    if (!isFinite(s)) return null;
+    // Allow opt-out via query
+    try {
+      const qs = getQS();
+      const policy = (qs.get('align_span_policy') || qs.get('span_policy') || '').trim().toLowerCase();
+      if (policy && ['off','none','no','0','false'].includes(policy)) return null;
+    } catch(_){}
+    if (c <= 2) {
+      if (s <= 1) return 0.55;
+      if (s <= 2) return 0.65;
+      if (s <= 3) return 0.75;
+      if (s <= 5) return 0.85;
+      if (s <= 8) return 0.9;
+      return 0.95;
+    }
+    if (c === 3) {
+      if (s <= 2) return 0.55;
+      if (s <= 4) return 0.65;
+      if (s <= 6) return 0.75;
+      if (s <= 8) return 0.8;
+      if (s <= 12) return 0.85;
+      return 0.9;
+    }
+    if (c === 4) {
+      if (s <= 4) return 0.5;
+      if (s <= 8) return 0.6;
+      if (s <= 12) return 0.7;
+      if (s <= 16) return 0.75;
+      return 0.8;
+    }
+    // 5+ bodies: still mildly stricter with span
+    if (s <= 8) return 0.4;
+    if (s <= 12) return 0.5;
+    if (s <= 20) return 0.6;
+    return 0.65;
+  } catch(_) { return null; }
+}
+
+// Infer classical 2-body aspect name from angular separation (deg)
+function aspectNameFromSpan(spanDeg, count) {
+  try {
+    const n = Number(count);
+    const s = Number(spanDeg);
+    if (!isFinite(n) || !isFinite(s)) return '';
+    const a = ((s % 360) + 360) % 360;
+    const near = (x, t, orb) => {
+      const d = Math.abs(((x - t + 540) % 360) - 180);
+      return d <= orb;
+    };
+    const L = getLang();
+    const es = { conj: 'Conjunción', opp: 'Oposición', sqr: 'Cuadratura', tri: 'Trígono', sex: 'Sextil', pair: 'Par', group: 'Grupo' };
+    const en = { conj: 'Conjunction', opp: 'Opposition', sqr: 'Square', tri: 'Trine', sex: 'Sextile', pair: 'Pair', group: 'Group' };
+    const W = (L === 'en') ? en : es;
+    // Detailed aspects for pairs
+    if (n === 2) {
+      if (near(a, 0, 10)) return W.conj;
+      if (near(a, 180, 10)) return W.opp;
+      if (near(a, 90, 8)) return W.sqr;
+      if (near(a, 120, 7)) return W.tri;
+      if (near(a, 60, 5)) return W.sex;
+      return W.pair;
+    }
+    // Multi-body heuristics: only tag clear axes or tight clusters
+    if (near(a, 0, 12)) return W.conj;           // tight cluster
+    if (near(a, 180, 12)) return W.opp;          // opposition axis (two lobes)
+    return ''; // otherwise omit to avoid over-claiming
+  } catch(_) { return ''; }
 }
 
 function resolveCalcYearUrl() {
@@ -1512,6 +1597,12 @@ async function buildCalendar(referenceDate = new Date(), tryCSV = true, base = n
       if (Number.isFinite(alignStep) && alignStep > 0) body.align_step_hours = alignStep;
       if (alignPlanets) body.align_planets = alignPlanets; // e.g., 'inner', 'outer', 'classic5', 'seven', 'all'
       if (['1','true','yes','on','outer','all'].includes(alignOuter)) body.align_include_outer = true;
+      // Optional: ask backend to include aspects if user requests (?aspects=1 or align_aspects)
+      const aspectsRaw = (qs.get('aspects') || qs.get('align_aspects') || qs.get('include_aspects') || '').trim().toLowerCase();
+      if (['1','true','yes','on','all','full','opp','oppositions'].includes(aspectsRaw)) {
+        body.align_detect_aspects = true;
+        if (['opp','oppositions'].includes(aspectsRaw)) body.align_include_oppositions = true;
+      }
       // Sensible defaults when no overrides are provided — broaden search for multi-planet alignments
       if (typeof body.align_span_deg === 'undefined') body.align_span_deg = 35; // degrees
       if (typeof body.align_step_hours === 'undefined') body.align_step_hours = 1; // finer granularity improves detection timing
@@ -2255,11 +2346,10 @@ function renderCalendar(data) {
               let sc = Number(d.alignment_score);
               try {
                 if (Array.isArray(d.alignments) && d.alignments.length) {
-                  const best = d.alignments.reduce((m, it) => Math.max(m, Number(it.score)||NaN), NaN);
-                  if (isFinite(best)) sc = best;
+                  let bestScore = NaN; let bestSpan = (typeof d.alignment_span_deg === 'number' && isFinite(d.alignment_span_deg)) ? d.alignment_span_deg : NaN; for (const it of d.alignments) { const sIt = Number(it.score); if (isFinite(sIt) && (isNaN(bestScore) || sIt > bestScore)) { bestScore = sIt; bestSpan = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? it.span_deg : bestSpan; } } if (isFinite(bestScore)) sc = bestScore;
                 }
               } catch(_){}
-              if (!isFinite(sc) || sc < gate) pass = false;
+              const spanGate = isFinite(bestSpan) ? getSpanScoreMin(al.count, bestSpan) : null; const req = Math.max(gate ?? 0, spanGate ?? 0); if (!isFinite(sc) || (req > 0 && sc < req)) pass = false;
             }
           }
           if (pass) {
@@ -2274,10 +2364,11 @@ function renderCalendar(data) {
                   const ttl2 = Number(it.total)||Number(d.alignment_total)||0;
                   const whenTxt = it.utc ? ` @ ${fmtUtcToLocalShort(it.utc)}` : '';
                   const planets = it.planets ? ` (${it.planets})` : '';
-                  const spanTxt = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? `, span ${Math.round(it.span_deg*10)/10}�` : '';
+                  const spanTxt = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? `, span ${Math.round(it.span_deg*10)/10}°` : '';
+                  const aspectTxt = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? (() => { const nm = aspectNameFromSpan(it.span_deg, c); return nm ? `, ${nm}` : ''; })() : '';
                   const scv = (typeof it.score === 'number' && isFinite(it.score)) ? it.score : (typeof d.alignment_score === 'number' ? d.alignment_score : NaN);
                   const scoreTxt = (isFinite(scv)) ? `, score ${Math.round(scv*100)}%` : '';
-                  return `${c}${ttl2?`/${ttl2}`:''}${planets}${spanTxt}${scoreTxt}${whenTxt}`;
+                  return `${c}${ttl2?`/${ttl2}`:''}${planets}${spanTxt}${aspectTxt}${scoreTxt}${whenTxt}`;
                 });
                 if (lines.length) tt += `\n- ${lines.join('\n- ')}`;
               }
@@ -2294,26 +2385,7 @@ function renderCalendar(data) {
           const b = document.createElement('span'); b.className = 'badge'; b.textContent = label; if (title) b.title = title; num.appendChild(b);
         };
         const al = resolveAlignment(d);
-        let pass = (isFinite(al.count) && al.count >= getAlignmentThreshold());
-        if (pass) {
-          const gate = getAlignmentScoreMin(al.count, d.alignment_total);
-          if (gate != null) {
-            let sc = Number(d.alignment_score);
-            try {
-              if (Array.isArray(d.alignments) && d.alignments.length) {
-                const best = d.alignments.reduce((m, it) => Math.max(m, Number(it.score)||NaN), NaN);
-                if (isFinite(best)) sc = best;
-              }
-            } catch(_){}
-            if (!isFinite(sc) || sc < gate) pass = false;
-          }
-        }
-        if (pass) {
-          const totalTxt = (typeof d.alignment_total === 'number' && isFinite(d.alignment_total) && d.alignment_total > 0)
-            ? `${al.count}/${d.alignment_total}`
-            : `${al.count}`;
-          const tt = `${i18nWord('alignment')} (${totalTxt}) ${al.when ? fmtUtcToLocalShort(al.when) : ''}`.trim();
-          appendBadge('AL', tt);
+         try { if (Array.isArray(d.alignments) && d.alignments.length) { let bestScore = NaN; let bestSpan = (typeof d.alignment_span_deg === 'number' && isFinite(d.alignment_span_deg)) ? d.alignment_span_deg : NaN; for (const it of d.alignments) { const sIt = Number(it.score); if (isFinite(sIt) && (isNaN(bestScore) || sIt > bestScore)) { bestScore = sIt; bestSpan = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? it.span_deg : bestSpan; } } if (isFinite(bestScore)) sc = bestScore; const spanGate = isFinite(bestSpan) ? getSpanScoreMin(al.count, bestSpan) : null; const req = Math.max(gate ?? 0, spanGate ?? 0); if (!isFinite(sc) || (req > 0 && sc < req)) pass = false; } } catch(_){} } if (pass) {
         }
       }
       const shem = document.createElement('div');
@@ -2432,10 +2504,11 @@ function renderCalendar(data) {
                   const ttl3 = Number(it.total)||Number(d.alignment_total)||0;
                   const whenTxt = it.utc ? ` @ ${fmtUtcToLocalShort(it.utc)}` : '';
                   const planets = it.planets ? ` (${it.planets})` : '';
-                  const spanTxt = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? `, span ${Math.round(it.span_deg*10)/10}�` : '';
+                  const spanTxt = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? `, span ${Math.round(it.span_deg*10)/10}°` : '';
+                  const aspectTxt = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? (() => { const nm = aspectNameFromSpan(it.span_deg, c); return nm ? `, ${nm}` : ''; })() : '';
                   const scv = (typeof it.score === 'number' && isFinite(it.score)) ? it.score : (typeof d.alignment_score === 'number' ? d.alignment_score : NaN);
                   const scoreTxt = (isFinite(scv)) ? `, score ${Math.round(scv*100)}%` : '';
-                  return `${c}${ttl3?`/${ttl3}`:''}${planets}${spanTxt}${scoreTxt}${whenTxt}`;
+                  return `${c}${ttl3?`/${ttl3}`:''}${planets}${spanTxt}${aspectTxt}${scoreTxt}${whenTxt}`;
                 });
                 if (lines2.length) tt2 += `\n- ${lines2.join('\n- ')}`;
               }
@@ -2567,7 +2640,9 @@ function scheduleTodayRollover() {
     const box = ensureInfoBox();
     const content = box.querySelector('#dayInfoBoxContent');
     const txt = el.getAttribute('title') || '';
-    content.innerHTML = txt.replace(/\n/g, '<br/>');
+    content.innerHTML = txt
+      .replace(/\r?\n/g, '<br/>')
+      .replace(/\s\|\s/g, '<br/>');
     // Position near element with smart anchoring and clamping
     const r = el.getBoundingClientRect();
     const margin = 8;

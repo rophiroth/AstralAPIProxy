@@ -668,7 +668,8 @@ function buildAstroTooltip(d) {
     if (d.solar_eclipse && d.solar_eclipse_utc) {
       const kind = (d.solar_eclipse_kind ? ` ${String(d.solar_eclipse_kind)}` : '');
       const mag = (typeof d.solar_eclipse_mag === 'number' && isFinite(d.solar_eclipse_mag)) ? ` (mag ${d.solar_eclipse_mag})` : '';
-      bits.push(`${i18nWord('solarEclipse')}: ${fmtUtcToLocalShort(d.solar_eclipse_utc)}${kind}${mag}`);
+      const obsc = (typeof d.solar_eclipse_obsc === 'number' && isFinite(d.solar_eclipse_obsc)) ? ` (${Math.round(d.solar_eclipse_obsc*100)}%)` : '';
+      bits.push(`${i18nWord('solarEclipse')}: ${fmtUtcToLocalShort(d.solar_eclipse_utc)}${kind}${mag}${obsc}`);
     }
     if (d.lunar_eclipse && d.lunar_eclipse_utc) {
       const kind = (d.lunar_eclipse_kind ? ` ${String(d.lunar_eclipse_kind)}` : '');
@@ -678,13 +679,12 @@ function buildAstroTooltip(d) {
     if (d.supermoon && d.supermoon_utc) bits.push(`${i18nWord('supermoon')}: ${fmtUtcToLocalShort(d.supermoon_utc)}`);
     const al = resolveAlignment(d);
     const th = getAlignmentThreshold();
-    // If detailed alignments array present, list up to 3 entries with span/score
+    // If detailed alignments array present, list all entries with span/score
     if (Array.isArray(d.alignments) && d.alignments.length) {
       const lines = [];
       for (const it of d.alignments) {
         const c = Number(it.count)||0;
         const ttl = Number(it.total)||Number(d.alignment_total)||0;
-        if (c < th) continue;
         const gate = getAlignmentScoreMin(c, ttl);
         const scv = (typeof it.score === 'number' && isFinite(it.score)) ? it.score : (typeof d.alignment_score === 'number' ? d.alignment_score : NaN);
         if (gate != null && isFinite(scv) && scv < gate) continue;
@@ -2214,7 +2214,8 @@ function renderCalendar(data) {
         if (d.solar_eclipse) {
           const kind = (d.solar_eclipse_kind ? ` ${String(d.solar_eclipse_kind)}` : '');
           const mag = (typeof d.solar_eclipse_mag === 'number' && isFinite(d.solar_eclipse_mag)) ? ` (mag ${d.solar_eclipse_mag})` : '';
-          appendBadge('SE', `${i18nWord('solarEclipse')} ${fmtUtcToLocalShort(d.solar_eclipse_utc)||''}${kind}${mag}`);
+          const obsc = (typeof d.solar_eclipse_obsc === 'number' && isFinite(d.solar_eclipse_obsc)) ? ` (${Math.round(d.solar_eclipse_obsc*100)}%)` : '';
+          appendBadge('SE', `${i18nWord('solarEclipse')} ${fmtUtcToLocalShort(d.solar_eclipse_utc)||''}${kind}${mag}${obsc}`);
         }
         if (d.lunar_eclipse) {
           const kind = (d.lunar_eclipse_kind ? ` ${String(d.lunar_eclipse_kind)}` : '');
@@ -2243,7 +2244,22 @@ function renderCalendar(data) {
             const totalTxt = (typeof d.alignment_total === 'number' && isFinite(d.alignment_total) && d.alignment_total > 0)
               ? `${al.count}/${d.alignment_total}`
               : `${al.count}`;
-            const tt = `${i18nWord('alignment')} (${totalTxt}) ${al.when ? fmtUtcToLocalShort(al.when) : ''}`.trim();
+            let tt = `${i18nWord('alignment')} (${totalTxt}) ${al.when ? fmtUtcToLocalShort(al.when) : ''}`.trim();
+            try {
+              if (Array.isArray(d.alignments) && d.alignments.length) {
+                const lines = d.alignments.map(it => {
+                  const c = Number(it.count)||0;
+                  const ttl2 = Number(it.total)||Number(d.alignment_total)||0;
+                  const whenTxt = it.utc ? ` @ ${fmtUtcToLocalShort(it.utc)}` : '';
+                  const planets = it.planets ? ` (${it.planets})` : '';
+                  const spanTxt = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? `, span ${Math.round(it.span_deg*10)/10}�` : '';
+                  const scv = (typeof it.score === 'number' && isFinite(it.score)) ? it.score : (typeof d.alignment_score === 'number' ? d.alignment_score : NaN);
+                  const scoreTxt = (isFinite(scv)) ? `, score ${Math.round(scv*100)}%` : '';
+                  return `${c}${ttl2?`/${ttl2}`:''}${planets}${spanTxt}${scoreTxt}${whenTxt}`;
+                });
+                if (lines.length) tt += `\n- ${lines.join('\n- ')}`;
+              }
+            } catch(_){}
             appendBadge('AL', tt);
           }
         }
@@ -2375,7 +2391,8 @@ function renderCalendar(data) {
         if (d.solstice) appendBadge2('SOL', `${i18nWord('solstice')} ${fmtUtcToLocalShort(d.solstice_utc)||''}`);
         if (d.solar_eclipse) {
           const mag2 = (typeof d.solar_eclipse_mag === 'number' && isFinite(d.solar_eclipse_mag)) ? ` (mag ${d.solar_eclipse_mag})` : '';
-          appendBadge2('SE', `${i18nWord('solarEclipse')} ${fmtUtcToLocalShort(d.solar_eclipse_utc)||''}${mag2}`);
+          const obsc2 = (typeof d.solar_eclipse_obsc === 'number' && isFinite(d.solar_eclipse_obsc)) ? ` (${Math.round(d.solar_eclipse_obsc*100)}%)` : '';
+          appendBadge2('SE', `${i18nWord('solarEclipse')} ${fmtUtcToLocalShort(d.solar_eclipse_utc)||''}${mag2}${obsc2}`);
         }
         if (d.lunar_eclipse) {
           const mag2 = (typeof d.lunar_eclipse_mag === 'number' && isFinite(d.lunar_eclipse_mag)) ? ` (mag ${d.lunar_eclipse_mag})` : '';
@@ -2385,7 +2402,22 @@ function renderCalendar(data) {
         {
           const al2 = resolveAlignment(d);
           if (isFinite(al2.count) && al2.count >= getAlignmentThreshold()) {
-            const tt2 = `${i18nWord('alignment')} (${al2.count}) ${al2.when ? fmtUtcToLocalShort(al2.when) : ''}`.trim();
+            let tt2 = `${i18nWord('alignment')} (${al2.count}) ${al2.when ? fmtUtcToLocalShort(al2.when) : ''}`.trim();
+            try {
+              if (Array.isArray(d.alignments) && d.alignments.length) {
+                const lines2 = d.alignments.map(it => {
+                  const c = Number(it.count)||0;
+                  const ttl3 = Number(it.total)||Number(d.alignment_total)||0;
+                  const whenTxt = it.utc ? ` @ ${fmtUtcToLocalShort(it.utc)}` : '';
+                  const planets = it.planets ? ` (${it.planets})` : '';
+                  const spanTxt = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? `, span ${Math.round(it.span_deg*10)/10}�` : '';
+                  const scv = (typeof it.score === 'number' && isFinite(it.score)) ? it.score : (typeof d.alignment_score === 'number' ? d.alignment_score : NaN);
+                  const scoreTxt = (isFinite(scv)) ? `, score ${Math.round(scv*100)}%` : '';
+                  return `${c}${ttl3?`/${ttl3}`:''}${planets}${spanTxt}${scoreTxt}${whenTxt}`;
+                });
+                if (lines2.length) tt2 += `\n- ${lines2.join('\n- ')}`;
+              }
+            } catch(_){}
             appendBadge2('AL', tt2);
           }
         }

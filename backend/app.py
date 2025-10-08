@@ -790,12 +790,23 @@ def calc_year():
                                     d['solar_eclipse_kind'] = str(kind)
                             except Exception:
                                 pass
-                            # Local magnitude (if available)
+                            # Local magnitude/obscuration (if available)
                             try:
                                 geopos = (longitude, latitude, 0)
                                 retflag, attr = swe.sol_eclipse_how(jd_utc(ev['time']), swe.FLG_SWIEPH, geopos)
-                                if isinstance(attr, (list, tuple)) and len(attr) > 0 and attr[0] is not None:
-                                    d['solar_eclipse_mag'] = round(float(attr[0]), 3)
+                                if isinstance(attr, (list, tuple)) and len(attr) > 0:
+                                    # attr[0] = magnitude (fraction of diameter)
+                                    # attr[1] = obscuration (fraction of solar disc area)
+                                    try:
+                                        if attr[0] is not None:
+                                            d['solar_eclipse_mag'] = round(float(attr[0]), 3)
+                                    except Exception:
+                                        pass
+                                    try:
+                                        if len(attr) > 1 and attr[1] is not None:
+                                            d['solar_eclipse_obsc'] = round(float(attr[1]), 3)
+                                    except Exception:
+                                        pass
                             except Exception:
                                 pass
                         elif ev.get('type') == 'lunar':
@@ -811,16 +822,27 @@ def calc_year():
                                 geopos = (longitude, latitude, 0)
                                 retflag, attr = swe.lun_eclipse_how(jd_utc(ev['time']), swe.FLG_SWIEPH, geopos)
                                 # attr[0]=umbral magnitude, attr[2]=penumbral
-                                mag = None
                                 if isinstance(attr, (list, tuple)) and len(attr) > 0:
+                                    mag_umbral = None
+                                    mag_penumbral = None
                                     try:
-                                        mag = float(attr[0]) if attr[0] is not None else None
+                                        if attr[0] is not None:
+                                            mag_umbral = float(attr[0])
                                     except Exception:
-                                        mag = None
-                                    if mag is None and len(attr) > 2 and attr[2] is not None:
-                                        mag = float(attr[2])
-                                if mag is not None:
-                                    d['lunar_eclipse_mag'] = round(mag, 3)
+                                        mag_umbral = None
+                                    try:
+                                        if len(attr) > 2 and attr[2] is not None:
+                                            mag_penumbral = float(attr[2])
+                                    except Exception:
+                                        mag_penumbral = None
+                                    # Preferred display magnitude
+                                    mag = mag_umbral if mag_umbral is not None else mag_penumbral
+                                    if mag is not None:
+                                        d['lunar_eclipse_mag'] = round(mag, 3)
+                                    if mag_umbral is not None:
+                                        d['lunar_eclipse_mag_umbral'] = round(mag_umbral, 3)
+                                    if mag_penumbral is not None:
+                                        d['lunar_eclipse_mag_penumbral'] = round(mag_penumbral, 3)
                             except Exception:
                                 pass
             except Exception:

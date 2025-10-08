@@ -1471,8 +1471,19 @@ async function buildCalendar(referenceDate = new Date(), tryCSV = true, base = n
     try { window.currentYear = currentYear; } catch(_){ }
     console.log('[buildCalendar] startDate', startDate.toISOString());
 
-    // Try new annual endpoint for precise lunar data and day bounds
+    // Backend mode selection: auto (default), force year, or force daily
+    const backendMode = (function(){
+      try {
+        const v = (getQS().get('backend') || '').trim().toLowerCase();
+        if (['year','annual','calcyear','y'].includes(v)) return 'year';
+        if (['daily','calc','d'].includes(v)) return 'daily';
+      } catch(_){ }
+      return 'auto';
+    })();
+
+    // Try new annual endpoint for precise lunar data and day bounds (unless forced to daily)
     try {
+      if (backendMode === 'daily') throw new Error('backend-mode=daily');
       const { lat: uLat, lon: uLon, tz } = getUserLatLonTz();
       const calcYearUrl = resolveCalcYearUrl();
       // Alignment tuning via query params (optional)
@@ -1549,7 +1560,7 @@ async function buildCalendar(referenceDate = new Date(), tryCSV = true, base = n
           return;
         }
       }
-      // Retry calcYear once in approximate mode before falling back
+      // Retry calcYear once in approximate mode before falling back; include extra logging
       try {
         const bodyApprox = { ...body, approx: true };
         console.log('[buildCalendar] retry /calcYear approx', calcYearUrl, bodyApprox);
@@ -1576,7 +1587,14 @@ async function buildCalendar(referenceDate = new Date(), tryCSV = true, base = n
       } catch (e) {
         console.warn('[buildCalendar] /calcYear approx failed', e?.message || e);
       }
-      console.warn('[buildCalendar] /calcYear failed or invalid after approx retry, falling back');
+      try {
+        // Surface HTTP status/text for easier diagnosis
+        if (typeof res !== 'undefined' && !res.ok) {
+          const txt = await res.text().catch(()=> '');
+          console.warn('[buildCalendar] /calcYear non-OK', res.status, res.statusText, txt.slice(0, 200));
+        }
+      } catch(_){ }
+      console.warn('[buildCalendar] /calcYear failed or invalid after approx retry, falling back to daily calc');
     } catch(e) {
       console.warn('[buildCalendar] /calcYear error, fallback to daily batches', e?.message || e);
     }
@@ -1616,6 +1634,10 @@ async function buildCalendar(referenceDate = new Date(), tryCSV = true, base = n
     try { suppressPickedClear = false; } catch(_) {}
     setYearLabel(enoch_year);
     status.textContent = '';
+    try {
+      const s = document.getElementById('status');
+      if (s) s.textContent = (s.textContent ? s.textContent + ' | ' : '') + 'daily-fallback';
+    } catch(_){ }
     // Cache and optionally upload CSV representation
     try {
       const csv = buildCsvText(currentData);

@@ -14,10 +14,11 @@ from datetime import datetime
 # Ruta ABSOLUTA al directorio que contiene los .se1
 ruta_efem = os.path.abspath("sweph/ephe")
 swe.set_ephe_path(ruta_efem)
-for archivo in ["seplm36.se1", "seplm42.se1", "sepl_30.se1"]:
-    ruta = os.path.join(ruta_efem, archivo)
-    print(f"✅ {archivo} encontrado: {os.path.exists(ruta)}")
-print(f"[DEBUG] Ruta de efemérides seteada en: {ruta_efem}")
+if 'is_debug_verbose' in globals() and is_debug_verbose():
+    for archivo in ["seplm36.se1", "seplm42.se1", "sepl_30.se1"]:
+        ruta = os.path.join(ruta_efem, archivo)
+        print(f"✅ {archivo} encontrado: {os.path.exists(ruta)}")
+    print(f"[DEBUG] Ruta de efemérides seteada en: {ruta_efem}")
 
 # Detectar índice de miércoles en runtime (evita supuestos de mapeo del backend de Swiss Ephemeris)
 WEDNESDAY_INDEX = swe.day_of_week(swe.julday(2025, 3, 19, 0.0))  # 2025-03-19 es miércoles

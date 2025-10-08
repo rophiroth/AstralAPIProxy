@@ -2,6 +2,11 @@ from datetime import datetime, timedelta
 from astral import LocationInfo
 from astral.sun import sun
 import pytz
+try:
+    from utils.debug import is_debug_verbose
+except Exception:
+    def is_debug_verbose():
+        return False
 
 def adjust_by_sunset(dt: datetime, latitude: float, longitude: float, tz_str: str) -> datetime:
     """
@@ -15,15 +20,18 @@ def adjust_by_sunset(dt: datetime, latitude: float, longitude: float, tz_str: st
     try:
         tz = pytz.timezone(tz_str)
     except pytz.UnknownTimeZoneError:
-        print(f"[DEBUG] Zona horaria desconocida: {tz_str}. Usando UTC.", flush=True)
+        if is_debug_verbose():
+            print(f"[DEBUG] Zona horaria desconocida: {tz_str}. Usando UTC.", flush=True)
         tz = pytz.UTC
 
     # Asegurarse de que dt tenga tzinfo antes de cualquier operación
     if dt.tzinfo is None or dt.tzinfo.utcoffset(dt) is None:
-        print("[FIX] Forzando tzinfo a dt (estaba naive o inválido)", flush=True)
+        if is_debug_verbose():
+            print("[FIX] Forzando tzinfo a dt (estaba naive o inválido)", flush=True)
         dt = tz.localize(dt.replace(tzinfo=None))
     else:
-        print("[CHECK] dt ya era aware", flush=True)
+        if is_debug_verbose():
+            print("[CHECK] dt ya era aware", flush=True)
 
     local_dt = dt.astimezone(tz)
 
@@ -31,19 +39,23 @@ def adjust_by_sunset(dt: datetime, latitude: float, longitude: float, tz_str: st
     sunset_raw = sun(location.observer, date=local_dt.date(), tzinfo=tz)['sunset']
     sunset = tz.localize(sunset_raw.replace(tzinfo=None)) if sunset_raw.tzinfo is None else sunset_raw.astimezone(tz)
 
-    print("\n[ENOK DEBUG] =====================", flush=True)
-    print(f"Input UTC datetime        : {dt} (tz: {dt.tzinfo})", flush=True)
-    print(f"Local datetime            : {local_dt} (tz: {tz_str})", flush=True)
-    print(f"Sunset local time         : {sunset}", flush=True)
+    if is_debug_verbose():
+        print("\n[ENOK DEBUG] =====================", flush=True)
+        print(f"Input UTC datetime        : {dt} (tz: {dt.tzinfo})", flush=True)
+        print(f"Local datetime            : {local_dt} (tz: {tz_str})", flush=True)
+        print(f"Sunset local time         : {sunset}", flush=True)
 
     try:
         should_sum = local_dt >= sunset
-        print(f"SHOULD SUM 1 DAY?         : {'YES' if should_sum else 'NO'}", flush=True)
+        if is_debug_verbose():
+            print(f"SHOULD SUM 1 DAY?         : {'YES' if should_sum else 'NO'}", flush=True)
     except Exception as e:
-        print(f"[ERROR] Comparison failed: {e}", flush=True)
+        if is_debug_verbose():
+            print(f"[ERROR] Comparison failed: {e}", flush=True)
         should_sum = False
 
-    print("===============================\n", flush=True)
+    if is_debug_verbose():
+        print("===============================\n", flush=True)
 
     if should_sum:
         return dt# + timedelta(days=1)

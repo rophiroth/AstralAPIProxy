@@ -1,4 +1,9 @@
 import swisseph as swe
+try:
+    from utils.debug import is_debug_verbose
+except Exception:
+    def is_debug_verbose():
+        return False
 
 def degree_to_sign(deg):
     signs = ['Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo',
@@ -18,8 +23,9 @@ def calculate_asc_mc_and_houses(julian_day, latitude, longitude):
     
         asc_sign, asc_pos = degree_to_sign(asc_deg)
         mc_sign, mc_pos = degree_to_sign(mc_deg)
-        print("cusps:", len(cusps), cusps)
-        print("ascmc:", len(ascmc), ascmc)
+        if is_debug_verbose():
+            print("cusps:", len(cusps), cusps)
+            print("ascmc:", len(ascmc), ascmc)
         casas = []
         for i in range(0, min(len(cusps), 13)):  # casas 1 a 12 si están disponibles
             deg = cusps[i]

@@ -915,7 +915,7 @@ def calc_year():
                             # Bonuses
                             pids = ev.get('pids') or []
                             try:
-                                import swisseph as swe  # type: ignore
+                                # Use module-level Swiss Ephemeris constants; avoid local import
                                 has_sun = (swe.SUN in pids)
                                 has_moon = (swe.MOON in pids)
                             except Exception:

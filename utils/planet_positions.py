@@ -1,6 +1,6 @@
 from utils.jd_time_utils import jd_to_tt
 import swisseph as swe
-from utils.debug import debug_any
+from utils.debug import debug_any, is_debug_verbose
 
 def calculate_planets(jd, latitude, longitude):
     swe.set_topo(longitude, latitude, 0)
@@ -23,7 +23,8 @@ def calculate_planets(jd, latitude, longitude):
     for name, planet_id in planets.items():
         
         res = swe.calc(jd_tt, planet_id, flags)
-        debug_any(res, f"{name} and {planet_id}")
+        if is_debug_verbose():
+            debug_any(res, f"{name} and {planet_id}")
         if isinstance(res, tuple) and len(res) == 2:
             lonlat, _ = res
             lon = lonlat[0] if len(lonlat) > 0 else None

@@ -1,9 +1,29 @@
+import os
 import swisseph as swe
 import pytz
 from datetime import timedelta, datetime
 from .enoch import *
 
+# Verbose debug gate controlled via env vars. Any truthy value among these enables logs.
+def _truthy(v):
+    try:
+        return str(v).strip().lower() in ("1","true","yes","on","debug")
+    except Exception:
+        return False
+
+DEBUG_VERBOSE = (
+    _truthy(os.environ.get("ASTRAL_DEBUG")) or
+    _truthy(os.environ.get("DEBUG_VERBOSE")) or
+    _truthy(os.environ.get("VERBOSE_DEBUG")) or
+    _truthy(os.environ.get("APP_DEBUG_VERBOSE"))
+)
+
+def is_debug_verbose():
+    return DEBUG_VERBOSE
+
 def debug_jd(jd, label="Debug JD",label2="DEBUG"):
+    if not DEBUG_VERBOSE:
+        return
     y, m, d, hour_decimal = swe.revjul(jd)
 
     hours = int(hour_decimal)
@@ -26,6 +46,8 @@ def debug_jd(jd, label="Debug JD",label2="DEBUG"):
     
     
 def debug_any(anything, label=" Something: ",label2="DEBUG"):
+    if not DEBUG_VERBOSE:
+        return
     print(f"[{label2}] {label}: {anything}")
     
 def jd_to_datetime(jd, tzinfo=pytz.UTC):

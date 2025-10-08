@@ -900,11 +900,37 @@ def calc_year():
                         cnt = int(ev.get('count') or 0)
                         span = float(ev.get('span') or 1e9)
                         total = int(ev.get('total') or 0) or max(len(key), 1)
-                        # Score: 50% fraction + 50% compactness
+                        # Score components with small bonuses:
+                        # - Fraction term uses a capped denominator (<=7) so large planet sets don’t overly penalize 3-body alignments.
+                        # - Compactness rewards smaller angular spans as before.
+                        # - Luminary bonus: slight boost if Sun/Moon participate.
+                        # - Count bonus: small bump for more bodies beyond pairs.
                         try:
-                            frac = max(0.0, min(1.0, cnt / float(total)))
+                            # Fraction with capped denominator
+                            denom_cap = 7  # classic seven (Sun+Moon+Mercury..Saturn)
+                            denom = float(max(1, min(denom_cap, int(total or 0))))
+                            frac = max(0.0, min(1.0, cnt / denom))
+                            # Compactness term
                             comp = max(0.0, min(1.0, 1.0 - span / float(max(1.0, align_span_deg))))
-                            score = round(0.5 * frac + 0.5 * comp, 3)
+                            # Bonuses
+                            pids = ev.get('pids') or []
+                            try:
+                                import swisseph as swe  # type: ignore
+                                has_sun = (swe.SUN in pids)
+                                has_moon = (swe.MOON in pids)
+                            except Exception:
+                                has_sun = False; has_moon = False
+                            lum_bonus = (0.06 if has_sun else 0.0) + (0.04 if has_moon else 0.0)
+                            # +0.02 per body over 2, capped at +0.08
+                            count_bonus = max(0.0, min(0.08, 0.02 * max(0, cnt - 2)))
+                            # Blend
+                            score = 0.5 * frac + 0.5 * comp + lum_bonus + count_bonus
+                            # Clamp and round
+                            if score < 0.0:
+                                score = 0.0
+                            if score > 1.0:
+                                score = 1.0
+                            score = round(score, 3)
                         except Exception:
                             score = None
                         better = (prev is None)

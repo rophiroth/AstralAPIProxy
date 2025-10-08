@@ -465,8 +465,9 @@ def scan_alignments_simple(
     elif mode in ('seven', '7'):
         ids = [swe.SUN, swe.MOON, swe.MERCURY, swe.VENUS, swe.MARS, swe.JUPITER, swe.SATURN]
     elif mode in ('all', 'nine', '8', '9'):
-        # start from full classic set and add outers+pluto and luminaries
-        ids = [swe.SUN, swe.MOON, swe.MERCURY, swe.VENUS, swe.MARS, swe.JUPITER, swe.SATURN, swe.URANUS, swe.NEPTUNE, swe.PLUTO]
+        # Start from full classic set and add outers and luminaries — exclude Pluto by request
+        # (treat only IAU planets + luminaries for alignments)
+        ids = [swe.SUN, swe.MOON, swe.MERCURY, swe.VENUS, swe.MARS, swe.JUPITER, swe.SATURN, swe.URANUS, swe.NEPTUNE]
     # Optional flags can add luminaries/outers on top of chosen mode
     if include_moon and swe.MOON not in ids:
         ids = [swe.MOON] + ids

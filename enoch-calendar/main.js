@@ -2496,45 +2496,50 @@ function scheduleTodayRollover() {
 }
 
 // --- Touch/click tooltip support for mobile (Android/iOS) ---
-(function setupTouchTooltips(){
-  function ensureInfoBox() {
-    let box = document.getElementById('dayInfoBox');
-    if (!box) {
-      box = document.createElement('div');
-      box.id = 'dayInfoBox';
-      box.style.position = 'fixed';
-      box.style.zIndex = '9999';
-      box.style.maxWidth = '360px';
-      box.style.background = 'rgba(0,0,0,0.9)';
-      box.style.color = '#fff';
-      box.style.padding = '8px 10px';
-      box.style.borderRadius = '8px';
-      box.style.boxShadow = '0 2px 10px rgba(0,0,0,0.4)';
-      box.style.fontSize = '12px';
-      box.style.display = 'none';
-      box.style.pointerEvents = 'auto';
-      box.style.whiteSpace = 'pre-line';
-      box.setAttribute('role', 'dialog');
-      box.setAttribute('aria-live', 'polite');
+  (function setupTouchTooltips(){
+    function ensureInfoBox() {
+      let box = document.getElementById('dayInfoBox');
+      if (!box) {
+        box = document.createElement('div');
+        box.id = 'dayInfoBox';
+        box.style.position = 'fixed';
+        box.style.zIndex = '9999';
+        box.style.maxWidth = '360px';
+        box.style.maxHeight = '75vh';
+        box.style.overflowY = 'auto';
+        box.style.background = 'rgba(0,0,0,0.9)';
+        box.style.color = '#fff';
+        box.style.padding = '8px 10px';
+        box.style.borderRadius = '8px';
+        box.style.boxShadow = '0 2px 10px rgba(0,0,0,0.4)';
+        box.style.fontSize = '12px';
+        box.style.display = 'none';
+        box.style.pointerEvents = 'auto';
+        box.style.whiteSpace = 'pre-line';
+        box.setAttribute('role', 'dialog');
+        box.setAttribute('aria-live', 'polite');
 
-      const close = document.createElement('div');
-      close.textContent = '✕';
-      close.style.position = 'absolute';
-      close.style.top = '2px';
-      close.style.right = '6px';
-      close.style.cursor = 'pointer';
-      close.style.opacity = '0.8';
-      close.addEventListener('click', () => hideBox());
-      box.appendChild(close);
+        const close = document.createElement('div');
+        close.textContent = '✕';
+        close.style.position = 'absolute';
+        close.style.top = '2px';
+        close.style.right = '6px';
+        close.style.cursor = 'pointer';
+        close.style.opacity = '0.8';
+        close.addEventListener('click', () => hideBox());
+        box.appendChild(close);
 
-      const content = document.createElement('div');
-      content.id = 'dayInfoBoxContent';
-      box.appendChild(content);
+        const content = document.createElement('div');
+        content.id = 'dayInfoBoxContent';
+        content.style.wordBreak = 'break-word';
+        content.style.overflowWrap = 'anywhere';
+        content.style.whiteSpace = 'pre-wrap';
+        box.appendChild(content);
 
-      document.body.appendChild(box);
+        document.body.appendChild(box);
+      }
+      return box;
     }
-    return box;
-  }
 
   function showBoxFor(el) {
     const box = ensureInfoBox();
@@ -2575,6 +2580,17 @@ function scheduleTodayRollover() {
       const above = Math.max(margin, Math.round(r.top - margin));
       box.style.top = (above - bh) + 'px';
     }
+    // Final clamp inside viewport (prevents off-screen overflow)
+    try {
+      // Reset transforms and clamp absolute positions
+      box.style.transform = 'translate(0, 0)';
+      const rect = box.getBoundingClientRect();
+      const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+      const targetLeft = clamp(rect.left, margin, (vw - margin) - rect.width);
+      const targetTop = clamp(rect.top, margin, (vh - margin) - rect.height);
+      box.style.left = Math.round(targetLeft) + 'px';
+      box.style.top = Math.round(targetTop) + 'px';
+    } catch(_){ }
     // Fade in
     requestAnimationFrame(() => { box.style.opacity = '1'; });
   }

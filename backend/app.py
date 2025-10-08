@@ -784,6 +784,12 @@ def calc_year():
                         if ev.get('type') == 'solar':
                             d['solar_eclipse'] = True
                             d['solar_eclipse_utc'] = ev['time'].astimezone(timezone.utc).isoformat()
+                            try:
+                                kind = ev.get('subtype') or ''
+                                if kind:
+                                    d['solar_eclipse_kind'] = str(kind)
+                            except Exception:
+                                pass
                             # Local magnitude (if available)
                             try:
                                 geopos = (longitude, latitude, 0)
@@ -795,6 +801,12 @@ def calc_year():
                         elif ev.get('type') == 'lunar':
                             d['lunar_eclipse'] = True
                             d['lunar_eclipse_utc'] = ev['time'].astimezone(timezone.utc).isoformat()
+                            try:
+                                kind = ev.get('subtype') or ''
+                                if kind:
+                                    d['lunar_eclipse_kind'] = str(kind)
+                            except Exception:
+                                pass
                             try:
                                 geopos = (longitude, latitude, 0)
                                 retflag, attr = swe.lun_eclipse_how(jd_utc(ev['time']), swe.FLG_SWIEPH, geopos)
@@ -840,12 +852,14 @@ def calc_year():
                         name_map[swe.PLUTO] = 'Pluto'
                     except Exception:
                         pass
+                    # Aggregate multiple alignments per day
                     for ev in al:
                         bi = bucket_index(ev['time'])
                         if bi is None:
                             continue
                         d = days[bi]
                         cnt = int(ev.get('count') or 0)
+                        # Maximal count for summary field
                         d['alignment'] = max(int(d.get('alignment') or 0), cnt)
                         d['alignment_utc'] = ev['time'].astimezone(timezone.utc).isoformat()
                         try:
@@ -854,9 +868,12 @@ def calc_year():
                                 d['alignment_total'] = tot
                         except Exception:
                             pass
+                        # Name list for this event
+                        planets_label = None
                         if ev.get('pids'):
                             try:
-                                d['alignment_planets'] = ','.join([name_map.get(pid, str(pid)) for pid in ev['pids']])
+                                planets_label = ','.join([name_map.get(pid, str(pid)) for pid in ev['pids']])
+                                d['alignment_planets'] = planets_label
                             except Exception:
                                 pass
                         if ev.get('span') is not None:
@@ -870,7 +887,31 @@ def calc_year():
                             frac = max(0.0, min(1.0, cnt / float(total)))
                             span = float(ev.get('span') or 0.0)
                             comp = max(0.0, min(1.0, 1.0 - span / float(max(1.0, align_span_deg))))
-                            d['alignment_score'] = round(0.5 * frac + 0.5 * comp, 3)
+                            score = round(0.5 * frac + 0.5 * comp, 3)
+                            d['alignment_score'] = score
+                        except Exception:
+                            pass
+                        # Append detailed item to per-day list
+                        try:
+                            item = {
+                                'utc': ev['time'].astimezone(timezone.utc).isoformat(),
+                                'count': cnt,
+                                'total': int(ev.get('total') or 0) or None,
+                                'planets': planets_label or None,
+                                'span_deg': float(ev.get('span')) if ev.get('span') is not None else None,
+                                'score': d.get('alignment_score')
+                            }
+                            if item['total'] is None:
+                                item.pop('total')
+                            if item['planets'] is None:
+                                item.pop('planets')
+                            if item['span_deg'] is None:
+                                item.pop('span_deg')
+                            if item['score'] is None:
+                                item.pop('score')
+                            if 'alignments' not in d or not isinstance(d['alignments'], list):
+                                d['alignments'] = []
+                            d['alignments'].append(item)
                         except Exception:
                             pass
             except Exception:

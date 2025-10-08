@@ -569,6 +569,30 @@ function getAlignmentThreshold() {
   } catch(_) {}
   return 4;
 }
+// Optional score gating: if enabled via align_policy=adaptive (or alignScoreCurve),
+// demand higher score for 2-body pairs and relax as N grows.
+function getAlignmentScoreMin(count, total) {
+  try {
+    const qs = getQS();
+    const raw = (qs.get('align_score_min') || qs.get('alignScoreMin') || '').trim();
+    if (raw) {
+      const v = parseFloat(raw);
+      if (isFinite(v) && v >= 0 && v <= 1) return v;
+    }
+    const policy = (qs.get('align_policy') || qs.get('alignScoreCurve') || '').trim().toLowerCase();
+    if (!policy) return null; // off by default
+    if (['adaptive','curve','smart'].includes(policy)) {
+      const n = Number(count)||0;
+      if (n <= 2) return 0.8;
+      if (n === 3) return 0.7;
+      if (n === 4) return 0.6;
+      if (n === 5) return 0.5;
+      if (n === 6) return 0.4;
+      return 0.3;
+    }
+  } catch(_) {}
+  return null;
+}
 function resolveAlignment(d) {
   try {
     // Normalize various possible backend keys and shapes
@@ -642,16 +666,36 @@ function buildAstroTooltip(d) {
     if (d.equinox && d.equinox_utc) bits.push(`${i18nWord('equinox')}: ${fmtUtcToLocalShort(d.equinox_utc)}`);
     if (d.solstice && d.solstice_utc) bits.push(`${i18nWord('solstice')}: ${fmtUtcToLocalShort(d.solstice_utc)}`);
     if (d.solar_eclipse && d.solar_eclipse_utc) {
+      const kind = (d.solar_eclipse_kind ? ` ${String(d.solar_eclipse_kind)}` : '');
       const mag = (typeof d.solar_eclipse_mag === 'number' && isFinite(d.solar_eclipse_mag)) ? ` (mag ${d.solar_eclipse_mag})` : '';
-      bits.push(`${i18nWord('solarEclipse')}: ${fmtUtcToLocalShort(d.solar_eclipse_utc)}${mag}`);
+      bits.push(`${i18nWord('solarEclipse')}: ${fmtUtcToLocalShort(d.solar_eclipse_utc)}${kind}${mag}`);
     }
     if (d.lunar_eclipse && d.lunar_eclipse_utc) {
+      const kind = (d.lunar_eclipse_kind ? ` ${String(d.lunar_eclipse_kind)}` : '');
       const mag = (typeof d.lunar_eclipse_mag === 'number' && isFinite(d.lunar_eclipse_mag)) ? ` (mag ${d.lunar_eclipse_mag})` : '';
-      bits.push(`${i18nWord('lunarEclipse')}: ${fmtUtcToLocalShort(d.lunar_eclipse_utc)}${mag}`);
+      bits.push(`${i18nWord('lunarEclipse')}: ${fmtUtcToLocalShort(d.lunar_eclipse_utc)}${kind}${mag}`);
     }
     if (d.supermoon && d.supermoon_utc) bits.push(`${i18nWord('supermoon')}: ${fmtUtcToLocalShort(d.supermoon_utc)}`);
     const al = resolveAlignment(d);
     const th = getAlignmentThreshold();
+    // If detailed alignments array present, list up to 3 entries with span/score
+    if (Array.isArray(d.alignments) && d.alignments.length) {
+      const lines = [];
+      for (const it of d.alignments.slice(0, 3)) {
+        const c = Number(it.count)||0;
+        const ttl = Number(it.total)||Number(d.alignment_total)||0;
+        if (c < th) continue;
+        const gate = getAlignmentScoreMin(c, ttl);
+        const scv = (typeof it.score === 'number' && isFinite(it.score)) ? it.score : (typeof d.alignment_score === 'number' ? d.alignment_score : NaN);
+        if (gate != null && isFinite(scv) && scv < gate) continue;
+        const whenTxt = it.utc ? ` @ ${fmtUtcToLocalShort(it.utc)}` : '';
+        const planets = it.planets ? ` (${it.planets})` : '';
+        const spanTxt = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? `, span ${Math.round(it.span_deg*10)/10}°` : '';
+        const scoreTxt = (isFinite(scv)) ? `, score ${Math.round(scv*100)}%` : '';
+        lines.push(`${c}${ttl?`/${ttl}`:''}${planets}${spanTxt}${scoreTxt}${whenTxt}`);
+      }
+      if (lines.length) bits.push(`${i18nWord('alignment')}: ${lines.join(' | ')}`);
+    }
     if (isFinite(al.count) && al.count >= th) {
       const whenTxt = al.when ? ` @ ${fmtUtcToLocalShort(al.when)}` : '';
       // Normalize planet list: support array, JSON string, or CSV string
@@ -2168,17 +2212,34 @@ function renderCalendar(data) {
         if (d.equinox) appendBadge('EQ', `${i18nWord('equinox')} ${fmtUtcToLocalShort(d.equinox_utc)||''}`);
         if (d.solstice) appendBadge('SOL', `${i18nWord('solstice')} ${fmtUtcToLocalShort(d.solstice_utc)||''}`);
         if (d.solar_eclipse) {
+          const kind = (d.solar_eclipse_kind ? ` ${String(d.solar_eclipse_kind)}` : '');
           const mag = (typeof d.solar_eclipse_mag === 'number' && isFinite(d.solar_eclipse_mag)) ? ` (mag ${d.solar_eclipse_mag})` : '';
-          appendBadge('SE', `${i18nWord('solarEclipse')} ${fmtUtcToLocalShort(d.solar_eclipse_utc)||''}${mag}`);
+          appendBadge('SE', `${i18nWord('solarEclipse')} ${fmtUtcToLocalShort(d.solar_eclipse_utc)||''}${kind}${mag}`);
         }
         if (d.lunar_eclipse) {
+          const kind = (d.lunar_eclipse_kind ? ` ${String(d.lunar_eclipse_kind)}` : '');
           const mag = (typeof d.lunar_eclipse_mag === 'number' && isFinite(d.lunar_eclipse_mag)) ? ` (mag ${d.lunar_eclipse_mag})` : '';
-          appendBadge('LE', `${i18nWord('lunarEclipse')} ${fmtUtcToLocalShort(d.lunar_eclipse_utc)||''}${mag}`);
+          appendBadge('LE', `${i18nWord('lunarEclipse')} ${fmtUtcToLocalShort(d.lunar_eclipse_utc)||''}${kind}${mag}`);
         }
         if (d.supermoon) appendBadge('S', `${i18nWord('supermoon')} ${fmtUtcToLocalShort(d.supermoon_utc)||''}`);
         {
           const al = resolveAlignment(d);
-          if (isFinite(al.count) && al.count >= getAlignmentThreshold()) {
+          let pass = (isFinite(al.count) && al.count >= getAlignmentThreshold());
+          if (pass) {
+            const gate = getAlignmentScoreMin(al.count, d.alignment_total);
+            if (gate != null) {
+              // Prefer using top detailed alignment score if present
+              let sc = Number(d.alignment_score);
+              try {
+                if (Array.isArray(d.alignments) && d.alignments.length) {
+                  const best = d.alignments.reduce((m, it) => Math.max(m, Number(it.score)||NaN), NaN);
+                  if (isFinite(best)) sc = best;
+                }
+              } catch(_){}
+              if (!isFinite(sc) || sc < gate) pass = false;
+            }
+          }
+          if (pass) {
             const totalTxt = (typeof d.alignment_total === 'number' && isFinite(d.alignment_total) && d.alignment_total > 0)
               ? `${al.count}/${d.alignment_total}`
               : `${al.count}`;
@@ -2195,7 +2256,21 @@ function renderCalendar(data) {
           const b = document.createElement('span'); b.className = 'badge'; b.textContent = label; if (title) b.title = title; num.appendChild(b);
         };
         const al = resolveAlignment(d);
-        if (isFinite(al.count) && al.count >= getAlignmentThreshold()) {
+        let pass = (isFinite(al.count) && al.count >= getAlignmentThreshold());
+        if (pass) {
+          const gate = getAlignmentScoreMin(al.count, d.alignment_total);
+          if (gate != null) {
+            let sc = Number(d.alignment_score);
+            try {
+              if (Array.isArray(d.alignments) && d.alignments.length) {
+                const best = d.alignments.reduce((m, it) => Math.max(m, Number(it.score)||NaN), NaN);
+                if (isFinite(best)) sc = best;
+              }
+            } catch(_){}
+            if (!isFinite(sc) || sc < gate) pass = false;
+          }
+        }
+        if (pass) {
           const totalTxt = (typeof d.alignment_total === 'number' && isFinite(d.alignment_total) && d.alignment_total > 0)
             ? `${al.count}/${d.alignment_total}`
             : `${al.count}`;

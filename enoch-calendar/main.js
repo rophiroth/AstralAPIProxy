@@ -33,7 +33,7 @@ function resolveApiUrl() {
 const API_URL = resolveApiUrl();
 
 // Simple visible version to verify deploy (moved up so functions can reference it)
-const APP_VERSION = 'calendar@2025-10-08T01:34Z';
+const APP_VERSION = 'calendar@2025-10-10T00:00Z';
 try {
   const s = document.getElementById('status');
   if (s) s.textContent = (s.textContent ? s.textContent + ' | ' : '') + APP_VERSION;
@@ -579,12 +579,13 @@ function buildMoonTooltip(d, lunarMap) {
 function getAlignmentThreshold() {
   try {
     const q = (getQS().get('align') || '').trim().toLowerCase();
-    if (!q) return 4; // default threshold
+    // Default lowered to 2 so 2‑body events (e.g., oppositions) are visible
+    if (!q) return 2;
     if (['all','any','on','true','yes'].includes(q)) return 0;
     const n = parseInt(q, 10);
     if (isFinite(n) && n >= 0) return Math.min(10, Math.max(0, n));
   } catch(_) {}
-  return 4;
+  return 2;
 }
 // Optional score gating: if enabled via align_policy=adaptive (or alignScoreCurve),
 // demand higher score for 2-body pairs and relax as N grows.
@@ -696,6 +697,7 @@ function buildAstroTooltip(d) {
     if (d.supermoon && d.supermoon_utc) bits.push(`${i18nWord('supermoon')}: ${fmtUtcToLocalShort(d.supermoon_utc)}`);
     const al = resolveAlignment(d);
     const th = getAlignmentThreshold();
+    const pairCap = getPairSpanMax();
     let hasDetailed = false;
     // If detailed alignments array present, list all entries with span/score, one per line
     if (Array.isArray(d.alignments) && d.alignments.length) {
@@ -703,10 +705,23 @@ function buildAstroTooltip(d) {
       for (const it of d.alignments) {
         const c = Number(it.count)||0;
         const ttl = Number(it.total)||Number(d.alignment_total)||0;
+        // Hard cap for pair span (client-side enforcement)
+        if (pairCap != null && c === 2) {
+          const sp = Number(it.span_deg);
+          if (isFinite(sp) && sp > pairCap) continue;
+        }
         const gate = getAlignmentScoreMin(c, ttl);
         const scv = (typeof it.score === 'number' && isFinite(it.score)) ? it.score : (typeof d.alignment_score === 'number' ? d.alignment_score : NaN);
         const spanGate = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? getSpanScoreMin(c, it.span_deg) : null;
-        const req = Math.max(gate ?? 0, spanGate ?? 0);
+        // Extra penalty for off-aspect pairs
+        let deltaGate = null;
+        try {
+          if (c === 2 && typeof it.span_deg === 'number' && isFinite(it.span_deg)) {
+            const dlt = aspectDeltaForPair(it.span_deg);
+            if (isFinite(dlt)) deltaGate = getPairDeltaScoreMin(dlt);
+          }
+        } catch(_) {}
+        const req = Math.max(gate ?? 0, spanGate ?? 0, deltaGate ?? 0);
         if (req > 0 && isFinite(scv) && scv < req) continue;
         const whenTxt = it.utc ? ` @ ${fmtUtcToLocalShort(it.utc)}` : '';
         const planets = it.planets ? ` (${it.planets})` : '';
@@ -734,6 +749,13 @@ function buildAstroTooltip(d) {
       }
     }
   if (!hasDetailed && isFinite(al.count) && al.count >= th) {
+      // Hard cap for pair summary (when top-level fields are used)
+      if (pairCap != null && al.count === 2) {
+        const spTop = Number(d.alignment_span_deg);
+        if (isFinite(spTop) && spTop > pairCap) {
+          return bits.length ? ('\n' + bits.join('\n')) : '';
+        }
+      }
       const whenTxt = al.when ? ` @ ${fmtUtcToLocalShort(al.when)}` : '';
       // Normalize planet list: support array, JSON string, or CSV string
       let planetsLabel = '';
@@ -767,6 +789,21 @@ function buildAstroTooltip(d) {
         const nm = aspectNameFromSpan(d.alignment_span_deg, al.count);
         return nm ? `, ${nm}` : '';
       })() : '';
+      // Apply score/delta/span gating to summary too
+      const scoreVal = (typeof d.alignment_score === 'number' && isFinite(d.alignment_score)) ? d.alignment_score : NaN;
+      const gateTop = getAlignmentScoreMin(al.count, d.alignment_total);
+      const spanGateTop = (typeof d.alignment_span_deg === 'number' && isFinite(d.alignment_span_deg)) ? getSpanScoreMin(al.count, d.alignment_span_deg) : null;
+      let deltaGateTop = null;
+      try {
+        if (al.count === 2 && typeof d.alignment_span_deg === 'number' && isFinite(d.alignment_span_deg)) {
+          const dltTop = aspectDeltaForPair(d.alignment_span_deg);
+          if (isFinite(dltTop)) deltaGateTop = getPairDeltaScoreMin(dltTop);
+        }
+      } catch(_) {}
+      const reqTop = Math.max(gateTop ?? 0, spanGateTop ?? 0, deltaGateTop ?? 0);
+      if (reqTop > 0 && isFinite(scoreVal) && scoreVal < reqTop) {
+        return bits.length ? ('\n' + bits.join('\n')) : '';
+      }
       const sc = (typeof d.alignment_score === 'number' && isFinite(d.alignment_score)) ? `, score ${Math.round(d.alignment_score*100)}%` : '';
       const totalTxt = (typeof d.alignment_total === 'number' && isFinite(d.alignment_total) && d.alignment_total > 0)
         ? `${al.count}/${d.alignment_total}`
@@ -778,19 +815,28 @@ function buildAstroTooltip(d) {
   return bits.length ? ('\n' + bits.join('\n')) : '';
 }
 // Additional span-demand: raise required score as span widens (stricter for minor counts)
+// Change: Always enforce for pairs (c<=2) by default. For multi-body groupings,
+// enforcement remains opt-in via align_span_policy.
 function getSpanScoreMin(count, spanDeg) {
   try {
     const c = Number(count)||0;
     const s = Number(spanDeg);
     if (!isFinite(s)) return null;
-    // Default: OFF unless explicitly enabled via query
-    try {
-      const qs = getQS();
-      const policy = (qs.get('align_span_policy') || qs.get('span_policy') || '').trim().toLowerCase();
-      if (!policy || ['off','none','no','0','false'].includes(policy)) return null;
-      // Only proceed when policy explicitly requests gating
-      if (!['on','yes','true','1','strict','hard'].includes(policy)) return null;
-    } catch(_){ return null; }
+    // Determine enforcement policy
+    let enforce = false;
+    // Always enforce for pairs to penalize off-span "Pair" items
+    if (c <= 2) enforce = true;
+    // Multi-body: only when explicitly enabled via query
+    if (!enforce) {
+      try {
+        const qs = getQS();
+        const policy = (qs.get('align_span_policy') || qs.get('span_policy') || '').trim().toLowerCase();
+        if (policy && !['off','none','no','0','false'].includes(policy) && ['on','yes','true','1','strict','hard'].includes(policy)) {
+          enforce = true;
+        }
+      } catch(_) { /* keep default */ }
+    }
+    if (!enforce) return null;
     if (c <= 2) {
       if (s <= 1) return 0.55;
       if (s <= 2) return 0.65;
@@ -820,6 +866,45 @@ function getSpanScoreMin(count, spanDeg) {
     if (s <= 20) return 0.6;
     return 0.65;
   } catch(_) { return null; }
+}
+
+// For pairs, add a delta-to-nearest-aspect penalty: the farther from
+// conjunction/opposition/square/trine/sextile, the higher the required score.
+// Default: ON, can be disabled via ?aspect_delta_policy=off
+function getPairDeltaScoreMin(deltaDeg) {
+  try {
+    const d = Number(deltaDeg);
+    if (!isFinite(d) || d < 0) return null;
+    // Allow disabling via query
+    try {
+      const qs = getQS();
+      const pol = (qs.get('aspect_delta_policy') || qs.get('delta_policy') || '').trim().toLowerCase();
+      if (pol && ['off','none','no','0','false'].includes(pol)) return null;
+    } catch(_) {}
+    // Gentle curve: tight deltas need modest score; loose deltas need very high
+    if (d <= 0.25) return 0.55;
+    if (d <= 0.5)  return 0.6;
+    if (d <= 1)    return 0.7;
+    if (d <= 2)    return 0.8;
+    if (d <= 3)    return 0.85;
+    if (d <= 5)    return 0.9;
+    if (d <= 8)    return 0.93;
+    return 0.96; // very off-aspect -> require excellent score
+  } catch(_) { return null; }
+}
+
+// Hard cap for pair span in degrees (only if explicitly provided).
+// NOTE: Do NOT fall back to ?align_span here.
+// align_span controls multi‑body cluster search window, not 2‑body aspect separations.
+// Using it as a hard cap hides squares/trines/oppositions when align_span is small.
+function getPairSpanMax() {
+  try {
+    const qs = getQS();
+    const rawMax = (qs.get('pair_span_max') || qs.get('align_pair_span_max') || '').trim();
+    const vMax = parseFloat(rawMax);
+    if (isFinite(vMax) && vMax > 0) return vMax;
+  } catch(_) {}
+  return null;
 }
 
 // Configurable orbs (tolerances) for 2-body aspect naming
@@ -1080,6 +1165,9 @@ function buildCsvText(rows) {
     typeof rows[0].alignment !== 'undefined'
   );
   const baseHeader = ['gregorian','enoch_year','enoch_month','enoch_day','day_of_year','added_week','name','start_utc','end_utc'];
+  const hasAlignments = (function(){
+    try { return typeof rows[0].alignments !== 'undefined'; } catch(_) { return false; }
+  })();
   const lunarHeader = hasLunar ? [
     'moon_phase_angle_deg',
     'moon_phase_angle_start_deg','moon_phase_angle_end_deg',
@@ -1098,10 +1186,21 @@ function buildCsvText(rows) {
     'alignment','alignment_utc',
     'alignment_total',
     'alignment_planets','alignment_span_deg','alignment_score',
+    ...(hasAlignments ? ['alignments'] : []),
     'solar_eclipse_mag','lunar_eclipse_mag'
   ] : [];
   const hebrewHeader = hasHebrew ? ['he_year','he_month','he_day','he_month_name','is_rosh_chodesh','he_holiday_code','he_holiday_name'] : [];
   const header = [...baseHeader, ...lunarHeader, ...astroHeader, ...hebrewHeader].join(',');
+  const csvQuote = (v) => {
+    try {
+      let s = (v === null || typeof v === 'undefined') ? '' : String(v);
+      if (/[",\n]/.test(s)) {
+        s = '"' + s.replace(/"/g, '""') + '"';
+      }
+      return s;
+    } catch(_) { return String(v ?? ''); }
+  };
+
   const lines = rows.map(d => {
     const base = [
       d.gregorian,
@@ -1147,7 +1246,12 @@ function buildCsvText(rows) {
       (d.supermoon ? '1' : ''), (d.supermoon_utc ?? ''),
       (typeof d.alignment !== 'undefined' ? d.alignment : ''), (d.alignment_utc ?? ''),
       (typeof d.alignment_total !== 'undefined' ? d.alignment_total : ''),
-      (d.alignment_planets ?? ''), (typeof d.alignment_span_deg !== 'undefined' ? d.alignment_span_deg : ''), (typeof d.alignment_score !== 'undefined' ? d.alignment_score : ''),
+      // planets may contain commas → quote for CSV
+      csvQuote(d.alignment_planets ?? ''),
+      (typeof d.alignment_span_deg !== 'undefined' ? d.alignment_span_deg : ''),
+      (typeof d.alignment_score !== 'undefined' ? d.alignment_score : ''),
+      // detailed alignments JSON (if present)
+      ...(hasAlignments ? [csvQuote((function(){ try { return JSON.stringify(d.alignments || []); } catch(_) { return '[]'; } })())] : []),
       (typeof d.solar_eclipse_mag !== 'undefined' ? d.solar_eclipse_mag : ''), (typeof d.lunar_eclipse_mag !== 'undefined' ? d.lunar_eclipse_mag : '')
     ] : [];
     const heb = hasHebrew ? [
@@ -1522,6 +1626,21 @@ async function loadYearFromCSV(year) {
           alignment_planets: r.alignment_planets,
           alignment_span_deg: (Number.isFinite(r.alignment_span_deg) ? r.alignment_span_deg : (r.alignment_span_deg ? Number(r.alignment_span_deg) : undefined)),
           alignment_score: (Number.isFinite(r.alignment_score) ? r.alignment_score : (r.alignment_score ? Number(r.alignment_score) : undefined)),
+          // Detailed alignments (CSV may contain JSON string)
+          alignments: (function(v){
+            try {
+              if (!v) return undefined;
+              if (Array.isArray(v)) return v;
+              if (typeof v === 'string') {
+                const s = v.trim();
+                if (s.startsWith('[') || s.startsWith('{')) {
+                  const arr = JSON.parse(s);
+                  return Array.isArray(arr) ? arr : undefined;
+                }
+              }
+            } catch(_) {}
+            return undefined;
+          })(r.alignments),
           solar_eclipse_mag: (Number.isFinite(r.solar_eclipse_mag) ? r.solar_eclipse_mag : (r.solar_eclipse_mag ? Number(r.solar_eclipse_mag) : undefined)),
           lunar_eclipse_mag: (Number.isFinite(r.lunar_eclipse_mag) ? r.lunar_eclipse_mag : (r.lunar_eclipse_mag ? Number(r.lunar_eclipse_mag) : undefined))
         }));
@@ -1599,6 +1718,21 @@ async function loadYearFromCSV(year) {
       alignment_planets: r.alignment_planets,
       alignment_span_deg: (Number.isFinite(r.alignment_span_deg) ? r.alignment_span_deg : (r.alignment_span_deg ? Number(r.alignment_span_deg) : undefined)),
       alignment_score: (Number.isFinite(r.alignment_score) ? r.alignment_score : (r.alignment_score ? Number(r.alignment_score) : undefined)),
+      // Detailed alignments (CSV may contain JSON string)
+      alignments: (function(v){
+        try {
+          if (!v) return undefined;
+          if (Array.isArray(v)) return v;
+          if (typeof v === 'string') {
+            const s = v.trim();
+            if (s.startsWith('[') || s.startsWith('{')) {
+              const arr = JSON.parse(s);
+              return Array.isArray(arr) ? arr : undefined;
+            }
+          }
+        } catch(_) {}
+        return undefined;
+      })(r.alignments),
       solar_eclipse_mag: (Number.isFinite(r.solar_eclipse_mag) ? r.solar_eclipse_mag : (r.solar_eclipse_mag ? Number(r.solar_eclipse_mag) : undefined)),
       lunar_eclipse_mag: (Number.isFinite(r.lunar_eclipse_mag) ? r.lunar_eclipse_mag : (r.lunar_eclipse_mag ? Number(r.lunar_eclipse_mag) : undefined))
     }));
@@ -1707,11 +1841,18 @@ async function buildCalendar(referenceDate = new Date(), tryCSV = true, base = n
       if (Number.isFinite(alignStep) && alignStep > 0) body.align_step_hours = alignStep;
       if (alignPlanets) body.align_planets = alignPlanets; // e.g., 'inner', 'outer', 'classic5', 'seven', 'all'
       if (['1','true','yes','on','outer','all'].includes(alignOuter)) body.align_include_outer = true;
-      // Optional: ask backend to include aspects if user requests (?aspects=1 or align_aspects)
+      // Aspects/oppositions: enable by default so 2-body oppositions surface.
+      // Can be disabled with ?aspects=off
       const aspectsRaw = (qs.get('aspects') || qs.get('align_aspects') || qs.get('include_aspects') || '').trim().toLowerCase();
-      if (['1','true','yes','on','all','full','opp','oppositions'].includes(aspectsRaw)) {
+      if (!aspectsRaw || ['auto','default'].includes(aspectsRaw)) {
         body.align_detect_aspects = true;
-        if (['opp','oppositions'].includes(aspectsRaw)) body.align_include_oppositions = true;
+        body.align_include_oppositions = true;
+      } else if (['1','true','yes','on','all','full','opp','oppositions'].includes(aspectsRaw)) {
+        // Any truthy value enables aspects AND oppositions by default
+        body.align_detect_aspects = true;
+        body.align_include_oppositions = true;
+      } else if (['0','off','no','false'].includes(aspectsRaw)) {
+        // leave aspects disabled
       }
       // Sensible defaults when no overrides are provided — broaden search for multi-planet alignments
       if (typeof body.align_span_deg === 'undefined') body.align_span_deg = 35; // degrees
@@ -2448,6 +2589,7 @@ function renderCalendar(data) {
         if (d.supermoon) appendBadge('S', `${i18nWord('supermoon')} ${fmtUtcToLocalShort(d.supermoon_utc)||''}`);
         {
           const al = resolveAlignment(d);
+          const pairCap = getPairSpanMax();
           let pass = (isFinite(al.count) && al.count >= getAlignmentThreshold());
           // Fallback: if detailed alignments exist, surface AL regardless of al.count
           if (!pass && Array.isArray(d.alignments) && d.alignments.length) pass = true;
@@ -2460,6 +2602,11 @@ function renderCalendar(data) {
               if (Array.isArray(d.alignments) && d.alignments.length) {
                 let bestScore = NaN;
                 for (const it of d.alignments) {
+                  // Skip out-of-cap pairs when selecting best
+                  if (pairCap != null && Number(it.count) === 2) {
+                    const spx = Number(it.span_deg);
+                    if (isFinite(spx) && spx > pairCap) continue;
+                  }
                   const sIt = Number(it.score);
                   if (isFinite(sIt) && (isNaN(bestScore) || sIt > bestScore)) {
                     bestScore = sIt;
@@ -2470,8 +2617,22 @@ function renderCalendar(data) {
               }
             } catch(_) {}
             const spanGate = isFinite(bestSpan) ? getSpanScoreMin(al.count, bestSpan) : null;
-            const req = Math.max(gate ?? 0, spanGate ?? 0);
+            // Add aspect-delta penalty for pairs
+            let deltaGate = null;
+            try {
+              if (Number(al.count) === 2 && isFinite(bestSpan)) {
+                const dlt = aspectDeltaForPair(bestSpan);
+                if (isFinite(dlt)) deltaGate = getPairDeltaScoreMin(dlt);
+              }
+            } catch(_) {}
+            const req = Math.max(gate ?? 0, spanGate ?? 0, deltaGate ?? 0);
             if (req > 0 && (!isFinite(sc) || sc < req)) pass = false;
+            // Hard cap enforcement for pairs
+            if (pairCap != null && Number(al.count) === 2) {
+              let spanToCheck = bestSpan;
+              if (!isFinite(spanToCheck)) spanToCheck = Number(d.alignment_span_deg);
+              if (isFinite(spanToCheck) && spanToCheck > pairCap) pass = false;
+            }
           }
           if (pass) {
             const totalTxt = (typeof d.alignment_total === 'number' && isFinite(d.alignment_total) && d.alignment_total > 0)
@@ -2485,7 +2646,34 @@ function renderCalendar(data) {
             let tt = `${i18nWord('alignment')} (${totalTxt})${aspectTxt} ${al.when ? fmtUtcToLocalShort(al.when) : ''}`.trim();
             try {
               if (Array.isArray(d.alignments) && d.alignments.length) {
-                const lines = d.alignments.map(it => {
+                const lines = d.alignments
+                  .filter(it => {
+                    // Enforce hard cap for pairs
+                    if (pairCap != null) {
+                      const c = Number(it.count)||0;
+                      if (c === 2) {
+                        const sp = Number(it.span_deg);
+                        if (isFinite(sp) && sp > pairCap) return false;
+                      }
+                    }
+                    // Apply score/span/delta gating per item when possible
+                    try {
+                      const c = Number(it.count)||0;
+                      const ttl2 = Number(it.total)||Number(d.alignment_total)||0;
+                      const scv = (typeof it.score === 'number' && isFinite(it.score)) ? it.score : (typeof d.alignment_score === 'number' ? d.alignment_score : NaN);
+                      const spanGate = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? getSpanScoreMin(c, it.span_deg) : null;
+                      const gate = getAlignmentScoreMin(c, ttl2);
+                      let deltaGate = null;
+                      if (c === 2 && typeof it.span_deg === 'number' && isFinite(it.span_deg)) {
+                        const dlt = aspectDeltaForPair(it.span_deg);
+                        if (isFinite(dlt)) deltaGate = getPairDeltaScoreMin(dlt);
+                      }
+                      const req = Math.max(gate ?? 0, spanGate ?? 0, deltaGate ?? 0);
+                      if (req > 0 && isFinite(scv) && scv < req) return false;
+                    } catch(_) {}
+                    return true;
+                  })
+                  .map(it => {
                   const c = Number(it.count)||0;
                   const ttl2 = Number(it.total)||Number(d.alignment_total)||0;
                   const whenTxt = it.utc ? ` @ ${fmtUtcToLocalShort(it.utc)}` : '';
@@ -2535,6 +2723,7 @@ function renderCalendar(data) {
         if (isFinite(al.count) && al.count >= getAlignmentThreshold()) pass = true;
         if (!pass && Array.isArray(d.alignments) && d.alignments.length) pass = true;
         if (pass) {
+          const pairCap = getPairSpanMax();
           const gate = getAlignmentScoreMin(al.count, d.alignment_total);
           if (gate != null) {
             let sc = Number(d.alignment_score);
@@ -2543,6 +2732,11 @@ function renderCalendar(data) {
               if (Array.isArray(d.alignments) && d.alignments.length) {
                 let bestScore = NaN;
                 for (const it of d.alignments) {
+                  // Skip out-of-cap pairs when evaluating best score/span
+                  if (pairCap != null && Number(it.count) === 2) {
+                    const spx = Number(it.span_deg);
+                    if (isFinite(spx) && spx > pairCap) continue;
+                  }
                   const sIt = Number(it.score);
                   if (isFinite(sIt) && (isNaN(bestScore) || sIt > bestScore)) {
                     bestScore = sIt;
@@ -2553,8 +2747,22 @@ function renderCalendar(data) {
               }
             } catch(_) {}
             const spanGate = isFinite(bestSpan) ? getSpanScoreMin(al.count, bestSpan) : null;
-            const req = Math.max(gate ?? 0, spanGate ?? 0);
+            // Add aspect-delta penalty for pairs
+            let deltaGate = null;
+            try {
+              if (Number(al.count) === 2 && isFinite(bestSpan)) {
+                const dlt = aspectDeltaForPair(bestSpan);
+                if (isFinite(dlt)) deltaGate = getPairDeltaScoreMin(dlt);
+              }
+            } catch(_) {}
+            const req = Math.max(gate ?? 0, spanGate ?? 0, deltaGate ?? 0);
             if (req > 0 && (!isFinite(sc) || sc < req)) pass = false;
+            // Hard cap enforcement for pairs
+            if (pairCap != null && Number(al.count) === 2) {
+              let spanToCheck = bestSpan;
+              if (!isFinite(spanToCheck)) spanToCheck = Number(d.alignment_span_deg);
+              if (isFinite(spanToCheck) && spanToCheck > pairCap) pass = false;
+            }
           }
         }
         if (pass) {
@@ -2572,7 +2780,34 @@ function renderCalendar(data) {
           tt += `${aspectTxt}` + (al.when ? ` ${fmtUtcToLocalShort(al.when)}` : '');
           try {
             if (Array.isArray(d.alignments) && d.alignments.length) {
-              const lines = d.alignments.map(it => {
+              const lines = d.alignments
+                .filter(it => {
+                  // Optional hard cap for pairs
+                  const c = Number(it.count)||0;
+                  if (c === 2) {
+                    const cap = getPairSpanMax();
+                    if (cap != null) {
+                      const sp = Number(it.span_deg);
+                      if (isFinite(sp) && sp > cap) return false;
+                    }
+                  }
+                  // Apply score/span/delta gating
+                  try {
+                    const ttl3 = Number(it.total)||Number(d.alignment_total)||0;
+                    const scv = (typeof it.score === 'number' && isFinite(it.score)) ? it.score : (typeof d.alignment_score === 'number' ? d.alignment_score : NaN);
+                    const spanGate = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? getSpanScoreMin(c, it.span_deg) : null;
+                    const gate = getAlignmentScoreMin(c, ttl3);
+                    let deltaGate = null;
+                    if (c === 2 && typeof it.span_deg === 'number' && isFinite(it.span_deg)) {
+                      const dlt = aspectDeltaForPair(it.span_deg);
+                      if (isFinite(dlt)) deltaGate = getPairDeltaScoreMin(dlt);
+                    }
+                    const req = Math.max(gate ?? 0, spanGate ?? 0, deltaGate ?? 0);
+                    if (req > 0 && isFinite(scv) && scv < req) return false;
+                  } catch(_) {}
+                  return true;
+                })
+                .map(it => {
                 const c = Number(it.count)||0;
                 const ttl2 = Number(it.total)||Number(d.alignment_total)||0;
                 const whenTxt = it.utc ? ` @ ${fmtUtcToLocalShort(it.utc)}` : '';
@@ -2706,33 +2941,113 @@ function renderCalendar(data) {
         {
           const al2 = resolveAlignment(d);
           if (isFinite(al2.count) && al2.count >= getAlignmentThreshold()) {
-            let tt2 = `${i18nWord('alignment')} (${al2.count}) ${al2.when ? fmtUtcToLocalShort(al2.when) : ''}`.trim();
-            try {
-              if (Array.isArray(d.alignments) && d.alignments.length) {
-                const lines2 = d.alignments.map(it => {
-                  const c = Number(it.count)||0;
-                  const ttl3 = Number(it.total)||Number(d.alignment_total)||0;
-                  const whenTxt = it.utc ? ` @ ${fmtUtcToLocalShort(it.utc)}` : '';
-                  const planets = it.planets ? ` (${it.planets})` : '';
-                  const spanTxt = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? (()=>{
-                    const isPair = (c === 2);
-                    const spanVal = Math.round(it.span_deg*10)/10;
-                    if (!isPair) return `, span ${spanVal}°`;
-                    const dlt = (typeof it.offset_deg === 'number' && isFinite(it.offset_deg)) ? it.offset_deg : aspectDeltaForPair(it.span_deg);
-                    const mode = getAspectLabelMode();
-                    if (mode === 'span') return `, ${spanVal}°`;
-                    if (mode === 'both') return `, ${spanVal}° (Δ ${Math.round(dlt*10)/10}°)`;
-                    return `, Δ ${Math.round(dlt*10)/10}°`;
-                  })() : '';
-                  const aspectTxt = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? (() => { const nm = aspectNameFromSpan(it.span_deg, c); return nm ? `, ${nm}` : ''; })() : '';
-                  const scv = (typeof it.score === 'number' && isFinite(it.score)) ? it.score : (typeof d.alignment_score === 'number' ? d.alignment_score : NaN);
-                  const scoreTxt = (isFinite(scv)) ? `, score ${Math.round(scv*100)}%` : '';
-                  return `${c}${ttl3?`/${ttl3}`:''}${planets}${spanTxt}${aspectTxt}${scoreTxt}${whenTxt}`;
-                });
-                if (lines2.length) tt2 += `\n- ${lines2.join('\n- ')}`;
+            const cap2 = getPairSpanMax();
+            // If hard cap is set and this is a pair with span beyond cap (top-level), skip badge
+            if (cap2 != null && Number(al2.count) === 2) {
+              const sTop2 = Number(d.alignment_span_deg);
+              if (isFinite(sTop2) && sTop2 > cap2) {
+                // Skip adding AL badge entirely for out-of-cap pair
+                
+              } else {
+                let tt2 = `${i18nWord('alignment')} (${al2.count}) ${al2.when ? fmtUtcToLocalShort(al2.when) : ''}`.trim();
+                try {
+                  if (Array.isArray(d.alignments) && d.alignments.length) {
+                    const lines2 = d.alignments
+                      .filter(it => {
+                        const c = Number(it.count)||0;
+                        if (c === 2) {
+                          const sp = Number(it.span_deg);
+                          if (isFinite(sp) && sp > cap2) return false;
+                        }
+                        // Score/span/delta gating per item
+                        try {
+                          const ttl3 = Number(it.total)||Number(d.alignment_total)||0;
+                          const scv = (typeof it.score === 'number' && isFinite(it.score)) ? it.score : (typeof d.alignment_score === 'number' ? d.alignment_score : NaN);
+                          const spanGate = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? getSpanScoreMin(c, it.span_deg) : null;
+                          const gate = getAlignmentScoreMin(c, ttl3);
+                          let deltaGate = null;
+                          if (c === 2 && typeof it.span_deg === 'number' && isFinite(it.span_deg)) {
+                            const dlt = aspectDeltaForPair(it.span_deg);
+                            if (isFinite(dlt)) deltaGate = getPairDeltaScoreMin(dlt);
+                          }
+                          const req = Math.max(gate ?? 0, spanGate ?? 0, deltaGate ?? 0);
+                          if (req > 0 && isFinite(scv) && scv < req) return false;
+                        } catch(_) {}
+                        return true;
+                      })
+                      .map(it => {
+                        const c = Number(it.count)||0;
+                        const ttl3 = Number(it.total)||Number(d.alignment_total)||0;
+                        const whenTxt = it.utc ? ` @ ${fmtUtcToLocalShort(it.utc)}` : '';
+                        const planets = it.planets ? ` (${it.planets})` : '';
+                        const spanTxt = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? (()=>{
+                          const isPair = (c === 2);
+                          const spanVal = Math.round(it.span_deg*10)/10;
+                          if (!isPair) return `, span ${spanVal}°`;
+                          const dlt = (typeof it.offset_deg === 'number' && isFinite(it.offset_deg)) ? it.offset_deg : aspectDeltaForPair(it.span_deg);
+                          const mode = getAspectLabelMode();
+                          if (mode === 'span') return `, ${spanVal}°`;
+                          if (mode === 'both') return `, ${spanVal}° (Δ ${Math.round(dlt*10)/10}°)`;
+                          return `, Δ ${Math.round(dlt*10)/10}°`;
+                        })() : '';
+                        const aspectTxt = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? (() => { const nm = aspectNameFromSpan(it.span_deg, c); return nm ? `, ${nm}` : ''; })() : '';
+                        const scv = (typeof it.score === 'number' && isFinite(it.score)) ? it.score : (typeof d.alignment_score === 'number' ? d.alignment_score : NaN);
+                        const scoreTxt = (isFinite(scv)) ? `, score ${Math.round(scv*100)}%` : '';
+                        return `${c}${ttl3?`/${ttl3}`:''}${planets}${spanTxt}${aspectTxt}${scoreTxt}${whenTxt}`;
+                      });
+                    if (lines2.length) tt2 += `\n- ${lines2.join('\n- ')}`;
+                  }
+                } catch(_){}
+                appendBadge2('AL', tt2);
               }
-            } catch(_){}
-            appendBadge2('AL', tt2);
+            } else {
+              let tt2 = `${i18nWord('alignment')} (${al2.count}) ${al2.when ? fmtUtcToLocalShort(al2.when) : ''}`.trim();
+              try {
+                if (Array.isArray(d.alignments) && d.alignments.length) {
+                  const lines2 = d.alignments
+                    .filter(it => {
+                      // Score/span/delta gating
+                      try {
+                        const c = Number(it.count)||0;
+                        const ttl3 = Number(it.total)||Number(d.alignment_total)||0;
+                        const scv = (typeof it.score === 'number' && isFinite(it.score)) ? it.score : (typeof d.alignment_score === 'number' ? d.alignment_score : NaN);
+                        const spanGate = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? getSpanScoreMin(c, it.span_deg) : null;
+                        const gate = getAlignmentScoreMin(c, ttl3);
+                        let deltaGate = null;
+                        if (c === 2 && typeof it.span_deg === 'number' && isFinite(it.span_deg)) {
+                          const dlt = aspectDeltaForPair(it.span_deg);
+                          if (isFinite(dlt)) deltaGate = getPairDeltaScoreMin(dlt);
+                        }
+                        const req = Math.max(gate ?? 0, spanGate ?? 0, deltaGate ?? 0);
+                        if (req > 0 && isFinite(scv) && scv < req) return false;
+                      } catch(_) {}
+                      return true;
+                    })
+                    .map(it => {
+                    const c = Number(it.count)||0;
+                    const ttl3 = Number(it.total)||Number(d.alignment_total)||0;
+                    const whenTxt = it.utc ? ` @ ${fmtUtcToLocalShort(it.utc)}` : '';
+                    const planets = it.planets ? ` (${it.planets})` : '';
+                    const spanTxt = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? (()=>{
+                      const isPair = (c === 2);
+                      const spanVal = Math.round(it.span_deg*10)/10;
+                      if (!isPair) return `, span ${spanVal}°`;
+                      const dlt = (typeof it.offset_deg === 'number' && isFinite(it.offset_deg)) ? it.offset_deg : aspectDeltaForPair(it.span_deg);
+                      const mode = getAspectLabelMode();
+                      if (mode === 'span') return `, ${spanVal}°`;
+                      if (mode === 'both') return `, ${spanVal}° (Δ ${Math.round(dlt*10)/10}°)`;
+                      return `, Δ ${Math.round(dlt*10)/10}°`;
+                    })() : '';
+                    const aspectTxt = (typeof it.span_deg === 'number' && isFinite(it.span_deg)) ? (() => { const nm = aspectNameFromSpan(it.span_deg, c); return nm ? `, ${nm}` : ''; })() : '';
+                    const scv = (typeof it.score === 'number' && isFinite(it.score)) ? it.score : (typeof d.alignment_score === 'number' ? d.alignment_score : NaN);
+                    const scoreTxt = (isFinite(scv)) ? `, score ${Math.round(scv*100)}%` : '';
+                    return `${c}${ttl3?`/${ttl3}`:''}${planets}${spanTxt}${aspectTxt}${scoreTxt}${whenTxt}`;
+                  });
+                  if (lines2.length) tt2 += `\n- ${lines2.join('\n- ')}`;
+                }
+              } catch(_){}
+              appendBadge2('AL', tt2);
+            }
           }
         }
       }

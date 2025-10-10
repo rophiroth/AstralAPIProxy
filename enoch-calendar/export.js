@@ -2,6 +2,7 @@ function downloadCSV(data) {
   if (!data.length) return;
   const hasLunar = typeof data[0].moon_phase_angle_deg !== 'undefined';
   const hasHebrew = typeof data[0].he_year !== 'undefined';
+  const hasAlignments = typeof data[0].alignments !== 'undefined';
   const baseHeader = ['gregorian','enoch_year','enoch_month','enoch_day','day_of_year','added_week','name','start_utc','end_utc'];
   const lunarHeader = hasLunar ? [
     'moon_phase_angle_deg',
@@ -16,9 +17,19 @@ function downloadCSV(data) {
   const astroHeader = [
     'equinox','equinox_utc','solstice','solstice_utc',
     'solar_eclipse','solar_eclipse_utc','lunar_eclipse','lunar_eclipse_utc',
-    'supermoon','supermoon_utc','alignment','alignment_utc'
+    'supermoon','supermoon_utc','alignment','alignment_utc',
+    'alignment_total','alignment_planets','alignment_span_deg','alignment_score',
+    ...(hasAlignments ? ['alignments'] : []),
+    'solar_eclipse_mag','lunar_eclipse_mag'
   ];
   const header = [...baseHeader, ...lunarHeader, ...astroHeader, ...hebrewHeader].join(',');
+  const csvQuote = (v) => {
+    try {
+      let s = (v === null || typeof v === 'undefined') ? '' : String(v);
+      if (/[",\n]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
+      return s;
+    } catch(_) { return String(v ?? ''); }
+  };
   const rows = data.map(d => {
     const base = [
       d.gregorian,
@@ -57,7 +68,14 @@ function downloadCSV(data) {
       (d.solar_eclipse ? '1' : ''), (d.solar_eclipse_utc ?? ''),
       (d.lunar_eclipse ? '1' : ''), (d.lunar_eclipse_utc ?? ''),
       (d.supermoon ? '1' : ''), (d.supermoon_utc ?? ''),
-      (typeof d.alignment !== 'undefined' ? d.alignment : ''), (d.alignment_utc ?? '')
+      (typeof d.alignment !== 'undefined' ? d.alignment : ''), (d.alignment_utc ?? ''),
+      (typeof d.alignment_total !== 'undefined' ? d.alignment_total : ''),
+      csvQuote(d.alignment_planets ?? ''),
+      (typeof d.alignment_span_deg !== 'undefined' ? d.alignment_span_deg : ''),
+      (typeof d.alignment_score !== 'undefined' ? d.alignment_score : ''),
+      ...(hasAlignments ? [csvQuote((function(){ try { return JSON.stringify(d.alignments || []); } catch(_) { return '[]'; } })())] : []),
+      (typeof d.solar_eclipse_mag !== 'undefined' ? d.solar_eclipse_mag : ''),
+      (typeof d.lunar_eclipse_mag !== 'undefined' ? d.lunar_eclipse_mag : '')
     ];
     const heb = hasHebrew ? [
       (d.he_year ?? ''),

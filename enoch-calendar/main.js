@@ -674,6 +674,13 @@ function resolveAlignment(d) {
     if (!when) {
       when = d.alignment_utc || d.planet_alignment_utc || d.alignment_time_utc || d.alignment_time || d.align_utc || d.align_time || d.alignment_iso || '';
     }
+    // 4) CSV fallback: if span exists but count missing, infer pair (2)
+    try {
+      if (!isFinite(count)) {
+        const sp = Number(d.alignment_span_deg);
+        if (isFinite(sp)) count = 2;
+      }
+    } catch(_) {}
     return { count, when };
   } catch(_) { return { count: NaN, when: '' }; }
 }
@@ -2626,7 +2633,7 @@ function renderCalendar(data) {
               }
             } catch(_) {}
             const req = Math.max(gate ?? 0, spanGate ?? 0, deltaGate ?? 0);
-            if (req > 0 && (!isFinite(sc) || sc < req)) pass = false;
+            if (req > 0 && (isFinite(sc) && sc < req)) pass = false;
             // Hard cap enforcement for pairs
             if (pairCap != null && Number(al.count) === 2) {
               let spanToCheck = bestSpan;
@@ -2756,7 +2763,7 @@ function renderCalendar(data) {
               }
             } catch(_) {}
             const req = Math.max(gate ?? 0, spanGate ?? 0, deltaGate ?? 0);
-            if (req > 0 && (!isFinite(sc) || sc < req)) pass = false;
+            if (req > 0 && (isFinite(sc) && sc < req)) pass = false;
             // Hard cap enforcement for pairs
             if (pairCap != null && Number(al.count) === 2) {
               let spanToCheck = bestSpan;

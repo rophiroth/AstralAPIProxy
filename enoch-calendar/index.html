@@ -126,9 +126,9 @@
       table.month th { font-size: 0.8rem; }
     }
 
-    /* Small phones: 2 columns for readability */
+    /* Phones: force a single month per row */
     @media (max-width: 600px) {
-      #calendar { grid-template-columns: repeat(2, 1fr); gap: 0.35rem; }
+      #calendar { grid-template-columns: 1fr; gap: 0.35rem; }
       .day { font-size: 0.86rem; }
       .day.festival .fest { font-size: 0.7rem; }
       table.month th, table.month td { padding: 3px; }
@@ -214,7 +214,10 @@
   <style>
     /* brand link hover */
     .brand a:hover { filter: brightness(0.98); }
-  </style>
+      /* Force single-column months on phones (e.g., Samsung S21 Ultra portrait) */
+    @media (max-width: 640px), (max-width: 900px) and (orientation: portrait) {
+      #calendar { grid-template-columns: 1fr !important; }
+    }</style>
 </head>
 <body>
   <div class="topbar">
@@ -332,3 +335,4 @@
   
 </body>
 </html>
+

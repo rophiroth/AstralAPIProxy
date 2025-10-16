@@ -25,23 +25,15 @@ app = Flask(__name__)
 # Flexible CORS: allow same-origin by default; enable cross-origin via env
 origins_env = os.environ.get("CORS_ORIGINS", "").strip()
 if origins_env:
-    # Support wildcard "*" to allow any origin (no credentials)
-    if origins_env == "*":
-        cors_kwargs = dict(resources={r"/*": {"origins": "*"}}, supports_credentials=False,
-                           allow_headers=["Content-Type", "Authorization"], methods=["GET","POST","OPTIONS"])
-        CORS(app, **cors_kwargs)
-    else:
-        allowed_origins = [o.strip() for o in origins_env.split(",") if o.strip()]
-        CORS(app, resources={r"/*": {"origins": allowed_origins}}, supports_credentials=False,
-             allow_headers=["Content-Type", "Authorization"], methods=["GET","POST","OPTIONS"])
+    allowed_origins = [o.strip() for o in origins_env.split(",") if o.strip()]
 else:
     allowed_origins = [
         "https://chart.psyhackers.org",
         "https://calendar.psyhackers.org",
     ]
-    # Broaden CORS to all routes so even error responses carry CORS headers for these origins
-    CORS(app, resources={r"/*": {"origins": allowed_origins}}, supports_credentials=False,
-         allow_headers=["Content-Type", "Authorization"], methods=["GET","POST","OPTIONS"])
+
+# Broaden CORS to all routes so even error responses carry CORS headers for these origins
+CORS(app, resources={r"/*": {"origins": allowed_origins}}, supports_credentials=False)
 
 # --- Helpers to support extended ISO (including BCE) directly to JD ---
 import re

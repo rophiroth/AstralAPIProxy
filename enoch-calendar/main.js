@@ -3314,6 +3314,8 @@ function onClick(id, handler) {
 // Jump to a specific Enoch year (CSV-first, fallback to approximate)
 onClick('jumpYearBtn', async () => {
   try {
+    // Show loading immediately for better UX; nested loaders are ref-counted
+    showLoading(window.t ? window.t('statusLoading') : 'Loading...');
     const input = document.getElementById('jumpYearInput');
     if (!input) return;
     const cleaned = String(input.value || '').trim().replace(/[^\d-]/g, '');
@@ -3339,6 +3341,8 @@ onClick('jumpYearBtn', async () => {
   } catch (e) {
     console.error('[jumpYear] failed', e);
     const s = document.getElementById('status'); if (s) s.textContent = 'Jump failed';
+  } finally {
+    hideLoading();
   }
 });
 
@@ -3356,6 +3360,8 @@ onClick('jumpYearBtn', async () => {
 // Map a Gregorian date to Enoch and load that year
 onClick('mapDateBtn', async () => {
   try {
+    // Show loading immediately so users see feedback before network call
+    showLoading(window.t ? window.t('statusLoading') : 'Loading...');
     const input = document.getElementById('gregDate');
     if (!input || !input.value) { setStatus('pickGregorianDate'); return; }
     // Build a local noon date to avoid TZ rollover
@@ -3405,6 +3411,8 @@ onClick('mapDateBtn', async () => {
     console.error('[mapDate] failed', e);
     setStatus('statusMapError');
     try { suppressPickedClear = false; } catch(_) {}
+  } finally {
+    hideLoading();
   }
 });
 
@@ -3464,6 +3472,9 @@ async function goToToday() {
     const el = document.querySelector('.day.today');
     if (el) { setTimeout(scrollToToday, 0); return; }
 
+    // Show loading only when we need to load/build
+    showLoading(window.t ? window.t('statusLoading') : 'Loading...');
+
     // 1) CSV-first using local approximation (no backend call)
     const approxYear = getApproxEnochYearForDate(new Date(today.toISOString()));
     if (currentYear === approxYear && Array.isArray(currentData) && currentData.length) {
@@ -3501,6 +3512,9 @@ async function goToToday() {
     console.warn('[today] failed', e?.message || e);
     // As a last resort, try to scroll in current view
     setTimeout(scrollToToday, 0);
+  } finally {
+    // Balance any immediate showLoading above or nested calls
+    hideLoading();
   }
 }
 

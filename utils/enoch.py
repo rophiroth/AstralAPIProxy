@@ -29,6 +29,18 @@ def _dow_index_from_jd(jd_val: float) -> int:
     return swe.day_of_week(swe.julday(int(y), int(mo), int(d), 0.0))
 
 
+def _tz_offset_days_from_longitude(longitude: float) -> float:
+    """Aproxima el desfase local (LMT) en días a partir de la longitud (este positivo)."""
+    return float(longitude) / 360.0
+
+
+def _dow_index_local_from_jd(jd_val: float, longitude: float) -> int:
+    """Día de semana según fecha CIVIL local (LMT derivada de la longitud)."""
+    tz_off = _tz_offset_days_from_longitude(longitude)
+    y, mo, d, _h = swe.revjul(jd_val + tz_off)
+    return swe.day_of_week(swe.julday(int(y), int(mo), int(d), 0.0))
+
+
 def calculate_real_equinox_jd(target_date,longitude,latitude):
     """
     Calcula el JD (Julian Day) del equinoccio real de marzo (Sol en 0° Aries)
@@ -130,25 +142,30 @@ def find_enoch_year_start(target_date,longitude=REFERENCE_LONGITUDE,latitude=REF
 
     # 2. Buscar miércoles anterior (Enoj inicia en miércoles)
     jd_before = equinox_jd
-    # Usar índice detectado para miércoles, comparando con el día civil (0h UT)
-    while _dow_index_from_jd(jd_before) != WEDNESDAY_INDEX:
+    # Usar índice detectado para miércoles, pero con día civil LOCAL (LMT por longitud)
+    while _dow_index_local_from_jd(jd_before, longitude) != WEDNESDAY_INDEX:
         jd_before -= 1.0
     #debug_jd(jd_before,"jd_before")
     # 3. Buscar miércoles siguiente
     jd_after = equinox_jd
-    while _dow_index_from_jd(jd_after) != WEDNESDAY_INDEX:
+    while _dow_index_local_from_jd(jd_after, longitude) != WEDNESDAY_INDEX:
         jd_after += 1.0
     #debug_jd(jd_after,"jd_after")
     # 4. Calcular sunsets para ambos martes
-    year, month, day, _ = swe.revjul(jd_before)
-
-    ret1, sunset_data_before = swe.rise_trans(swe.julday(year,month,day,0), swe.SUN, 2, geopos)
+    # Calcular medianoche local (UT) para cada miércoles y desde ahí el sunset local de ese día
+    tz_off = _tz_offset_days_from_longitude(longitude)
+    # Miércoles anterior → usar el atardecer del MARTES previo (inicio del miércoles enojiano)
+    yb, mb, db, _ = swe.revjul(jd_before + tz_off)
+    ut0_before = swe.julday(int(yb), int(mb), int(db), 0.0) - tz_off
+    ret1, sunset_data_before = swe.rise_trans(ut0_before - 1.0, swe.SUN, 2, geopos)
     sunset_before_jd = sunset_data_before[0]
     #debug_any(sunset_data_before,"sunset_data_before")
     #debug_jd(sunset_before_jd,"sunset_before_jd")
     
-    year, month, day, _ = swe.revjul(jd_after)
-    ret2, sunset_data_after = swe.rise_trans(swe.julday(year,month,day,0), swe.SUN, 2, geopos)
+    # Miércoles siguiente → usar el atardecer del MARTES previo (inicio del miércoles enojiano)
+    ya, ma, da, _ = swe.revjul(jd_after + tz_off)
+    ut0_after = swe.julday(int(ya), int(ma), int(da), 0.0) - tz_off
+    ret2, sunset_data_after = swe.rise_trans(ut0_after - 1.0, swe.SUN, 2, geopos)
     sunset_after_jd = sunset_data_after[0]
     #debug_jd(sunset_after_jd,"sunset_after_jd")
     # 5. Comparar cuál sunset está más cerca del equinoccio

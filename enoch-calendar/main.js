@@ -3304,6 +3304,32 @@ if (dlIcsBtn) dlIcsBtn.addEventListener('click', () => {
   try { downloadICS(currentData); } catch (e) { console.error('ICS export failed', e); }
 });
 
+// Import Google Calendar button: opens language-specific calendar URL
+(function(){
+  const btn = document.getElementById('importGoogle');
+  if (!btn) return;
+  function applyTitle(){
+    const L = (window.lang || 'es').toLowerCase() === 'en' ? 'en' : 'es';
+    if (L === 'en') {
+      btn.setAttribute('title', 'Import to Google Calendar');
+      btn.setAttribute('aria-label', 'Import to Google Calendar');
+    } else {
+      btn.setAttribute('title', 'Importar a Google Calendar');
+      btn.setAttribute('aria-label', 'Importar a Google Calendar');
+    }
+  }
+  applyTitle();
+  try { document.addEventListener('langchange', applyTitle); } catch(_) {}
+  const URL_EN = 'https://calendar.google.com/calendar/u/3?cid=NWNiZTEzZWY4OWYwMmFlNGMxMzQ5NTQwYmJmNzQwMzEyODU0ZGZjYjQwMDUwMTc5YTY0YTM2MWQyMjU3MTZlYkBncm91cC5jYWxlbmRhci5nb29nbGUuY29t';
+  const URL_ES = 'https://calendar.google.com/calendar/u/3?cid=MGRjNjcxNTRkNDZhMDc4NDdiNDI3OTZmODUyMmYzOGM2MTQ0YTc4YTlmZGE4ZGJhOTRlODVmMjE3ZTliZTIxZkBncm91cC5jYWxlbmRhci5nb29nbGUuY29t';
+  btn.addEventListener('click', () => {
+    const L = (window.lang || 'es').toLowerCase() === 'en' ? 'en' : 'es';
+    const url = (L === 'en') ? URL_EN : URL_ES;
+    console.log('[importGoogle] opening', L, url.slice(0,48) + '...');
+    try { window.open(url, '_blank', 'noopener'); } catch(_) { location.href = url; }
+  });
+})();
+
 // --- UI wiring for Jump Year and Map Date ---
 function onClick(id, handler) {
   const el = document.getElementById(id);

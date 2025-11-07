@@ -132,7 +132,11 @@ function downloadCSV(data) {
   URL.revokeObjectURL(url);
 }
 
-function downloadICS(data) {\n  try {\n    if (!Array.isArray(data) || data.length === 0) return;\n    // Pad Pisces if the year looks truncated (31 or 38 days as appropriate)\n    try { data = padEnochYearForIcs(data); } catch(_) {}
+function downloadICS(data) {
+  try {
+    if (!Array.isArray(data) || data.length === 0) return;
+    // Pad Pisces if the year looks truncated (31 or 38 days as appropriate)
+    try { data = padEnochYearForIcs(data); } catch(_) {}
     const now = new Date();
     const dtstamp = toIcsDateTime(now.toISOString());
 

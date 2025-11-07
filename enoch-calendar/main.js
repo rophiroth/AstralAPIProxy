@@ -1566,7 +1566,10 @@ function ensureEnochYearCompleteness(arr) {
     const lastEnochDay = Number(last.enoch_day) || (arr.length - 333);
     const { lat, lon } = (typeof getUserLatLonTz === 'function') ? getUserLatLonTz() : { lat: -33.45, lon: -70.6667 };
 
-    const fmtYMD = (d) => {\n      const pad = (n) => String(n).padStart(2, '0');\n      return ${d.getUTCFullYear()}--;\n    };
+    const fmtYMD = (d) => {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}`;
+};
     const base = (function(){
       try { return parseYMDToUTC(String(last.gregorian)); } catch(_) { return new Date(String(last.gregorian)); }
     })();
@@ -3566,6 +3569,10 @@ async function goToToday() {
 try { window.goToToday = goToToday; window.scrollToToday = scrollToToday; } catch(_){}
 
 initCalendar();
+
+
+
+
 
 
 

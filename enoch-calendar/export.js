@@ -229,7 +229,7 @@ function downloadICS(data) {
         for (let i = 1; i <= missing; i++) {
           const dt = new Date(base.getTime());
           dt.setUTCDate(dt.getUTCDate() + i);
-          const ymd = ${dt.getUTCFullYear()}--;
+          const ymd = `${dt.getUTCFullYear()}-${pad(dt.getUTCMonth()+1)}-${pad(dt.getUTCDate())}`;
           let shem = '';
           try {
             if (typeof window !== 'undefined' && typeof window.getShemEnochiano === 'function') {
@@ -814,5 +814,7 @@ function downloadICS(data) {
     console.error('[ICS] build failed', e);
   }
 }
+
+
 
 

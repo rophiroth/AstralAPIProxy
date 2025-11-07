@@ -132,9 +132,7 @@ function downloadCSV(data) {
   URL.revokeObjectURL(url);
 }
 
-function downloadICS(data) {
-  try {
-    if (!Array.isArray(data) || data.length === 0) return;
+function downloadICS(data) {\n  try {\n    if (!Array.isArray(data) || data.length === 0) return;\n    // Pad Pisces if the year looks truncated (31 or 38 days as appropriate)\n    try { data = padEnochYearForIcs(data); } catch(_) {}
     const now = new Date();
     const dtstamp = toIcsDateTime(now.toISOString());
 
@@ -205,16 +203,50 @@ function downloadICS(data) {
         return `${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())}`;
       } catch(_) { return ''; }
     }
-    function addDaysIso(isoDate, days) {
+    
+    // Ensure ICS covers full Pisces: pad missing last Enoch days to 31 or 38
+    function padEnochYearForIcs(rows) {
       try {
-        const base = new Date(isoDate + (isoDate.length <= 10 ? 'T00:00:00Z' : ''));
-        if (isNaN(base)) return '';
-        base.setUTCDate(base.getUTCDate() + (days|0));
-        const y = base.getUTCFullYear(); const m = String(base.getUTCMonth()+1).padStart(2,'0'); const d = String(base.getUTCDate()).padStart(2,'0');
-        return `${y}-${m}-${d}`;
-      } catch(_) { return ''; }
+        if (!Array.isArray(rows) || rows.length === 0) return rows;
+        // Find last record by day_of_year
+        const sorted = rows.slice().sort((a,b) => Number(a.day_of_year) - Number(b.day_of_year));
+        const last = sorted[sorted.length - 1];
+        if (!last || Number(last.enoch_month) !== 12) return rows; // only pad when already in Pisces
+        const expect38 = rows.some(r => !!r.added_week);
+        const expectedPiscesDays = expect38 ? 38 : 31;
+        const lastEDay = Number(last.enoch_day);
+        if (!Number.isFinite(lastEDay) || lastEDay >= expectedPiscesDays) return rows;
+        const missing = expectedPiscesDays - lastEDay;
+        const pad = (n)=> String(n).padStart(2,'0');
+        const parseYMD = (ymd) => { try { return new Date(ymd + 'T00:00:00Z'); } catch(_) { return null; } };
+        const base = parseYMD(String(last.gregorian));
+        if (!base || isNaN(base)) return rows;
+        const out = rows.slice();
+        for (let i = 1; i <= missing; i++) {
+          const dt = new Date(base.getTime());
+          dt.setUTCDate(dt.getUTCDate() + i);
+          const ymd = ${dt.getUTCFullYear()}--;
+          let shem = '';
+          try {
+            if (typeof window !== 'undefined' && typeof window.getShemEnochiano === 'function') {
+              shem = window.getShemEnochiano(12, lastEDay + i, expect38 && (last.day_of_year + i > 364)) || '';
+            }
+          } catch(_) {}
+          out.push({
+            gregorian: ymd,
+            enoch_year: last.enoch_year,
+            enoch_month: 12,
+            enoch_day: lastEDay + i,
+            added_week: (expect38 && (last.day_of_year + i > 364)) ? true : false,
+            name: shem,
+            day_of_year: Number(last.day_of_year) + i,
+            start_utc: '', end_utc: ''
+          });
+        }
+        try { console.warn('[ICS] padded Pisces to', expectedPiscesDays, 'days; added', missing, 'records'); } catch(_) {}
+        return out;
+      } catch(_) { return rows; }
     }
-
     // Zodiac mapping for month → sign + glyph (1-based months)
     const ZSIGNS = [
       { en: 'Aries',       es: 'Aries',       glyph: '♈' },
@@ -778,3 +810,4 @@ function downloadICS(data) {
     console.error('[ICS] build failed', e);
   }
 }
+

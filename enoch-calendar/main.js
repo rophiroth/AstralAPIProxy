@@ -1964,9 +1964,6 @@ async function buildCalendar(referenceDate = new Date(), tryCSV = true, base = n
         }
       } catch(_){ }
       console.warn('[buildCalendar] /calcYear failed or invalid after approx retry, falling back to daily calc');
-    } catch(e) {
-      console.warn('[buildCalendar] /calcYear error, fallback to daily batches', e?.message || e);
-    }
 
     const dates = [];
     for (let i = 0; i < 364; i++) dates.push(addDaysUTC(startDate, i));

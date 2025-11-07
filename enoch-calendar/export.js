@@ -224,7 +224,7 @@ function downloadICS(data) {
         const pad = (n)=> String(n).padStart(2,'0');
         const parseYMD = (ymd) => { try { return new Date(ymd + 'T00:00:00Z'); } catch(_) { return null; } };
         const base = parseYMD(String(last.gregorian));
-        if (!base || isNaN(base)) return rows;
+        if (!base || isNaN(base.getTime())) return rows;
         const out = rows.slice();
         for (let i = 1; i <= missing; i++) {
           const dt = new Date(base.getTime());
@@ -814,4 +814,5 @@ function downloadICS(data) {
     console.error('[ICS] build failed', e);
   }
 }
+
 

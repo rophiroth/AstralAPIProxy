@@ -1550,6 +1550,61 @@ function sunsetPairForYMD(ymd, lat, lon) {
   const endUTC = calcSunsetUTC(base, lat, lon);
   return { startUTC, endUTC };
 }
+// Ensure the provided year data contains all expected Enoch days
+// - Normal year: 364 days, Pisces (month 12) has 31
+// - Added week year: 371 days, Pisces has 38 and days > 364 are marked added_week
+function ensureEnochYearCompleteness(arr) {
+  try {
+    if (!Array.isArray(arr) || !arr.length) return arr;
+    const hasAddedWeekFlag = arr.some(d => !!d.added_week);
+    const expectedDays = hasAddedWeekFlag ? 371 : 364;
+    if (arr.length >= expectedDays) return arr;
+
+    const last = arr[arr.length - 1];
+    if (!last || Number(last.enoch_month) !== 12) return arr;
+    const lastDOY = Number(last.day_of_year) || arr.length;
+    const lastEnochDay = Number(last.enoch_day) || (arr.length - 333);
+    const { lat, lon } = (typeof getUserLatLonTz === 'function') ? getUserLatLonTz() : { lat: -33.45, lon: -70.6667 };
+
+    const fmtYMD = (d) => {
+      const pad = (n) => String(n).padStart(2, '0');
+      return ${d.getUTCFullYear()}--;
+    };
+    const base = (function(){
+      try { return parseYMDToUTC(String(last.gregorian)); } catch(_) { return new Date(String(last.gregorian)); }
+    })();
+    if (isNaN(base)) return arr;
+
+    const missing = expectedDays - arr.length;
+    for (let i = 1; i <= missing; i++) {
+      const dY = lastDOY + i;
+      const eDay = lastEnochDay + i;
+      const dt = new Date(base.getTime());
+      dt.setUTCDate(dt.getUTCDate() + i);
+      const ymd = fmtYMD(dt);
+      let startISO = '', endISO = '';
+      try {
+        const p = sunsetPairForYMD(ymd, lat, lon);
+        startISO = p.startUTC ? p.startUTC.toISOString() : '';
+        endISO = p.endUTC ? p.endUTC.toISOString() : '';
+      } catch(_) {}
+      let shem = '';
+      try { if (typeof getShemEnochiano === 'function') shem = getShemEnochiano(12, eDay, hasAddedWeekFlag || dY > 364) || ''; } catch(_) {}
+      arr.push({
+        gregorian: ymd,
+        enoch_year: last.enoch_year,
+        enoch_month: 12,
+        enoch_day: eDay,
+        added_week: (hasAddedWeekFlag || dY > 364) ? true : false,
+        name: shem,
+        day_of_year: dY,
+        start_utc: startISO,
+        end_utc: endISO
+      });
+    }
+    return arr;
+  } catch (_) { return arr; }
+}
 
 function fmtLocal(dt) {
   if (!dt || isNaN(dt)) return 'N/A';
@@ -1653,6 +1708,9 @@ async function loadYearFromCSV(year) {
         }));
         currentYear = year;
         currentStartDate = parseYMDToUTC(currentData[0].gregorian) || new Date(currentData[0].gregorian);
+        const { lat: uLat2, lon: uLon2 } = getUserLatLonTz();
+        currentData = currentData.map(d => { if (!d.start_utc || !d.end_utc) { const { startUTC, endUTC } = sunsetPairForYMD(d.gregorian, uLat2, uLon2); d.start_utc = startUTC ? startUTC.toISOString() : ''; d.end_utc = endUTC ? endUTC.toISOString() : ''; } d.enoch_year = d.enoch_year || year; return d; });
+        try { currentData = ensureEnochYearCompleteness(currentData); } catch(_) {}
         currentYearLength = currentData.length;
         try { window.currentData = currentData; window.currentYear = currentYear; } catch(_){ }
         renderCalendar(currentData);
@@ -1746,18 +1804,10 @@ async function loadYearFromCSV(year) {
     currentYear = year;
     // Use safe parsing in case CSV uses non-ISO separators
     currentStartDate = parseYMDToUTC(currentData[0].gregorian) || new Date(currentData[0].gregorian);
-    // Ensure start/end present for tooltip and export when loading CSV lacking them
-    const { lat: uLat2, lon: uLon2 } = getUserLatLonTz();
-    currentData = currentData.map(d => {
-      if (!d.start_utc || !d.end_utc) {
-        const { startUTC, endUTC } = sunsetPairForYMD(d.gregorian, uLat2, uLon2);
-        d.start_utc = startUTC ? startUTC.toISOString() : '';
-        d.end_utc = endUTC ? endUTC.toISOString() : '';
-      }
-      d.enoch_year = d.enoch_year || year;
-      return d;
-    });
-    currentYearLength = currentData.length;
+        const { lat: uLat2, lon: uLon2 } = getUserLatLonTz();
+        currentData = currentData.map(d => { if (!d.start_utc || !d.end_utc) { const { startUTC, endUTC } = sunsetPairForYMD(d.gregorian, uLat2, uLon2); d.start_utc = startUTC ? startUTC.toISOString() : ''; d.end_utc = endUTC ? endUTC.toISOString() : ''; } d.enoch_year = d.enoch_year || year; return d; });
+        try { currentData = ensureEnochYearCompleteness(currentData); } catch(_) {}
+        currentYearLength = currentData.length;
     try { window.currentData = currentData; window.currentYear = currentYear; } catch(_){ }
     renderCalendar(currentData);
     try { suppressPickedClear = false; } catch(_) {}
@@ -1886,51 +1936,21 @@ async function buildCalendar(referenceDate = new Date(), tryCSV = true, base = n
         } catch(_){}
         if (j && j.ok && Array.isArray(j.days)) {
           // Ensure each day carries the Shemot name; fallback to local resolver if backend omitted it
-          currentData = j.days.map(d => ({
-            ...d,
-            name: (d && d.name) ? d.name : getShemEnochiano(d.enoch_month, d.enoch_day, d.added_week)
-          }));
-          try {
-            const evs = currentData.filter(d => d.moon_event).map(d => ({ g: d.gregorian, evt: d.moon_event, utc: d.moon_event_utc, icon: d.moon_icon }));
-            dbg('[calcYear] events received (first 12)', evs.slice(0,12));
-          } catch(_){ }
+          currentData = j.days.map(d => ({ ...d, name: (d && d.name) ? d.name : getShemEnochiano(d.enoch_month, d.enoch_day, d.added_week) }));
+          try { currentData = ensureEnochYearCompleteness(currentData); } catch(_) {}
           currentYearLength = currentData.length;
-          try { window.currentData = currentData; } catch(_){ }
-    renderCalendar(currentData);
-    try { suppressPickedClear = false; } catch(_) {}
-    setYearLabel(j.enoch_year || enoch_year);
+          try { window.currentData = currentData; } catch(_) { }
+          renderCalendar(currentData);
+          try { suppressPickedClear = false; } catch(_) { }
+          setYearLabel(j.enoch_year);
           status.textContent = '';
           try {
             const csv = buildCsvText(currentData);
-            if (csv && shouldCacheCsv()) saveCsvToLocal(j.enoch_year || enoch_year, csv);
-            if (csv && shouldUploadCsv()) uploadCsvToServer(j.enoch_year || enoch_year, csv);
+            if (csv && shouldCacheCsv()) saveCsvToLocal(j.enoch_year, csv);
+            if (csv && shouldUploadCsv()) uploadCsvToServer(j.enoch_year, csv);
           } catch(e){ console.warn('[buildCalendar] cache/upload skipped', e?.message || e); }
           isBuilding = false;
           return;
-        }
-      }
-      // Retry calcYear once in approximate mode before falling back; include extra logging
-      try {
-        const bodyApprox = { ...body, approx: true };
-        console.log('[buildCalendar] retry /calcYear approx', calcYearUrl, bodyApprox);
-        const res2 = await fetch(calcYearUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bodyApprox) });
-        if (res2.ok) {
-          const j2 = await res2.json();
-          if (j2 && j2.ok && Array.isArray(j2.days)) {
-            currentData = j2.days.map(d => ({ ...d, name: (d && d.name) ? d.name : getShemEnochiano(d.enoch_month, d.enoch_day, d.added_week) }));
-            currentYearLength = currentData.length;
-            try { window.currentData = currentData; } catch(_){ }
-            renderCalendar(currentData);
-            try { suppressPickedClear = false; } catch(_) {}
-            setYearLabel(j2.enoch_year || enoch_year);
-            status.textContent = '';
-            try {
-              const csv = buildCsvText(currentData);
-              if (csv && shouldCacheCsv()) saveCsvToLocal(j2.enoch_year || enoch_year, csv);
-              if (csv && shouldUploadCsv()) uploadCsvToServer(j2.enoch_year || enoch_year, csv);
-            } catch(e){ console.warn('[buildCalendar] cache/upload skipped', e?.message || e); }
-            isBuilding = false;
-            return;
           }
         }
       } catch (e) {
@@ -1967,7 +1987,7 @@ async function buildCalendar(referenceDate = new Date(), tryCSV = true, base = n
       const e = r.enoch;
       return {
         gregorian,
-        enoch_year,
+        enoch_year: e.enoch_year,
         enoch_month: e.enoch_month,
         enoch_day: e.enoch_day,
         added_week: e.added_week,
@@ -1977,6 +1997,8 @@ async function buildCalendar(referenceDate = new Date(), tryCSV = true, base = n
         end_utc: endUTC ? endUTC.toISOString() : ''
       };
     });
+    try { currentData = ensureEnochYearCompleteness(currentData); } catch(_) {}
+    currentYearLength = currentData.length;
     try { window.currentData = currentData; } catch(_){ }
 
     renderCalendar(currentData);
@@ -3547,4 +3569,5 @@ async function goToToday() {
 try { window.goToToday = goToToday; window.scrollToToday = scrollToToday; } catch(_){}
 
 initCalendar();
+
 

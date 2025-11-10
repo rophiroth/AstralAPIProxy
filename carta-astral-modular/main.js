@@ -13,7 +13,7 @@ function getApiUrl() {
   }
 }
 
-window.addEventListener("DOMContentLoaded", () => {
+function initApp() {
   debugValue("馃寪 Main.js cargado");
 
   let selectedLat = null;
@@ -142,4 +142,11 @@ window.addEventListener("DOMContentLoaded", () => {
       debugValue("馃挜 Error en fetch", err);
     }
   });
-});
+}
+
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', initApp);
+} else {
+  // DOM ya listo; inicializar de inmediato (para loader din谩mico)
+  initApp();
+}

@@ -82,10 +82,10 @@ function initApp() {
     const canvas = document.getElementById("treeOfLifeCanvas");
     const ctx = canvas.getContext("2d");
     const treeWrapper = document.querySelector('.tree-wrapper');
-    // Ocultar mientras cargamos nuevo cálculo
-    output.classList.add('hidden');
+    // Mostrar estado de carga visible
+    output.classList.remove('hidden');
+    output.innerHTML = "<p>Calculando carta…</p>";
     if (treeWrapper) treeWrapper.classList.add('hidden');
-    output.innerHTML = "";
 
     debugValue("馃摛 Enviando datos", { datetime, selectedLat, selectedLon });
 
@@ -138,8 +138,8 @@ function initApp() {
       output.classList.remove('hidden');
       if (treeWrapper) treeWrapper.classList.remove('hidden');
     } catch (err) {
-      output.innerHTML = "<p>Error inesperado: " + err.message + "</p>";
-      debugValue("馃挜 Error en fetch", err);
+      output.innerHTML = "<p>Error inesperado: " + (err && err.message ? err.message : String(err)) + "</p>";
+      debugValue("🔬 Error en fetch", err);
     }
   });
 }

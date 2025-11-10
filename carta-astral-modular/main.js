@@ -68,6 +68,11 @@ window.addEventListener("DOMContentLoaded", () => {
     const output = document.getElementById("output");
     const canvas = document.getElementById("treeOfLifeCanvas");
     const ctx = canvas.getContext("2d");
+    const treeWrapper = document.querySelector('.tree-wrapper');
+    // Ocultar mientras cargamos nuevo cálculo
+    output.classList.add('hidden');
+    if (treeWrapper) treeWrapper.classList.add('hidden');
+    output.innerHTML = "";
 
     debugValue("馃摛 Enviando datos", { datetime, selectedLat, selectedLon });
 
@@ -106,12 +111,19 @@ window.addEventListener("DOMContentLoaded", () => {
       //    comenta o descomenta esta línea según quieras listar:
       renderPlanetsAndHouses(output, oplanets, houses_data);
 
+      // 2b) Resumen por elementos (planetas + casas) y mini IA
+      renderElementSummary(output, oplanets, houses_data.houses);
+
       // 3) Dibuja en canvas
 
       document.fonts.load("20px 'StamHebrew'").then(() => {
 		  drawTreeOfLife(data, ctx); // fuente ya lista
 		});
 		setupTooltip(canvas, houses_data.houses, oplanets);
+
+      // Mostrar secciones una vez listo
+      output.classList.remove('hidden');
+      if (treeWrapper) treeWrapper.classList.remove('hidden');
     } catch (err) {
       output.innerHTML = "<p>Error inesperado: " + err.message + "</p>";
       debugValue("馃挜 Error en fetch", err);

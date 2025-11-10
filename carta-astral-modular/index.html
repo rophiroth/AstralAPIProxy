@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="styles.css">
   <script src="icons.js"></script>
   <script src="astroUtils.js"></script>
+  <script src="elements.js"></script>
   <script src="renderOutput.js"></script>
   <script src="tooltips.js"></script> 
   <script src="debug.js"></script>
@@ -34,8 +35,8 @@
     <button type="submit">Calcular Carta</button>
   </form>
   <div style='display: flex;'>
-    <div id="output"></div>
-    <div class="tree-wrapper">
+    <div id="output" class="hidden"></div>
+    <div class="tree-wrapper hidden">
       <canvas id="treeOfLifeCanvas" width="600" height="1000"></canvas>
     </div>
   </div>

@@ -40,6 +40,11 @@ canvas {
   padding: 1rem;
   border: 1px solid #ccc;
 }
+
+/* Ocultar al inicio hasta tener datos reales */
+.hidden {
+  display: none !important;
+}
 #suggestions {
   border: 1px solid #ccc;
   background: white;

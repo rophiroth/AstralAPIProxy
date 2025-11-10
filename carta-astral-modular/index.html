@@ -5,20 +5,43 @@
   <title>Carta Astral Modular</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="api-url" content="https://astralapiproxy.onrender.com/calculate" />
-  <link rel="stylesheet" href="styles.css?v=20251110">
-  <script src="icons.js?v=20251110"></script>
-  <script src="astroUtils.js?v=20251110"></script>
-  <script src="elements.js?v=20251110"></script>
-  <script src="renderOutput.js?v=20251110"></script>
-  <script src="tooltips.js?v=20251110"></script> 
-  <script src="debug.js?v=20251110"></script>
-  <script src="shemot.js?v=20251110"></script>
-  <script src="sefirotCoords.js?v=20251110"></script>
-	<script src="drawAscMcHouses.js?v=20251110"></script>
-	<script src="mapPlanetsToSefirot.js?v=20251110"></script>
-	<script src="drawTreeOfLife.js?v=20251110"></script>
-	
-	<script src="main.js?v=20251110"></script>
+  <script>
+    (function() {
+      var v = Date.now();
+      function addCSS(href) {
+        var l = document.createElement('link');
+        l.rel = 'stylesheet';
+        l.href = href + '?v=' + v;
+        document.head.appendChild(l);
+      }
+      function addJS(src) {
+        return new Promise(function(resolve, reject) {
+          var s = document.createElement('script');
+          s.src = src + '?v=' + v;
+          s.async = false;
+          s.onload = resolve;
+          s.onerror = reject;
+          document.head.appendChild(s);
+        });
+      }
+      addCSS('styles.css');
+      var scripts = [
+        'icons.js',
+        'astroUtils.js',
+        'elements.js',
+        'renderOutput.js',
+        'tooltips.js',
+        'debug.js',
+        'shemot.js',
+        'sefirotCoords.js',
+        'drawAscMcHouses.js',
+        'mapPlanetsToSefirot.js',
+        'drawTreeOfLife.js',
+        'main.js'
+      ];
+      scripts.reduce(function(p, src){ return p.then(function(){ return addJS(src); }); }, Promise.resolve());
+    })();
+  </script>
 
 
 </head>

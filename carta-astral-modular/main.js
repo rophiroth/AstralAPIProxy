@@ -1,5 +1,18 @@
 // main.js
 
+function getApiUrl() {
+  try {
+    const meta = document.querySelector('meta[name="api-url"]');
+    const fromMeta = meta && meta.getAttribute('content');
+    const hinted = (window.CALC_API || '').trim();
+    const base = fromMeta || hinted || 'https://astralapiproxy.onrender.com/calculate';
+    const u = new URL(base, window.location.origin);
+    return u.toString();
+  } catch (_) {
+    return 'https://astralapiproxy.onrender.com/calculate';
+  }
+}
+
 window.addEventListener("DOMContentLoaded", () => {
   debugValue("馃寪 Main.js cargado");
 
@@ -82,8 +95,8 @@ window.addEventListener("DOMContentLoaded", () => {
     }
 	const tz = await getTimezoneFromCoords(selectedLat,selectedLon);
     try {
-//      const response = await fetch("http://127.0.0.1:5000/calculate", {
-	const response = await fetch("http://192.168.1.83:5000/calculate", {
+      const API_URL = getApiUrl();
+	const response = await fetch(API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

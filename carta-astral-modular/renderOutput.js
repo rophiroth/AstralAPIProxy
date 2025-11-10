@@ -106,6 +106,7 @@ function renderElementSummary(container, planets, houses) {
   const domTotal   = window.dominantElement(totalCounts);
 
   const block = document.createElement('div');
+  block.className = 'element-summary';
   block.style.background = '#eefaf1';
   block.style.padding = '10px';
   block.style.borderRadius = '8px';

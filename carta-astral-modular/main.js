@@ -93,9 +93,16 @@ function initApp() {
       output.innerHTML = "<p>Selecciona una ubicación válida o permite el acceso a tu ubicación.</p>";
       return;
     }
-	const tz = await getTimezoneFromCoords(selectedLat,selectedLon);
+	let tz = 'UTC';
+	try {
+	  tz = await getTimezoneFromCoords(selectedLat,selectedLon);
+	} catch (tzErr) {
+	  debugValue("TZ detect error, using UTC", tzErr);
+	  tz = 'UTC';
+	}
     try {
       const API_URL = getApiUrl();
+      debugValue("API target", API_URL);
 	const response = await fetch(API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -107,6 +114,7 @@ function initApp() {
         })
       });
 
+      debugValue("Fetch status", response.status);
       const data = await response.json();
 	  const { planets, enoch, houses_data } = data;          // 鈫? bloque nuevo
 	  //const { ascendant, midheaven, houses } = houses_data;  // 鈫? lo que necesitaba el front

@@ -96,14 +96,21 @@ window.renderPlanetsAndHouses = renderPlanetsAndHouses;
 // Resumen por Elementos + IA
 // ==========================
 
-function renderElementSummary(container, planets, houses) {
+function renderElementSummary(container, planets, _houses) {
+  // Solo contar PLANETAS (sin casas)
   const planetCounts = window.countElementsForPlanets(planets);
-  const houseCounts  = window.countElementsForHouses(houses);
-  const totalCounts  = window.sumElementCounts(planetCounts, houseCounts);
 
-  const domPlanets = window.dominantElement(planetCounts);
-  const domHouses  = window.dominantElement(houseCounts);
-  const domTotal   = window.dominantElement(totalCounts);
+  // Polaridad clásica
+  const masc = (planetCounts.Fuego || 0) + (planetCounts.Aire || 0);
+  const fem  = (planetCounts.Tierra || 0) + (planetCounts.Agua || 0);
+  const dominantPolarity = masc === fem ? 'Empate' : (masc > fem ? 'Masculino' : 'Femenino');
+
+  // Exploración: Masculino(Fuego), Neutro(Aire), Femenino(Agua+Tierra)
+  const trio = {
+    'Masculino (Fuego)': planetCounts.Fuego || 0,
+    'Neutro (Aire)': planetCounts.Aire || 0,
+    'Femenino (Agua+Tierra)': (planetCounts.Agua || 0) + (planetCounts.Tierra || 0)
+  };
 
   const block = document.createElement('div');
   block.className = 'element-summary';
@@ -135,14 +142,13 @@ function renderElementSummary(container, planets, houses) {
       </thead>
       <tbody>
         ${row('Planetas', planetCounts)}
-        ${row('Casas', houseCounts)}
-        ${row('Total', totalCounts)}
       </tbody>
     </table>
     <div style="margin-top:8px;">
-      <strong>Dominante (Planetas):</strong> ${domPlanets.element || '-'} (${domPlanets.count})<br>
-      <strong>Dominante (Casas):</strong> ${domHouses.element || '-'} (${domHouses.count})<br>
-      <strong>Dominante (Total):</strong> ${domTotal.element || '-'} (${domTotal.count})
+      <strong>Polaridad:</strong> Masculino (🔥+💨): ${masc} | Femenino (💧+🌱): ${fem} → <em>${dominantPolarity}</em>
+      <br>
+      <strong>Tríada propuesta:</strong>
+      Masculino (🔥): ${trio['Masculino (Fuego)']} | Neutro (💨): ${trio['Neutro (Aire)']} | Femenino (💧+🌱): ${trio['Femenino (Agua+Tierra)']}
     </div>
     <div id="ai-section" style="margin-top:10px;background:#fff;padding:10px;border:1px solid #ccc;border-radius:6px;">
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
@@ -155,7 +161,7 @@ function renderElementSummary(container, planets, houses) {
 
   container.appendChild(block);
 
-  const prompt = buildElementPrompt(planetCounts, houseCounts, totalCounts, domTotal.element);
+  const prompt = buildElementPromptPolarity(planetCounts, masc, fem, trio, dominantPolarity);
   const btn = block.querySelector('#ai-generate');
   const out = block.querySelector('#ai-output');
 
@@ -165,7 +171,7 @@ function renderElementSummary(container, planets, houses) {
       const txt = await generateAIInsight(prompt);
       out.textContent = txt;
     } catch (e) {
-      out.textContent = 'No se pudo solicitar IA. Interpretación heurística local:\n' + heuristicInsight(totalCounts, domTotal.element);
+      out.textContent = 'No se pudo solicitar IA. Interpretación heurística local:\n' + heuristicInsightPolarity(planetCounts, masc, fem, trio, dominantPolarity);
     } finally {
       btn.disabled = false; btn.textContent = 'Generar interpretación con IA';
     }
@@ -175,36 +181,27 @@ function renderElementSummary(container, planets, houses) {
   btn.click();
 }
 
-function buildElementPrompt(planetCounts, houseCounts, totalCounts, dominant) {
+function buildElementPromptPolarity(planetCounts, masc, fem, trio, dominantPolarity) {
   const js = (o) => JSON.stringify(o);
   return (
-    'Eres un astrólogo. Resume brevemente la energía elemental ' +
-    'de esta carta. Da consejos prácticos y tono positivo. ' +
-    `Planetas: ${js(planetCounts)}. Casas: ${js(houseCounts)}. ` +
-    `Total: ${js(totalCounts)}. Elemento dominante: ${dominant || 'ninguno'}. ` +
+    'Eres astrólogo. Resume brevemente el balance elemental y de polaridad. ' +
+    'Usa tono positivo y consejos prácticos. ' +
+    `Planetas por elemento: ${js(planetCounts)}. ` +
+    `Polaridad (M/F): ${masc}/${fem} → ${dominantPolarity}. ` +
+    `Tríada (Fuego/Aire/Agua+Tierra): ${js(trio)}. ` +
     'Escribe 4–6 líneas en español neutro.'
   );
 }
 
-function heuristicInsight(totalCounts, dominant) {
+function heuristicInsightPolarity(planetCounts, masc, fem, trio, dominantPolarity) {
   const lines = [];
-  const pretty = (k, v) => `${k}: ${v}`;
-  lines.push(`Balance elemental — ${pretty('Fuego', totalCounts.Fuego)}, ${pretty('Tierra', totalCounts.Tierra)}, ${pretty('Aire', totalCounts.Aire)}, ${pretty('Agua', totalCounts.Agua)}.`);
-  if (dominant) {
-    const msg = {
-      Fuego: 'Predomina la acción y la iniciativa; canaliza con objetivos claros y constancia.',
-      Tierra: 'Predomina lo práctico y estable; cultiva flexibilidad y descanso consciente.',
-      Aire: 'Predomina lo mental y social; aterriza ideas con pequeños hábitos diarios.',
-      Agua: 'Predomina lo emocional e intuitivo; protege tus límites y rutinas de autocuidado.'
-    }[dominant];
-    if (msg) lines.push(msg);
-  }
-  // Observación secundaria
-  const entries = Object.entries(totalCounts).sort((a,b)=>b[1]-a[1]);
-  if (entries[1] && entries[1][1] > 0) {
-    lines.push(`Segundo elemento fuerte: ${entries[1][0].toLowerCase()}, útil como contrapeso.`);
-  }
-  lines.push('Sugerencia: observa en qué áreas (casas) se concentran, para aplicar foco.');
+  const p = planetCounts;
+  lines.push(`Elementos — Fuego: ${p.Fuego||0}, Tierra: ${p.Tierra||0}, Aire: ${p.Aire||0}, Agua: ${p.Agua||0}.`);
+  lines.push(`Polaridad — Masculino (🔥+💨): ${masc}, Femenino (💧+🌱): ${fem}. Dominante: ${dominantPolarity}.`);
+  lines.push(`Tríada — Fuego: ${trio['Masculino (Fuego)']}, Aire: ${trio['Neutro (Aire)']}, Agua+Tierra: ${trio['Femenino (Agua+Tierra)']}.`);
+  if (dominantPolarity === 'Masculino') lines.push('Tendencia a la iniciativa/actividad; sujeta la energía con objetivos concretos.');
+  else if (dominantPolarity === 'Femenino') lines.push('Tendencia a lo receptivo/emocional; apoya con rutinas y límites saludables.');
+  else lines.push('Balanceado: aprovecha la flexibilidad para alternar acción y contemplación.');
   return lines.join('\n');
 }
 

@@ -80,12 +80,12 @@ canvas {
 .metatron {
   font-family: 'MetatronHebrew';
 }
-/* Contenedor fijo para el Árbol de la Vida */
+/* Contenedor fijo para el Arbol de la Vida */
 .tree-wrapper {
-  width: 900px;        /* mismo ancho que el canvas */
-  overflow-x: auto;    /* si el viewport es más angosto, aparece scroll */
-  margin: 0;      /* centrado horizontal */
-  padding: 0; 
+  width: auto;
+  overflow-x: auto;
+  margin: 0;
+  padding: 0;
 }
 
 /* Evita espacios en blanco extra alrededor del canvas */
@@ -107,3 +107,26 @@ canvas {
 .element-summary th, .element-summary td { padding: 8px 10px; border-bottom: 1px solid #eef0f3; }
 .element-summary thead th { color: #475467; font-weight: 600; }
 .element-summary tbody tr:hover { background: #fafbfc; }
+
+/* Layout responsive para resultados */
+.layout {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+.layout #output {
+  flex: 1 1 380px;
+  max-width: 520px;
+}
+.layout .tree-wrapper {
+  flex: 0 0 640px;  /* reserva ancho del canvas */
+}
+
+/* Form mas compacto */
+#astroForm { max-width: 420px; }
+#coords { max-width: 420px; }
+
+@media (max-width: 1100px) {
+  .layout { flex-direction: column; }
+  .layout #output, .layout .tree-wrapper { max-width: 100%; flex: 1 1 auto; }
+}

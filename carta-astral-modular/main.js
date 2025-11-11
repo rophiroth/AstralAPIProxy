@@ -124,8 +124,8 @@ function initApp() {
       //    comenta o descomenta esta línea según quieras listar:
       renderPlanetsAndHouses(output, oplanets, houses_data);
 
-      // 2b) Resumen por elementos (planetas + casas) y mini IA
-      renderElementSummary(output, oplanets, houses_data.houses);
+      // 2b) Resumen por elementos (planetas + ascendente) y mini IA
+      renderElementSummary(output, oplanets, houses_data.ascendant);
 
       // 3) Dibuja en canvas
 

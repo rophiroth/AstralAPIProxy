@@ -96,16 +96,13 @@ window.renderPlanetsAndHouses = renderPlanetsAndHouses;
 // Resumen por Elementos + IA
 // ==========================
 
-function renderElementSummary(container, planets, _houses) {
-  // Solo contar PLANETAS (sin casas)
-  const planetCounts = window.countElementsForPlanets(planets);
-
-  // Polaridad clásica
-  const masc = (planetCounts.Fuego || 0) + (planetCounts.Aire || 0);
-  const fem  = (planetCounts.Tierra || 0) + (planetCounts.Agua || 0);
+function renderElementSummary(container, planets, ascendant) {
+  // Weighted elements + polarity, excluding Pluto, including Ascendant (Sun/Moon/Asc x2)
+  const ascSign = ascendant && ascendant.sign;
+  const { elements: planetCounts, polarity } = window.computeWeightedElementsPolarity(planets, ascSign);
+  const masc = polarity.masc;
+  const fem  = polarity.fem;
   const dominantPolarity = masc === fem ? 'Empate' : (masc > fem ? 'Masculino' : 'Femenino');
-
-  // Exploración: Masculino(Fuego), Neutro(Aire), Femenino(Agua+Tierra)
   const trio = {
     'Masculino (Fuego)': planetCounts.Fuego || 0,
     'Neutro (Aire)': planetCounts.Aire || 0,
@@ -128,6 +125,8 @@ function renderElementSummary(container, planets, _houses) {
       <td style="padding:4px 8px;">💧 ${counts.Agua}</td>
     </tr>`;
 
+  const fmt = (n) => (Math.abs(n - Math.round(n)) < 1e-9 ? Math.round(n) : (Math.round(n*100)/100).toFixed(2));
+
   block.innerHTML = `
     <h3>Resumen por Elementos</h3>
     <table style="border-collapse:collapse;">
@@ -141,14 +140,19 @@ function renderElementSummary(container, planets, _houses) {
         </tr>
       </thead>
       <tbody>
-        ${row('Planetas', planetCounts)}
+        ${row('Planetas (peso c/Asc)', {
+          Fuego: fmt(planetCounts.Fuego||0),
+          Tierra: fmt(planetCounts.Tierra||0),
+          Aire: fmt(planetCounts.Aire||0),
+          Agua: fmt(planetCounts.Agua||0)
+        })}
       </tbody>
     </table>
     <div style="margin-top:8px;">
-      <strong>Polaridad:</strong> Masculino (🔥+💨): ${masc} | Femenino (💧+🌱): ${fem} → <em>${dominantPolarity}</em>
+      <strong>Polaridad (ponderada):</strong> Masculino (🔥+💨): ${fmt(masc)} | Femenino (💧+🌱): ${fmt(fem)} → <em>${dominantPolarity}</em>
       <br>
       <strong>Tríada propuesta:</strong>
-      Masculino (🔥): ${trio['Masculino (Fuego)']} | Neutro (💨): ${trio['Neutro (Aire)']} | Femenino (💧+🌱): ${trio['Femenino (Agua+Tierra)']}
+      Masculino (🔥): ${fmt(trio['Masculino (Fuego)'])} | Neutro (💨): ${fmt(trio['Neutro (Aire)'])} | Femenino (💧+🌱): ${fmt(trio['Femenino (Agua+Tierra)'])}
     </div>
     <div id="ai-section" style="margin-top:10px;background:#fff;padding:10px;border:1px solid #ccc;border-radius:6px;">
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">

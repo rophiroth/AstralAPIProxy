@@ -63,11 +63,58 @@
     return { element: best, count: max > -Infinity ? max : 0 };
   }
 
+  // =====================
+  // Weighted scoring
+  // - Exclude Pluto
+  // - Include Ascendant
+  // - Sun, Moon, Ascendant have weight 2, others 1
+  // - Polarity weights per element:
+  //   Fire: 100% M, 0% F
+  //   Air:  75% M, 25% F
+  //   Earth:25% M, 75% F
+  //   Water:0% M, 100% F
+  // Returns { elements:{}, polarity:{masc,fem} }
+  function computeWeightedElementsPolarity(planets, ascendantSign) {
+    const elements = emptyElementCount();
+    let masc = 0, fem = 0;
+
+    const excluded = new Set(['Pluto']);
+    const specialDouble = new Set(['Sun','Moon','Ascendant']);
+
+    function addBySign(sign, who) {
+      if (!sign) return;
+      const el = SIGN_ELEMENT[sign];
+      if (!el) return;
+      const w = specialDouble.has(who) ? 2 : 1;
+      elements[el] += w;
+      // polarity split
+      if (el === 'Fuego') { masc += 1 * w; }
+      else if (el === 'Aire') { masc += 0.75 * w; fem += 0.25 * w; }
+      else if (el === 'Tierra') { masc += 0.25 * w; fem += 0.75 * w; }
+      else if (el === 'Agua') { fem += 1 * w; }
+    }
+
+    // Planets
+    for (const [name, body] of Object.entries(planets || {})) {
+      if (excluded.has(name)) continue;
+      const lon = body && typeof body.longitude === 'number' ? body.longitude : null;
+      if (lon == null) continue;
+      const sign = (typeof getZodiacSign === 'function') ? getZodiacSign(lon) : null;
+      if (!sign) continue;
+      addBySign(sign, name);
+    }
+
+    // Ascendant
+    if (ascendantSign) addBySign(ascendantSign, 'Ascendant');
+
+    return { elements, polarity: { masc, fem } };
+  }
+
   // Exponer globalmente
   window.elementFromSign = elementFromSign;
   window.countElementsForPlanets = countElementsForPlanets;
   window.countElementsForHouses = countElementsForHouses;
   window.sumElementCounts = sumElementCounts;
   window.dominantElement = dominantElement;
+  window.computeWeightedElementsPolarity = computeWeightedElementsPolarity;
 })();
-

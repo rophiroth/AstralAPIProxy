@@ -129,6 +129,23 @@ function renderElementSummary(container, planets, ascendant) {
 
   const fmt = (n) => (Math.abs(n - Math.round(n)) < 1e-9 ? Math.round(n) : (Math.round(n*100)/100).toFixed(2));
 
+  const maxWeighted = Math.max(
+    Number(weightedCounts.Fuego||0),
+    Number(weightedCounts.Tierra||0),
+    Number(weightedCounts.Aire||0),
+    Number(weightedCounts.Agua||0)
+  );
+  const isMax = (v) => Math.abs(Number(v) - maxWeighted) < 1e-6;
+
+  const puntajeRow = `
+    <tr>
+      <td style="padding:4px 8px;">Puntaje (ponderado)</td>
+      <td style="padding:4px 8px;">🔥 ${isMax(weightedCounts.Fuego||0) ? `<span class="hi">${fmt(weightedCounts.Fuego||0)}</span>` : fmt(weightedCounts.Fuego||0)}</td>
+      <td style="padding:4px 8px;">🌱 ${isMax(weightedCounts.Tierra||0) ? `<span class=\"hi\">${fmt(weightedCounts.Tierra||0)}</span>` : fmt(weightedCounts.Tierra||0)}</td>
+      <td style="padding:4px 8px;">💨 ${isMax(weightedCounts.Aire||0) ? `<span class=\"hi\">${fmt(weightedCounts.Aire||0)}</span>` : fmt(weightedCounts.Aire||0)}</td>
+      <td style="padding:4px 8px;">💧 ${isMax(weightedCounts.Agua||0) ? `<span class=\"hi\">${fmt(weightedCounts.Agua||0)}</span>` : fmt(weightedCounts.Agua||0)}</td>
+    </tr>`;
+
   block.innerHTML = `
     <h3>Resumen por Elementos</h3>
     <table style="border-collapse:collapse;">
@@ -148,12 +165,7 @@ function renderElementSummary(container, planets, ascendant) {
           Aire: fmt(rawCounts.Aire||0),
           Agua: fmt(rawCounts.Agua||0)
         })}
-        ${row('Puntaje (ponderado)', {
-          Fuego: fmt(weightedCounts.Fuego||0),
-          Tierra: fmt(weightedCounts.Tierra||0),
-          Aire: fmt(weightedCounts.Aire||0),
-          Agua: fmt(weightedCounts.Agua||0)
-        })}
+        ${puntajeRow}
       </tbody>
     </table>
     <div style="margin-top:8px;">

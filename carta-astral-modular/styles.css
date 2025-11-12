@@ -108,6 +108,14 @@ canvas {
 .element-summary thead th { color: #475467; font-weight: 600; }
 .element-summary tbody tr:hover { background: #fafbfc; }
 
+/* Destacado para máximos empatados */
+.element-summary .hi {
+  background: #fff4cc;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-weight: 600;
+}
+
 /* Layout responsive para resultados */
 .layout {
   display: flex;

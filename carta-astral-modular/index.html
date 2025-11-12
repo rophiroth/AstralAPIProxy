@@ -5,50 +5,14 @@
   <title>Carta Astral Modular</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="api-url" content="https://astralapiproxy.onrender.com/calculate" />
-  <script>
-    (function() {
-      var v = Date.now();
-      function addCSS(href) {
-        var l = document.createElement('link');
-        l.rel = 'stylesheet';
-        l.href = href + '?v=' + v;
-        document.head.appendChild(l);
-      }
-      function addJS(src) {
-        return new Promise(function(resolve, reject) {
-          var s = document.createElement('script');
-          s.src = src + '?v=' + v;
-          s.async = false;
-          s.onload = resolve;
-          s.onerror = reject;
-          document.head.appendChild(s);
-        });
-      }
-      addCSS('styles.css');
-      var scripts = [
-        'icons.js',
-        'astroUtils.js',
-        'elements.js',
-        'renderOutput.js',
-        'tooltips.js',
-        'debug.js',
-        'shemot.js',
-        'sefirotCoords.js',
-        'drawAscMcHouses.js',
-        'mapPlanetsToSefirot.js',
-        'drawTreeOfLife.js',
-        'main.js'
-      ];
-      scripts.reduce(function(p, src){ return p.then(function(){ return addJS(src); }); }, Promise.resolve());
-    })();
-  </script>
+  <link rel="stylesheet" href="styles.css">
 
 
 </head>
 <body>
   <div class="page">
   <h1>Carta Astral Modular</h1>
-  <form id="astroForm">
+  <form id="astroForm" class="form-grid">
     <label>Fecha y hora de nacimiento:
       <input type="datetime-local" id="datetime" value="1986-10-13T01:00">
     </label>
@@ -65,6 +29,36 @@
       <canvas id="treeOfLifeCanvas" width="600" height="1000"></canvas>
     </div>
   </div>
+  <script>
+    (function() {
+      var v = Date.now();
+      function addJS(src) {
+        return new Promise(function(resolve, reject) {
+          var s = document.createElement('script');
+          s.src = src + '?v=' + v;
+          s.async = false; // mantener orden de carga
+          s.onload = resolve;
+          s.onerror = reject;
+          document.body.appendChild(s);
+        });
+      }
+      var scripts = [
+        'debug.js',
+        'icons.js',
+        'astroUtils.js',
+        'elements.js',
+        'renderOutput.js',
+        'tooltips.js',
+        'shemot.js',
+        'sefirotCoords.js',
+        'drawAscMcHouses.js',
+        'mapPlanetsToSefirot.js',
+        'drawTreeOfLife.js',
+        'main.js'
+      ];
+      scripts.reduce(function(p, src){ return p.then(function(){ return addJS(src); }); }, Promise.resolve());
+    })();
+  </script>
   </div>
 </body>
 </html>

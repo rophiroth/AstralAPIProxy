@@ -188,7 +188,8 @@ function renderElementSummary(container, planets, ascendant) {
 
   container.appendChild(block);
 
-  const prompt = buildElementPromptPolarity(planetCounts, masc, fem, trio, dominantPolarity);
+  // Usar los conteos ponderados para el prompt/heurística
+  const prompt = buildElementPromptPolarity(weightedCounts, masc, fem, trio, dominantPolarity);
   const btn = block.querySelector('#ai-generate');
   const out = block.querySelector('#ai-output');
 
@@ -198,7 +199,7 @@ function renderElementSummary(container, planets, ascendant) {
       const txt = await generateAIInsight(prompt);
       out.textContent = txt;
     } catch (e) {
-      out.textContent = 'No se pudo solicitar IA. Interpretación heurística local:\n' + heuristicInsightPolarity(planetCounts, masc, fem, trio, dominantPolarity);
+      out.textContent = 'No se pudo solicitar IA. Interpretación heurística local:\n' + heuristicInsightPolarity(weightedCounts, masc, fem, trio, dominantPolarity);
     } finally {
       btn.disabled = false; btn.textContent = 'Generar interpretación con IA';
     }

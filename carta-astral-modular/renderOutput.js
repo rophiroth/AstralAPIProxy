@@ -110,11 +110,7 @@ function renderElementSummary(container, planets, ascendant) {
   const masc = polarity.masc;
   const fem  = polarity.fem;
   const dominantPolarity = masc === fem ? 'Empate' : (masc > fem ? 'Masculino' : 'Femenino');
-  const trio = {
-    'Masculino (Fuego)': weightedCounts.Fuego || 0,
-    'Neutro (Aire)': weightedCounts.Aire || 0,
-    'Femenino (Agua+Tierra)': (weightedCounts.Agua || 0) + (weightedCounts.Tierra || 0)
-  };
+  \n\n  const mascW = (weightedCounts.Fuego||0) + (weightedCounts.Aire||0);\n  const femW  = (weightedCounts.Agua||0) + (weightedCounts.Tierra||0);
 
   const block = document.createElement('div');
   block.className = 'element-summary';
@@ -316,4 +312,5 @@ async function generateAIInsight(prompt) {
 }
 
 window.renderElementSummary = renderElementSummary;
+
 

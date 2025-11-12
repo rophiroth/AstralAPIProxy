@@ -138,7 +138,7 @@ canvas {
 .element-summary .cell-sub { color: #667085; font-size: 12px; margin-top: 2px; }
 
 /* Theme toggle */
-.theme-toggle { all: unset; cursor: pointer; color: var(--text); border: 1px solid var(--border); padding: 4px 8px; border-radius: 8px; line-height: 1; font-size: 14px; }
+.theme-toggle { all: unset; cursor: pointer; color: var(--text); border: 1px solid var(--border); padding: 4px 8px; border-radius: 8px; line-height: 1; font-size: 14px; position: fixed; top: 12px; right: 12px; z-index: 1000; }
 .theme-toggle:hover { background: rgba(0,0,0,0.03); }
 
 /* Layout responsive para resultados */

@@ -161,6 +161,7 @@
   function listElementContributorsDetailed(planets, ascendantSign) {
     const out = { Fuego: [], Tierra: [], Aire: [], Agua: [] };
     const excluded = new Set(['Pluto']);
+    const specialDouble = new Set(['Sun','Moon','Ascendant']);
     for (const [name, body] of Object.entries(planets || {})) {
       if (excluded.has(name)) continue;
       const lon = body && typeof body.longitude === 'number' ? body.longitude : null;
@@ -168,11 +169,12 @@
       const sign = (typeof getZodiacSign === 'function') ? getZodiacSign(lon) : null;
       if (!sign) continue;
       const el = SIGN_ELEMENT[sign]; if (!el) continue;
-      const token = `<span title="${(PLANET_LABEL_ES[name]||name)} en ${(SIGN_LABEL_ES[sign]||sign)}">${(PLANET_SYMBOL[name]||name)}${(SIGN_SYMBOL[sign]||'')}</span>`;
+      const dbl = specialDouble.has(name) ? '×2' : '';
+      const token = `<span title="${(PLANET_LABEL_ES[name]||name)} en ${(SIGN_LABEL_ES[sign]||sign)}">${(PLANET_SYMBOL[name]||name)}${(SIGN_SYMBOL[sign]||'')}${dbl}</span>`;
       out[el].push(token);
     }
     if (ascendantSign) {
-      const el = SIGN_ELEMENT[ascendantSign]; if (el) out[el].push(`<span title="Ascendente">${PLANET_SYMBOL.Ascendant}</span>${(SIGN_SYMBOL[ascendantSign]||'')}`);
+      const el = SIGN_ELEMENT[ascendantSign]; if (el) out[el].push(`<span title="Ascendente">${PLANET_SYMBOL.Ascendant}</span>${(SIGN_SYMBOL[ascendantSign]||'')}×2`);
     }
     return out;
   }
@@ -181,6 +183,7 @@
   function listModalityContributorsDetailed(planets, ascendantSign) {
     const out = { Cardinal: [], Fijo: [], Mutable: [] };
     const excluded = new Set(['Pluto']);
+    const specialDouble = new Set(['Sun','Moon','Ascendant']);
     for (const [name, body] of Object.entries(planets || {})) {
       if (excluded.has(name)) continue;
       const lon = body && typeof body.longitude === 'number' ? body.longitude : null;
@@ -188,11 +191,12 @@
       const sign = (typeof getZodiacSign === 'function') ? getZodiacSign(lon) : null;
       if (!sign) continue;
       const mod = SIGN_MODALITY[sign]; if (!mod) continue;
-      const token = `<span title="${(PLANET_LABEL_ES[name]||name)} en ${(SIGN_LABEL_ES[sign]||sign)}">${(PLANET_SYMBOL[name]||name)}${(SIGN_SYMBOL[sign]||'')}</span>`;
+      const dbl = specialDouble.has(name) ? '×2' : '';
+      const token = `<span title="${(PLANET_LABEL_ES[name]||name)} en ${(SIGN_LABEL_ES[sign]||sign)}">${(PLANET_SYMBOL[name]||name)}${(SIGN_SYMBOL[sign]||'')}${dbl}</span>`;
       out[mod].push(token);
     }
     if (ascendantSign) {
-      const mod = SIGN_MODALITY[ascendantSign]; if (mod) out[mod].push(`<span title="Ascendente">${PLANET_SYMBOL.Ascendant}</span>${(SIGN_SYMBOL[ascendantSign]||'')}`);
+      const mod = SIGN_MODALITY[ascendantSign]; if (mod) out[mod].push(`<span title="Ascendente">${PLANET_SYMBOL.Ascendant}</span>${(SIGN_SYMBOL[ascendantSign]||'')}×2`);
     }
     return out;
   }

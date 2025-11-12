@@ -118,7 +118,7 @@ function renderElementSummary(container, planets, ascendant) {
 
   const block = document.createElement('div');
   block.className = 'element-summary';
-  block.style.background = '#eefaf1';
+  block.style.background = 'var(--card-bg)';
   block.style.padding = '10px';
   block.style.borderRadius = '8px';
   block.style.marginTop = '10px';

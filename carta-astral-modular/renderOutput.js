@@ -102,6 +102,9 @@ function renderElementSummary(container, planets, ascendant) {
   const rawCounts = window.computeRawElementsCounts(planets, ascSign);
   // Weighted elements + polarity — excluye Plutón, incluye Ascendente con ponderaciones
   const { elements: weightedCounts, polarity } = window.computeWeightedElementsPolarity(planets, ascSign);
+  // Modalities
+  const rawMods = window.computeRawModalityCounts(planets, ascSign);
+  const weightedMods = window.computeWeightedModalityCounts(planets, ascSign);
   const masc = polarity.masc;
   const fem  = polarity.fem;
   const dominantPolarity = masc === fem ? 'Empate' : (masc > fem ? 'Masculino' : 'Femenino');
@@ -168,11 +171,59 @@ function renderElementSummary(container, planets, ascendant) {
         ${puntajeRow}
       </tbody>
     </table>
+    <h3 style="margin-top:14px;">Resumen por Modos</h3>
+    ${(() => {
+      const maxWM = Math.max(Number(weightedMods.Cardinal||0), Number(weightedMods.Fijo||0), Number(weightedMods.Mutable||0));
+      const hiM = (v) => Math.abs(Number(v) - maxWM) < 1e-6;
+      return `
+      <table style="border-collapse:collapse;">
+        <thead>
+          <tr>
+            <th style="text-align:left;padding:4px 8px;">Fuente</th>
+            <th style="text-align:left;padding:4px 8px;">Cardinal</th>
+            <th style="text-align:left;padding:4px 8px;">Fijo</th>
+            <th style="text-align:left;padding:4px 8px;">Mutable</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="padding:4px 8px;">Conteo (unitario)</td>
+            <td style="padding:4px 8px;">${fmt(rawMods.Cardinal||0)}</td>
+            <td style="padding:4px 8px;">${fmt(rawMods.Fijo||0)}</td>
+            <td style="padding:4px 8px;">${fmt(rawMods.Mutable||0)}</td>
+          </tr>
+          <tr>
+            <td style="padding:4px 8px;">Puntaje (ponderado)</td>
+            <td style="padding:4px 8px;">${hiM(weightedMods.Cardinal||0) ? `<span class="hi">${fmt(weightedMods.Cardinal||0)}</span>` : fmt(weightedMods.Cardinal||0)}</td>
+            <td style="padding:4px 8px;">${hiM(weightedMods.Fijo||0) ? `<span class="hi">${fmt(weightedMods.Fijo||0)}</span>` : fmt(weightedMods.Fijo||0)}</td>
+            <td style="padding:4px 8px;">${hiM(weightedMods.Mutable||0) ? `<span class="hi">${fmt(weightedMods.Mutable||0)}</span>` : fmt(weightedMods.Mutable||0)}</td>
+          </tr>
+        </tbody>
+      </table>`;
+    })()}
+    <div style="margin-top:6px;color:#475467;font-size:13px;">
+      <strong>Aportantes (planetas+Asc):</strong>
+      Fuego: ${(window.listElementContributors(planets, ascSign).Fuego || []).join(' ') || '-'} ·
+      Tierra: ${(window.listElementContributors(planets, ascSign).Tierra || []).join(' ') || '-'} ·
+      Aire: ${(window.listElementContributors(planets, ascSign).Aire || []).join(' ') || '-'} ·
+      Agua: ${(window.listElementContributors(planets, ascSign).Agua || []).join(' ') || '-'}
+    </div>
     <div style="margin-top:8px;">
       <strong>Polaridad (ponderada):</strong> Masculino (🔥+💨): ${fmt(masc)} | Femenino (💧+🌱): ${fmt(fem)} → <em>${dominantPolarity}</em>
       <br>
       <strong>Tríada propuesta:</strong>
-      Masculino (🔥): ${fmt(trio['Masculino (Fuego)'])} | Neutro (💨): ${fmt(trio['Neutro (Aire)'])} | Femenino (💧+🌱): ${fmt(trio['Femenino (Agua+Tierra)'])}
+      ${(() => {
+        const maxT = Math.max(Number(trio['Masculino (Fuego)']), Number(trio['Neutro (Aire)']), Number(trio['Femenino (Agua+Tierra)']));
+        const hi = (val, label, icon) => {
+          const txt = `${label} (${icon}): ${fmt(val)}`;
+          return Math.abs(Number(val) - maxT) < 1e-6 ? `<span class="hi">${txt}</span>` : txt;
+        };
+        return [
+          hi(trio['Masculino (Fuego)'], 'Masculino', '🔥'),
+          hi(trio['Neutro (Aire)'], 'Neutro', '💨'),
+          hi(trio['Femenino (Agua+Tierra)'], 'Femenino', '💧+🌱')
+        ].join(' | ');
+      })()}
     </div>
     <div style="margin-top:6px;color:#667085;font-size:12px;">
       <em>Notas:</em> Conteo excluye Plutón e incluye Ascendente (1). Puntaje pondera Sol/Luna/Asc x2; Aire 75/25, Tierra 25/75.

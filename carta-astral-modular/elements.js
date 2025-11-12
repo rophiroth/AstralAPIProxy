@@ -16,6 +16,19 @@
     Pisces: "Agua"
   };
 
+  // Unicode glyphs for zodiac signs
+  const SIGN_SYMBOL = {
+    Aries: '♈', Taurus: '♉', Gemini: '♊', Cancer: '♋', Leo: '♌', Virgo: '♍',
+    Libra: '♎', Scorpio: '♏', Sagittarius: '♐', Capricorn: '♑', Aquarius: '♒', Pisces: '♓'
+  };
+
+  // Modalities (Cardinal, Fixed, Mutable)
+  const SIGN_MODALITY = {
+    Aries: 'Cardinal', Cancer: 'Cardinal', Libra: 'Cardinal', Capricorn: 'Cardinal',
+    Taurus: 'Fijo', Leo: 'Fijo', Scorpio: 'Fijo', Aquarius: 'Fijo',
+    Gemini: 'Mutable', Virgo: 'Mutable', Sagittarius: 'Mutable', Pisces: 'Mutable'
+  };
+
   function elementFromSign(sign) {
     return SIGN_ELEMENT[sign] || "";
   }
@@ -133,6 +146,69 @@
     return counts;
   }
 
+  // Raw modality counts (unit weight), exclude Pluto, include Asc as 1
+  function computeRawModalityCounts(planets, ascendantSign) {
+    const counts = { Cardinal: 0, Fijo: 0, Mutable: 0 };
+    const excluded = new Set(['Pluto']);
+    for (const [name, body] of Object.entries(planets || {})) {
+      if (excluded.has(name)) continue;
+      const lon = body && typeof body.longitude === 'number' ? body.longitude : null;
+      if (lon == null) continue;
+      const sign = (typeof getZodiacSign === 'function') ? getZodiacSign(lon) : null;
+      if (!sign) continue;
+      const mod = SIGN_MODALITY[sign];
+      if (mod) counts[mod] += 1;
+    }
+    if (ascendantSign) {
+      const mod = SIGN_MODALITY[ascendantSign];
+      if (mod) counts[mod] += 1;
+    }
+    return counts;
+  }
+
+  // Weighted modality counts — Sun/Moon/Asc x2; excluye Pluto
+  function computeWeightedModalityCounts(planets, ascendantSign) {
+    const counts = { Cardinal: 0, Fijo: 0, Mutable: 0 };
+    const excluded = new Set(['Pluto']);
+    const specialDouble = new Set(['Sun','Moon','Ascendant']);
+    function add(sign, who) {
+      const mod = SIGN_MODALITY[sign];
+      if (!mod) return;
+      const w = specialDouble.has(who) ? 2 : 1;
+      counts[mod] += w;
+    }
+    for (const [name, body] of Object.entries(planets || {})) {
+      if (excluded.has(name)) continue;
+      const lon = body && typeof body.longitude === 'number' ? body.longitude : null;
+      if (lon == null) continue;
+      const sign = (typeof getZodiacSign === 'function') ? getZodiacSign(lon) : null;
+      if (!sign) continue;
+      add(sign, name);
+    }
+    if (ascendantSign) add(ascendantSign, 'Ascendant');
+    return counts;
+  }
+
+  // List contributors per element (glyphs), exclude Pluto; include Asc
+  function listElementContributors(planets, ascendantSign) {
+    const out = { Fuego: [], Tierra: [], Aire: [], Agua: [] };
+    const excluded = new Set(['Pluto']);
+    for (const [name, body] of Object.entries(planets || {})) {
+      if (excluded.has(name)) continue;
+      const lon = body && typeof body.longitude === 'number' ? body.longitude : null;
+      if (lon == null) continue;
+      const sign = (typeof getZodiacSign === 'function') ? getZodiacSign(lon) : null;
+      if (!sign) continue;
+      const el = SIGN_ELEMENT[sign];
+      if (el) out[el].push(SIGN_SYMBOL[sign] || sign);
+    }
+    if (ascendantSign) {
+      const el = SIGN_ELEMENT[ascendantSign];
+      if (el) out[el].push(SIGN_SYMBOL[ascendantSign] || ascendantSign);
+    }
+    return out;
+  }
+
   // Exponer globalmente
   window.elementFromSign = elementFromSign;
   window.countElementsForPlanets = countElementsForPlanets;
@@ -141,4 +217,7 @@
   window.dominantElement = dominantElement;
   window.computeWeightedElementsPolarity = computeWeightedElementsPolarity;
   window.computeRawElementsCounts = computeRawElementsCounts;
+  window.computeRawModalityCounts = computeRawModalityCounts;
+  window.computeWeightedModalityCounts = computeWeightedModalityCounts;
+  window.listElementContributors = listElementContributors;
 })();

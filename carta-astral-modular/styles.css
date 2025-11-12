@@ -12,6 +12,9 @@ body {
   background: linear-gradient(180deg, #f7f8fb 0%, #eef2f7 100%);
   color: #1d1e20;
 }
+/* Container */
+.page { max-width: 1200px; margin: 0 auto; }
+h1 { font-weight: 700; letter-spacing: -0.02em; }
 label {
   display: block;
   margin-top: 1rem;

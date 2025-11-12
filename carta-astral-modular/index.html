@@ -4,6 +4,12 @@
   <meta charset="UTF-8">
   <title>Carta Astral Modular</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script>
+    try {
+      var pref = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', pref);
+    } catch(e) {}
+  </script>
   <meta name="api-url" content="https://astralapiproxy.onrender.com/calculate" />
   <link rel="stylesheet" href="styles.css">
 
@@ -11,7 +17,10 @@
 </head>
 <body>
   <div class="page">
-  <h1>Carta Astral Modular</h1>
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+    <h1>Carta Astral Modular</h1>
+    <button id="themeToggle" type="button" class="theme-toggle" aria-label="Cambiar tema">🌓</button>
+  </div>
   <form id="astroForm" class="form-grid">
     <label>Fecha y hora de nacimiento:
       <input type="datetime-local" id="datetime" value="1986-10-13T01:00">
@@ -57,6 +66,17 @@
         'main.js'
       ];
       scripts.reduce(function(p, src){ return p.then(function(){ return addJS(src); }); }, Promise.resolve());
+
+      // Theme toggle wiring
+      try {
+        var btn = document.getElementById('themeToggle');
+        if (btn) btn.addEventListener('click', function(){
+          var cur = document.documentElement.getAttribute('data-theme') || 'light';
+          var next = (cur === 'dark') ? 'light' : 'dark';
+          document.documentElement.setAttribute('data-theme', next);
+          localStorage.setItem('theme', next);
+        });
+      } catch(e) {}
     })();
   </script>
   </div>

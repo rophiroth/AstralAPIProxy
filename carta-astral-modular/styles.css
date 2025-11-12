@@ -6,11 +6,25 @@
   font-family: 'MetatronHebrew';
   src: url('Metatron-Regular.ttf') format('truetype');
 }
+:root {
+  --bg: #f7f8fb;
+  --text: #1d1e20;
+  --card-bg: #ffffff;
+  --border: #e4e7ec;
+  --muted: #667085;
+}
+[data-theme='dark'] {
+  --bg: #0f1115;
+  --text: #e6e7eb;
+  --card-bg: #171a21;
+  --border: #303642;
+  --muted: #9aa4b2;
+}
 body {
   font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, sans-serif;
   padding: 2rem;
-  background: linear-gradient(180deg, #f7f8fb 0%, #eef2f7 100%);
-  color: #1d1e20;
+  background: var(--bg);
+  color: var(--text);
 }
 /* Container */
 .page { max-width: 1200px; margin: 0 auto; }
@@ -45,9 +59,9 @@ canvas {
 }
 #output, #coords {
   margin-top: 1rem;
-  background: #fff;
+  background: var(--card-bg);
   padding: 1rem;
-  border: 1px solid #e4e7ec;
+  border: 1px solid var(--border);
   border-radius: 12px;
   box-shadow: 0 8px 24px rgba(16,24,40,0.06);
 }
@@ -57,8 +71,8 @@ canvas {
   display: none !important;
 }
 #suggestions {
-  border: 1px solid #e4e7ec;
-  background: #fff;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
   max-width: 100%;
   position: absolute;
   z-index: 10;
@@ -118,6 +132,14 @@ canvas {
   border-radius: 6px;
   font-weight: 600;
 }
+
+/* Subtexto de celdas (aportantes) */
+.element-summary .cell-top { font-weight: 600; }
+.element-summary .cell-sub { color: #667085; font-size: 12px; margin-top: 2px; }
+
+/* Theme toggle */
+.theme-toggle { background: transparent; border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: 8px; cursor: pointer; }
+.theme-toggle:hover { background: rgba(0,0,0,0.03); }
 
 /* Layout responsive para resultados */
 .layout {

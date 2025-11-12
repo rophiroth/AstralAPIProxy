@@ -105,6 +105,8 @@ function renderElementSummary(container, planets, ascendant) {
   // Modalities
   const rawMods = window.computeRawModalityCounts(planets, ascSign);
   const weightedMods = window.computeWeightedModalityCounts(planets, ascSign);
+  const contribEl = window.listElementContributorsDetailed ? window.listElementContributorsDetailed(planets, ascSign) : null;
+  const contribMod = window.listModalityContributorsDetailed ? window.listModalityContributorsDetailed(planets, ascSign) : null;
   const masc = polarity.masc;
   const fem  = polarity.fem;
   const dominantPolarity = masc === fem ? 'Empate' : (masc > fem ? 'Masculino' : 'Femenino');
@@ -120,6 +122,18 @@ function renderElementSummary(container, planets, ascendant) {
   block.style.padding = '10px';
   block.style.borderRadius = '8px';
   block.style.marginTop = '10px';
+  // Celdas con aportantes (planeta+signo)
+  const cell = (icon, val, tokens) => `
+      <div class="cell-top">${icon} ${val}</div>
+      <div class="cell-sub">${(tokens && tokens.length) ? tokens.join(' ') : '-'}</div>`;
+  const row2 = (label, counts, tokensByEl) => `
+    <tr>
+      <td style="padding:4px 8px;">${label}</td>
+      <td style="padding:4px 8px;">${cell('🔥', counts.Fuego, tokensByEl ? tokensByEl.Fuego : null)}</td>
+      <td style="padding:4px 8px;">${cell('🌱', counts.Tierra, tokensByEl ? tokensByEl.Tierra : null)}</td>
+      <td style="padding:4px 8px;">${cell('💨', counts.Aire, tokensByEl ? tokensByEl.Aire : null)}</td>
+      <td style="padding:4px 8px;">${cell('💧', counts.Agua, tokensByEl ? tokensByEl.Agua : null)}</td>
+    </tr>`;
 
   const row = (label, counts) => `
     <tr>
@@ -162,12 +176,12 @@ function renderElementSummary(container, planets, ascendant) {
         </tr>
       </thead>
       <tbody>
-        ${row('Conteo (unitario)', {
+        ${row2('Conteo (unitario)', {
           Fuego: fmt(rawCounts.Fuego||0),
           Tierra: fmt(rawCounts.Tierra||0),
           Aire: fmt(rawCounts.Aire||0),
           Agua: fmt(rawCounts.Agua||0)
-        })}
+        }, window.listElementContributorsDetailed ? window.listElementContributorsDetailed(planets, ascSign) : null)}
         ${puntajeRow}
       </tbody>
     </table>
@@ -188,9 +202,9 @@ function renderElementSummary(container, planets, ascendant) {
         <tbody>
           <tr>
             <td style="padding:4px 8px;">Conteo (unitario)</td>
-            <td style="padding:4px 8px;">${fmt(rawMods.Cardinal||0)}</td>
-            <td style="padding:4px 8px;">${fmt(rawMods.Fijo||0)}</td>
-            <td style="padding:4px 8px;">${fmt(rawMods.Mutable||0)}</td>
+            <td style="padding:4px 8px;"><div class="cell-top">${fmt(rawMods.Cardinal||0)}</div><div class="cell-sub">${(contribMod && contribMod.Cardinal && contribMod.Cardinal.length ? contribMod.Cardinal.join(' ') : '-')}</div></td>
+            <td style="padding:4px 8px;"><div class="cell-top">${fmt(rawMods.Fijo||0)}</div><div class="cell-sub">${(contribMod && contribMod.Fijo && contribMod.Fijo.length ? contribMod.Fijo.join(' ') : '-')}</div></td>
+            <td style="padding:4px 8px;"><div class="cell-top">${fmt(rawMods.Mutable||0)}</div><div class="cell-sub">${(contribMod && contribMod.Mutable && contribMod.Mutable.length ? contribMod.Mutable.join(' ') : '-')}</div></td>
           </tr>
           <tr>
             <td style="padding:4px 8px;">Puntaje (ponderado)</td>

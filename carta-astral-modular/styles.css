@@ -57,14 +57,7 @@ canvas {
   border: 1px solid #ccc;
   display: block;
 }
-#output, #coords {
-  margin-top: 1rem;
-  background: var(--card-bg);
-  padding: 1rem;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(16,24,40,0.06);
-}
+#output, #coords { display: none !important; }
 
 /* Ocultar al inicio hasta tener datos reales */
 .hidden {
@@ -157,7 +150,7 @@ canvas {
 
 /* Form mas compacto */
 #astroForm { max-width: 100%; }
-#coords { display: none; }
+#coords { display: none !important; }
 
 /* Grid para formulario */
 .form-grid {
@@ -178,3 +171,4 @@ button[type="submit"] { width: auto; padding: 10px 14px; }
   .layout { flex-direction: column; }
   .layout #output, .layout .tree-wrapper { max-width: 100%; flex: 1 1 auto; }
 }
+

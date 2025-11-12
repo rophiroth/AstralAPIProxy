@@ -60,13 +60,12 @@ function setupTooltip(canvas, houses, planets) {
         //  return;
         }
 
-        let tooltipContent = `<strong>House ${h.house}</strong><br>${getZodiacEmoji(h.sign)} ${h.sign} ${decimals(h.position, 4)}°
-		<span style="font-family:'StamHebrew'; font-size: 18px;">${hebrewLettersMap[h.house]}</span><br><br>`;
+        let tooltipContent = `<strong>House ${h.house}</strong><br>${getZodiacEmoji(h.sign)} ${h.sign} ${decimals(h.position, 4)}\\u00B0\n\t\t<spanspan style="font-family:'StamHebrew'; font-size: 18px;">${(window.hebrewLettersMap||{})[h.house]}</span><br><br>`;
 
 		if (planetsInHouse && planetsInHouse.length > 0) {
 		  tooltipContent += planetsInHouse.map(p => {
 			const emoji = window.planetEmojis?.[p.name] || "";
-			const zodiac = window.getZodiacSign([p.longitude]) || "";
+			const zodiac = window.getZodiacSign(p.longitude) || "";
 			return `${emoji} ${p.name}: ${getZodiacEmoji(zodiac)} ${zodiac} ${decimals(p.longitude%30, 4)}° ${decimals(p.longitude, 4)}°`;
 		  }).join("<br>");
 		} else {
@@ -91,3 +90,4 @@ function setupTooltip(canvas, houses, planets) {
 }
 
 window.setupTooltip = setupTooltip;
+

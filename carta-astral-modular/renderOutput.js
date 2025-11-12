@@ -216,14 +216,7 @@ function renderElementSummary(container, planets, ascendant) {
       </table>`;
     })()}
     <div style="margin-top:6px;color:#475467;font-size:13px;">
-      <strong>Aportantes (planetas+Asc):</strong>
-      Fuego: ${(window.listElementContributors(planets, ascSign).Fuego || []).join(' ') || '-'} ·
-      Tierra: ${(window.listElementContributors(planets, ascSign).Tierra || []).join(' ') || '-'} ·
-      Aire: ${(window.listElementContributors(planets, ascSign).Aire || []).join(' ') || '-'} ·
-      Agua: ${(window.listElementContributors(planets, ascSign).Agua || []).join(' ') || '-'}
-    </div>
-    <div style="margin-top:8px;">
-      <strong>Polaridad (ponderada):</strong> Masculino (🔥+💨): ${fmt(masc)} | Femenino (💧+🌱): ${fmt(fem)} → <em>${dominantPolarity}</em>
+      <strong>Polaridad (conteo):</strong> Masculino (🔥+💨): ${fmt((rawCounts.Fuego||0)+(rawCounts.Aire||0))} | Femenino (💧+🌱): ${fmt((rawCounts.Agua||0)+(rawCounts.Tierra||0))} → <em>${dominantPolarity}</em>
       <br>
       <strong>Tríada propuesta:</strong>
       ${(() => {
@@ -323,3 +316,4 @@ async function generateAIInsight(prompt) {
 }
 
 window.renderElementSummary = renderElementSummary;
+

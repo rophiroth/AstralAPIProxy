@@ -110,6 +110,29 @@
     return { elements, polarity: { masc, fem } };
   }
 
+  // =====================
+  // Raw counts (unit weight)
+  // - Exclude Pluto
+  // - Include Ascendant (unit)
+  function computeRawElementsCounts(planets, ascendantSign) {
+    const counts = emptyElementCount();
+    const excluded = new Set(['Pluto']);
+    for (const [name, body] of Object.entries(planets || {})) {
+      if (excluded.has(name)) continue;
+      const lon = body && typeof body.longitude === 'number' ? body.longitude : null;
+      if (lon == null) continue;
+      const sign = (typeof getZodiacSign === 'function') ? getZodiacSign(lon) : null;
+      if (!sign) continue;
+      const el = SIGN_ELEMENT[sign];
+      if (el) counts[el] += 1;
+    }
+    if (ascendantSign) {
+      const el = SIGN_ELEMENT[ascendantSign];
+      if (el) counts[el] += 1;
+    }
+    return counts;
+  }
+
   // Exponer globalmente
   window.elementFromSign = elementFromSign;
   window.countElementsForPlanets = countElementsForPlanets;
@@ -117,4 +140,5 @@
   window.sumElementCounts = sumElementCounts;
   window.dominantElement = dominantElement;
   window.computeWeightedElementsPolarity = computeWeightedElementsPolarity;
+  window.computeRawElementsCounts = computeRawElementsCounts;
 })();

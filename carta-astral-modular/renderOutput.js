@@ -97,16 +97,18 @@ window.renderPlanetsAndHouses = renderPlanetsAndHouses;
 // ==========================
 
 function renderElementSummary(container, planets, ascendant) {
-  // Weighted elements + polarity, excluding Pluto, including Ascendant (Sun/Moon/Asc x2)
   const ascSign = ascendant && ascendant.sign;
-  const { elements: planetCounts, polarity } = window.computeWeightedElementsPolarity(planets, ascSign);
+  // Raw unit counts (conteo) — excluye Plutón, incluye Ascendente (1)
+  const rawCounts = window.computeRawElementsCounts(planets, ascSign);
+  // Weighted elements + polarity — excluye Plutón, incluye Ascendente con ponderaciones
+  const { elements: weightedCounts, polarity } = window.computeWeightedElementsPolarity(planets, ascSign);
   const masc = polarity.masc;
   const fem  = polarity.fem;
   const dominantPolarity = masc === fem ? 'Empate' : (masc > fem ? 'Masculino' : 'Femenino');
   const trio = {
-    'Masculino (Fuego)': planetCounts.Fuego || 0,
-    'Neutro (Aire)': planetCounts.Aire || 0,
-    'Femenino (Agua+Tierra)': (planetCounts.Agua || 0) + (planetCounts.Tierra || 0)
+    'Masculino (Fuego)': weightedCounts.Fuego || 0,
+    'Neutro (Aire)': weightedCounts.Aire || 0,
+    'Femenino (Agua+Tierra)': (weightedCounts.Agua || 0) + (weightedCounts.Tierra || 0)
   };
 
   const block = document.createElement('div');
@@ -140,11 +142,17 @@ function renderElementSummary(container, planets, ascendant) {
         </tr>
       </thead>
       <tbody>
-        ${row('Planetas (peso c/Asc)', {
-          Fuego: fmt(planetCounts.Fuego||0),
-          Tierra: fmt(planetCounts.Tierra||0),
-          Aire: fmt(planetCounts.Aire||0),
-          Agua: fmt(planetCounts.Agua||0)
+        ${row('Conteo (unitario)', {
+          Fuego: fmt(rawCounts.Fuego||0),
+          Tierra: fmt(rawCounts.Tierra||0),
+          Aire: fmt(rawCounts.Aire||0),
+          Agua: fmt(rawCounts.Agua||0)
+        })}
+        ${row('Puntaje (ponderado)', {
+          Fuego: fmt(weightedCounts.Fuego||0),
+          Tierra: fmt(weightedCounts.Tierra||0),
+          Aire: fmt(weightedCounts.Aire||0),
+          Agua: fmt(weightedCounts.Agua||0)
         })}
       </tbody>
     </table>
@@ -153,6 +161,9 @@ function renderElementSummary(container, planets, ascendant) {
       <br>
       <strong>Tríada propuesta:</strong>
       Masculino (🔥): ${fmt(trio['Masculino (Fuego)'])} | Neutro (💨): ${fmt(trio['Neutro (Aire)'])} | Femenino (💧+🌱): ${fmt(trio['Femenino (Agua+Tierra)'])}
+    </div>
+    <div style="margin-top:6px;color:#667085;font-size:12px;">
+      <em>Notas:</em> Conteo excluye Plutón e incluye Ascendente (1). Puntaje pondera Sol/Luna/Asc x2; Aire 75/25, Tierra 25/75.
     </div>
     <div id="ai-section" style="margin-top:10px;background:#fff;padding:10px;border:1px solid #ccc;border-radius:6px;">
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">

@@ -16,7 +16,7 @@
   // Glifos planetarios (y ASC)
   const PLANET_SYMBOL = {
     Sun: '☉', Moon: '☽', Mercury: '☿', Venus: '♀', Mars: '♂', Jupiter: '♃', Saturn: '♄',
-    Uranus: '♅', Neptune: '♆', Pluto: '♇', Ascendant: 'ASC'
+    Uranus: '♅', Neptune: '♆', Pluto: '♇', Ascendant: '↑'
   };
 
   // Modalidades
@@ -168,7 +168,7 @@
       out[el].push((PLANET_SYMBOL[name] || name) + (SIGN_SYMBOL[sign] || ''));
     }
     if (ascendantSign) {
-      const el = SIGN_ELEMENT[ascendantSign]; if (el) out[el].push(PLANET_SYMBOL.Ascendant + (SIGN_SYMBOL[ascendantSign] || ''));
+      const el = SIGN_ELEMENT[ascendantSign]; if (el) out[el].push('<span title="Ascendente">' + PLANET_SYMBOL.Ascendant + '</span>' + (SIGN_SYMBOL[ascendantSign] || ''));
     }
     return out;
   }
@@ -187,7 +187,7 @@
       out[mod].push((PLANET_SYMBOL[name] || name) + (SIGN_SYMBOL[sign] || ''));
     }
     if (ascendantSign) {
-      const mod = SIGN_MODALITY[ascendantSign]; if (mod) out[mod].push(PLANET_SYMBOL.Ascendant + (SIGN_SYMBOL[ascendantSign] || ''));
+      const mod = SIGN_MODALITY[ascendantSign]; if (mod) out[mod].push('<span title="Ascendente">' + PLANET_SYMBOL.Ascendant + '</span>' + (SIGN_SYMBOL[ascendantSign] || ''));
     }
     return out;
   }
@@ -222,4 +222,3 @@
   window.listElementContributorsDetailed = listElementContributorsDetailed;
   window.listModalityContributorsDetailed = listModalityContributorsDetailed;
 })();
-

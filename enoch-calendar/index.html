@@ -328,10 +328,16 @@
   </script>
   <!-- fallback if document.write blocked -->
   <noscript>
-    <script src="shemot.js" defer></script>
-    <script src="csv.js" defer></script>
-    <script src="export.js" defer></script>
-    <script src="main.js" defer></script>
+  <script>
+    (function(){
+      var v = Date.now();
+      function add(src){ var s=document.createElement('script'); s.src=src+'?v='+v; s.defer=true; document.head.appendChild(s); }
+      add('shemot.js');
+      add('csv.js');
+      add('export.js');
+      add('main.js');
+    })();
+  </script>
   </noscript>
   
 </body>

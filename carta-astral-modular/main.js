@@ -126,14 +126,14 @@ function initApp() {
       //const shemEnoch = getShemEnochiano(enoch.enoch_month, enoch.enoch_day, enoch.added_week);
 
 	  // 1) Solo Enoj:
-	  renderEnochInfo(output, enoch,planets.Sun.longitude);
+	  (typeof window.renderEnochInfo==="function"?renderEnochInfo(output, enoch, planets.Sun && planets.Sun.longitude):debugValue("renderEnochInfo missing"));
 
       // 2) Opcional: toda la data de planetas y casas
       //    comenta o descomenta esta línea según quieras listar:
-      renderPlanetsAndHouses(output, oplanets, houses_data);
+      (typeof window.renderPlanetsAndHouses==="function"?renderPlanetsAndHouses(output, oplanets, houses_data):debugValue("renderPlanetsAndHouses missing"));
 
       // 2b) Resumen por elementos (planetas + ascendente) y mini IA
-      renderElementSummary(output, oplanets, houses_data.ascendant);
+      (typeof window.renderElementSummary==="function"?renderElementSummary(output, oplanets, houses_data.ascendant):debugValue("renderElementSummary missing"));
 
       // 3) Dibuja en canvas
 
@@ -158,4 +158,7 @@ if (document.readyState === 'loading') {
   // DOM ya listo; inicializar de inmediato (para loader din谩mico)
   initApp();
 }
+
+
+
 

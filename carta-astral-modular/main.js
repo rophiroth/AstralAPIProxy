@@ -29,7 +29,7 @@ function initApp() {
       navigator.geolocation.getCurrentPosition(pos => {
         selectedLat = pos.coords.latitude;
         selectedLon = pos.coords.longitude;
-        coordsDiv.innerHTML = "<strong>Lat:</strong> " + selectedLat.toFixed(4) + " | <strong>Lon:</strong> " + selectedLon.toFixed(4) + " (Detected location)";
+        locationInput.placeholder = "Lat: " + selectedLat.toFixed(4) + " | Lon: " + selectedLon.toFixed(4) + " (Detectado)";
         debugValue("Detected location", selectedLat, selectedLon);
       }, err => {
         locationInput.placeholder = "Escribe tu ciudad";
@@ -60,7 +60,7 @@ function initApp() {
             locationInput.value = place.display_name;
             selectedLat = parseFloat(place.lat);
             selectedLon = parseFloat(place.lon);
-            coordsDiv.innerHTML = "<strong>Lat:</strong> " + selectedLat + " | <strong>Lon:</strong> " + selectedLon;
+            locationInput.placeholder = "Lat: " + selectedLat.toFixed(4) + " | Lon: " + selectedLon.toFixed(4);
             suggestionsBox.innerHTML = "";
             debugValue("Detected location", place.display_name, selectedLat, selectedLon);
           });
@@ -158,3 +158,4 @@ if (document.readyState === 'loading') {
   // DOM ya listo; inicializar de inmediato (para loader din谩mico)
   initApp();
 }
+

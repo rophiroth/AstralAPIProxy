@@ -135,7 +135,7 @@ canvas {
 
 /* Form mas compacto */
 #astroForm { max-width: 100%; }
-#coords { max-width: 100%; display: inline-block; }
+#coords { display: none; }
 
 /* Grid para formulario */
 .form-grid {
@@ -146,6 +146,11 @@ canvas {
 }
 label { margin-top: 0; }
 button[type="submit"] { width: auto; padding: 10px 14px; }
+/* Centrar botón y ubicarlo debajo en el grid */
+.form-grid button[type="submit"] {
+  grid-column: 1 / -1;
+  justify-self: center;
+}
 
 @media (max-width: 1100px) {
   .layout { flex-direction: column; }

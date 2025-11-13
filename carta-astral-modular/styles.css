@@ -234,27 +234,21 @@ canvas {
 
 .form-grid {
   display: flex;
-  gap: 8px;
+  gap: 12px;
   align-items: flex-end;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
 }
-.form-grid label {
-  margin: 0;
+.form-field {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
-.form-grid label span {
+.form-field label {
   font-size: 0.85rem;
   color: var(--muted);
-  margin-bottom: 4px;
 }
 #datetime, #location {
-  max-width: 230px;
-  height: 32px;
-}
-#datetime, #location {
-  width: 220px;
+  width: 240px;
   height: 32px;
 }
 .form-grid button[type="submit"] {
@@ -310,40 +304,6 @@ canvas {
 }
 .location-control button:hover {
   background: rgba(109,58,191,0.08);
-}
-.location-input-wrapper {
-  position: relative;
-}
-.gps-status {
-  margin-top: 0;
-  font-size: 11px;
-  color: var(--muted);
-  min-height: 16px;
-  position: absolute;
-  bottom: -18px;
-  left: 0;
-  visibility: hidden;
-}
-.gps-status {
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--muted);
-  min-height: 16px;
-  visibility: hidden;
-}
-.gps-status.error {
-  color: #f87171;
-}
-.gps-status.busy::after {
-  content: '';
-  display: inline-block;
-  width: 10px;
-  height: 10px;
-  margin-left: 6px;
-  border: 2px solid currentColor;
-  border-top-color: transparent;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
 }
 label { margin-top: 0; }
 /* Si no hay sugerencias, no mostrar el contenedor */

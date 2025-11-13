@@ -50,20 +50,18 @@
     </div>
   </div>
   <form id="astroForm" class="form-grid">
-    <label><span data-l10n="dateLabel">Fecha y hora de nacimiento:</span>
+    <div class="form-field">
+      <label for="datetime" data-l10n="dateLabel">Fecha y hora de nacimiento:</label>
       <input type="datetime-local" id="datetime" value="1986-10-13T01:00">
-    </label>
-    <label>
-      <span data-l10n="locationLabel">Ubicación (Ciudad, País):</span>
-      <div class="location-input-wrapper">
-        <div class="location-control">
-          <input type="text" id="location" autocomplete="off" placeholder="Escribe tu ciudad">
-          <button type="button" id="gpsButton" aria-label="Usar ubicación actual">📍</button>
-        </div>
-        <div class="gps-status" id="gpsStatus" aria-live="polite"></div>
+    </div>
+    <div class="form-field">
+      <label for="location" data-l10n="locationLabel">Ubicación (Ciudad, País):</label>
+      <div class="location-control">
+        <input type="text" id="location" autocomplete="off" placeholder="Escribe tu ciudad">
+        <button type="button" id="gpsButton" aria-label="Usar ubicación actual">📍</button>
       </div>
       <div id="suggestions"></div>
-    </label>
+    </div>
     <div id="coords"></div>
     <button type="submit">Calcular Carta</button>
   </form>

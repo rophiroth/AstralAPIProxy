@@ -75,14 +75,17 @@ function initApp() {
   const suggestionsBox = document.getElementById("suggestions");
   const coordsDiv = document.getElementById("coords");
   const gpsButton = document.getElementById("gpsButton");
-  const gpsStatus = document.getElementById("gpsStatus");
   const langSelect = document.getElementById("langSelect");
 
   function setLocationFromSuggestion(label, lat, lon, { manual = false } = {}) {
     locationInput.value = label;
     selectedLat = lat;
     selectedLon = lon;
-    locationInput.placeholder = "Lat: " + lat.toFixed(4) + " | Lon: " + lon.toFixed(4);
+    if (!manual) {
+      setGpsStatus("detectedPlaceholder");
+    } else {
+      locationInput.placeholder = currentTranslations.placeholder;
+    }
     suggestionsBox.innerHTML = "";
     debugValue("Detected location", label, lat, lon);
     manualLocationSelected = manual;
@@ -99,6 +102,7 @@ function initApp() {
       statusSearching: "Buscando ubicación...",
       statusDetected: "Ubicación detectada",
       statusError: "GPS:",
+      detectedPlaceholder: "Ubicación actual (Ubicación detectada)",
       suggestionNoResults: "No se encontraron resultados",
       suggestionError: "No hay conexión"
     },
@@ -112,6 +116,7 @@ function initApp() {
       statusSearching: "Looking up location...",
       statusDetected: "Location detected",
       statusError: "GPS:",
+      detectedPlaceholder: "Current location (Location detected)",
       suggestionNoResults: "No results found",
       suggestionError: "No connection"
     }
@@ -167,44 +172,45 @@ function initApp() {
     suggestionsBox.appendChild(div);
   }
 
-function setGpsStatus(text, isError = false, isBusy = false) {
-    if (!gpsStatus) return;
-    const hasText = Boolean(text && text.trim());
-    gpsStatus.textContent = text || "";
-    gpsStatus.classList.toggle("error", Boolean(isError));
-    gpsStatus.classList.toggle("busy", Boolean(isBusy));
-    gpsStatus.style.visibility = hasText ? "visible" : "hidden";
+  function setGpsStatus(key, extra = "") {
+    if (!locationInput || manualLocationSelected) return;
+    if (!key) {
+      locationInput.placeholder = currentTranslations.placeholder;
+      return;
+    }
+    const base = currentTranslations[key] || "";
+    const text = [base, extra].filter(Boolean).join(" ").trim();
+    locationInput.placeholder = text || currentTranslations.placeholder;
   }
 
   function requestGeolocation({ force = false } = {}) {
     if (!navigator.geolocation) {
-      setGpsStatus(currentTranslations.statusError + " GPS no disponible", true);
+      setGpsStatus(null);
       return;
     }
     if (manualLocationSelected && !force) {
-      setGpsStatus("");
       return;
     }
     if (autoGeoRequested && !force) {
       return;
     }
     autoGeoRequested = true;
-    setGpsStatus(currentTranslations.statusSearching, false, true);
+    setGpsStatus("statusSearching");
     if (gpsButton) gpsButton.disabled = true;
     navigator.geolocation.getCurrentPosition(pos => {
-        setGpsStatus(currentTranslations.statusDetected);
-      setLocationFromSuggestion("Ubicación actual", pos.coords.latitude, pos.coords.longitude);
+      setLocationFromSuggestion(currentTranslations.detectedPlaceholder, pos.coords.latitude, pos.coords.longitude);
+      setGpsStatus("detectedPlaceholder");
       autoGeoRequested = false;
       if (gpsButton) gpsButton.disabled = false;
     }, (err) => {
-      setGpsStatus(currentTranslations.statusError + " " + (err.message || "sin permiso"), true);
+      setGpsStatus("statusError", err && err.message ? err.message : "sin permiso");
       autoGeoRequested = false;
       if (gpsButton) gpsButton.disabled = false;
     }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
   }
 
     locationInput.addEventListener("input", () => {
-    setGpsStatus("");
+    setGpsStatus(null);
     clearTimeout(debounceTimeout);
     debounceTimeout = setTimeout(async () => {
       const query = locationInput.value.trim();

@@ -1,18 +1,28 @@
 // renderOutput.js (sanitized)
 
-// Hebrew letters (StamHebrew) for houses
-const hebrewLettersMap = {
-  1:"\u05D0",2:"\u05D1",3:"\u05D2",4:"\u05D3",5:"\u05D4",6:"\u05D5",
-  7:"\u05D6",8:"\u05D7",9:"\u05D8",10:"\u05D9",11:"\u05DB",12:"\u05DC"
+// Hebrew letters (StamHebrew) per house according to Aries->Pisces sequence
+const hebrewHouseLetters = {
+  1:"\u05D4", // ה
+  2:"\u05D5", // ו
+  3:"\u05D6", // ז
+  4:"\u05D7", // ח
+  5:"\u05D8", // ט
+  6:"\u05D9", // י
+  7:"\u05DC", // ל
+  8:"\u05E0", // נ
+  9:"\u05E1", // ס
+ 10:"\u05E2", // ע
+ 11:"\u05E6", // צ
+ 12:"\u05E7"  // ק
 };
-try { window.hebrewLettersMap = hebrewLettersMap; } catch(_) {}
+try { window.hebrewHouseLetters = hebrewHouseLetters; } catch(_) {}
 
 function renderEnochInfo(container, enoch, lastSunLongitude){
   try {
     const shemAstron = (typeof getShemAstronomico==='function') ? getShemAstronomico(lastSunLongitude) : '';
     const shemEnoch  = (typeof getShemEnochiano==='function') ? getShemEnochiano(enoch.enoch_month, enoch.enoch_day, enoch.added_week) : '';
     container.innerHTML = [
-      '<div style="background:#f0f8ff;padding:10px;border-radius:8px;">',
+      '<div style="background:var(--card-bg);color:var(--text);border:1px solid var(--border);padding:10px;border-radius:8px;">',
       '  <h3>Calendario de Enoch</h3>',
       '  <ul style="list-style:none;padding:0;margin:0 0 10px 0;">',
       '    <li><strong>A\u00F1o:</strong> ' + enoch.enoch_year + '</li>',
@@ -34,7 +44,7 @@ function renderPlanetsAndHouses(container, planets, houses_data){
   const { ascendant, midheaven, houses } = houses_data || {};
   // planets
   let html = [
-    '<div style="background:#fffbea;padding:10px;border-radius:8px;margin-top:10px;">',
+    '<div style="background:var(--card-bg);color:var(--text);padding:10px;border-radius:8px;margin-top:10px;border:1px solid var(--border);">',
     '  <h3>Planetas</h3>',
     '  <ul style="list-style:none;padding:0;">'
   ];
@@ -44,19 +54,23 @@ function renderPlanetsAndHouses(container, planets, houses_data){
       if (lon==null) continue;
       const zodiacSign = (typeof getZodiacSign==='function') ? getZodiacSign(lon) : '';
       const ze = (window.zodiacEmojis && window.zodiacEmojis[zodiacSign]) || '';
-      html.push('<li>' + (window.planetEmojis?.[name]||'') + ' <strong>' + name + ':</strong> ' + (ze||'') + ' ' + zodiacSign + ' ' + (decimals(lon%30,4)) + '\u00B0 (' + decimals(lon,4) + '\u00B0)</li>');
+      const pEmoji = (window.planetEmojis && window.planetEmojis[name]) || '';
+      const zEmoji = ze || '';
+      html.push('<li><span style="font-size:1.1em;margin-right:4px;">' + pEmoji + '</span> <strong>' + name + ':</strong> <span style="font-size:1.05em;margin-right:2px;">' + zEmoji + '</span> ' + zodiacSign + ' ' + (decimals(lon%30,4)) + '\u00B0 (' + decimals(lon,4) + '\u00B0)</li>');
     }
   } catch(_){}
   html.push('  </ul>','</div>');
 
   // houses
-  html.push('<div style="background:#e6f7ff;padding:10px;border-radius:8px;margin-top:10px;">','  <h3>Casas Astrologicas</h3>','  <ul style="list-style:none;padding:0;">');
+  html.push('<div style="background:var(--card-bg);color:var(--text);padding:10px;border-radius:8px;margin-top:10px;border:1px solid var(--border);">','  <h3>Casas Astrologicas</h3>','  <ul style="list-style:none;padding:0;">');
   try {
     html.push('<li><strong>Asc:</strong> ' + ((window.zodiacEmojis && window.zodiacEmojis[ascendant.sign])||'') + ' ' + ascendant.sign + ' ' + decimals(ascendant.position,4) + '\u00B0 ' + decimals(ascendant.degree,4) + '\u00B0</li>');
     html.push('<li><strong>MC:</strong> ' + ((window.zodiacEmojis && window.zodiacEmojis[midheaven.sign])||'') + ' ' + midheaven.sign + ' ' + decimals(midheaven.position,4) + '\u00B0 ' + decimals(midheaven.degree,4) + '\u00B0</li>');
     for (const h of (houses||[])){
       const ze = (window.zodiacEmojis && window.zodiacEmojis[h.sign]) || '';
-      html.push('<li><strong>Casa ' + h.house + ':</strong> ' + (ze||'') + ' ' + h.sign + ' ' + decimals(h.position,4) + '\u00B0 <span style="font-family:\'StamHebrew\';">' + (hebrewLettersMap[h.house]||'') + '</span></li>');
+      const letter = (window.hebrewHouseLetters && window.hebrewHouseLetters[h.house]) || '';
+      const letterHtml = letter ? ' <span style="font-family:\'StamHebrew\';margin-left:4px;">' + letter + '</span>' : '';
+      html.push('<li><strong>Casa ' + h.house + ':</strong> ' + (ze||'') + ' ' + h.sign + ' ' + decimals(h.position,4) + '\u00B0' + letterHtml + '</li>');
     }
   } catch(_){}
   html.push('  </ul>','</div>');
@@ -64,7 +78,7 @@ function renderPlanetsAndHouses(container, planets, houses_data){
   container.innerHTML += html.join('\n');
 }
 
-// =============== Element summary ===============
+// =============== Summaries ===============
 function renderElementSummary(container, planets, ascendant){
   try {
     const ascSign = ascendant && ascendant.sign;
@@ -77,7 +91,9 @@ function renderElementSummary(container, planets, ascendant){
     const tokens = (window.listElementContributorsDetailed) ? window.listElementContributorsDetailed(planets, ascSign) : null;
     const fmt = (n) => (Math.abs(n-Math.round(n))<1e-9 ? Math.round(n) : (Math.round(n*100)/100).toFixed(2));
 
-    const cell = (title, val, list) => '<div class="cell-top">'+title+' '+fmt(val)+'</div><div class="cell-sub">'+(list && list.length? list.join(' ') : '-')+'</div>';
+    const cellUnit = (val, list) => '<div class="cell-top">'+fmt(val)+'</div><div class="cell-sub">'+(list && list.length? list.join(' ') : '-')+'</div>';
+    // same cell formatter for modalidades
+    const cell = (_key, val, list) => '<div class="cell-top">'+fmt(val)+'</div><div class="cell-sub">'+(list && list.length? list.join(' ') : '-')+'</div>';
     const maxVal = Math.max(Number(counts.Fuego||0), Number(counts.Tierra||0), Number(counts.Aire||0), Number(counts.Agua||0));
     const hi = (v) => Math.abs(Number(v)-maxVal) < 1e-6;
 
@@ -94,10 +110,10 @@ function renderElementSummary(container, planets, ascendant){
       '  <thead><tr><th style="text-align:left;padding:4px 8px;">Fuente</th><th style="text-align:left;padding:4px 8px;">Fuego</th><th style="text-align:left;padding:4px 8px;">Tierra</th><th style="text-align:left;padding:4px 8px;">Aire</th><th style="text-align:left;padding:4px 8px;">Agua</th></tr></thead>',
       '  <tbody>',
       '    <tr><td style="padding:4px 8px;">Conteo (unitario)</td>'+
-      '      <td style="padding:4px 8px;">'+cell('Fuego', raw.Fuego||0, tokens?tokens.Fuego:null)+'</td>'+
-      '      <td style="padding:4px 8px;">'+cell('Tierra', raw.Tierra||0, tokens?tokens.Tierra:null)+'</td>'+
-      '      <td style="padding:4px 8px;">'+cell('Aire', raw.Aire||0, tokens?tokens.Aire:null)+'</td>'+
-      '      <td style="padding:4px 8px;">'+cell('Agua', raw.Agua||0, tokens?tokens.Agua:null)+'</td></tr>',
+      '      <td style="padding:4px 8px;">'+cellUnit(raw.Fuego||0, tokens?tokens.Fuego:null)+'</td>'+
+      '      <td style="padding:4px 8px;">'+cellUnit(raw.Tierra||0, tokens?tokens.Tierra:null)+'</td>'+
+      '      <td style="padding:4px 8px;">'+cellUnit(raw.Aire||0, tokens?tokens.Aire:null)+'</td>'+
+      '      <td style="padding:4px 8px;">'+cellUnit(raw.Agua||0, tokens?tokens.Agua:null)+'</td></tr>',
       '    <tr><td style="padding:4px 8px;">Puntaje (ponderado)</td>'+
       '      <td style="padding:4px 8px;">'+(hi(counts.Fuego)?'<span class="hi">'+fmt(counts.Fuego)+'</span>':fmt(counts.Fuego||0))+'</td>'+
       '      <td style="padding:4px 8px;">'+(hi(counts.Tierra)?'<span class="hi">'+fmt(counts.Tierra)+'</span>':fmt(counts.Tierra||0))+'</td>'+
@@ -106,10 +122,57 @@ function renderElementSummary(container, planets, ascendant){
       '  </tbody>',
       '</table>',
       '<div style="margin-top:8px;">'+
-        '<strong>Polaridad (puntaje x2):</strong> Masculino (Fuego+Aire): '+fmt(mascW)+' | Femenino (Agua+Tierra): '+fmt(femW)+'</div>'
+        '<strong>Polaridad:</strong> Masculino (Fuego+Aire): '+fmt(mascW)+' | Femenino (Agua+Tierra): '+fmt(femW)+'</div>',
+      (function(){
+        var triM = Number(counts.Fuego||0);
+        var triN = Number(counts.Aire||0);
+        var triF = Number((counts.Agua||0) + (counts.Tierra||0));
+        var triMax = Math.max(triM, triN, triF);
+        var wrap = function(label, v){ return (Math.abs(v-triMax)<1e-6)?('<span class="hi">'+fmt(v)+'</span>'):fmt(v); };
+        return '<div style="margin-top:6px;"><strong>Tr\u00EDada:</strong> Masculino (Fuego): '+wrap('M',triM)+' | Neutro (Aire): '+wrap('N',triN)+' | Femenino (Agua+Tierra): '+wrap('F',triF)+'</div>';
+      })()
     ].join('\n');
 
     container.appendChild(card);
+
+    // Nota aclaratoria (letra chica)
+    try {
+      var note = document.createElement('div');
+      note.className = 'note';
+      note.innerHTML = 'Nota: se excluye <strong>Plutón</strong>; <strong>Sol</strong>, <strong>Luna</strong> y <strong>Ascendente</strong> puntúan ×2 en los conteos ponderados.';
+      container.appendChild(note);
+    } catch(_){}
+
+    // Modalidades
+    const rawMod = (window.computeRawModalityCounts) ? window.computeRawModalityCounts(planets, ascSign) : {Cardinal:0,Fijo:0,Mutable:0};
+    const wMod   = (window.computeWeightedModalityCounts) ? window.computeWeightedModalityCounts(planets, ascSign) : rawMod;
+    const modTokens = (window.listModalityContributorsDetailed) ? window.listModalityContributorsDetailed(planets, ascSign) : null;
+    const maxMod = Math.max(Number(wMod.Cardinal||0), Number(wMod.Fijo||0), Number(wMod.Mutable||0));
+    const hiMod = (v) => Math.abs(Number(v)-maxMod) < 1e-6;
+
+    const mod = document.createElement('div');
+    mod.className = 'element-summary';
+    mod.style.background = 'var(--card-bg)';
+    mod.style.padding = '10px';
+    mod.style.borderRadius = '8px';
+    mod.style.marginTop = '10px';
+    mod.innerHTML = [
+      '<h3>Resumen por Modalidades</h3>',
+      '<table style="border-collapse:collapse;">',
+      '  <thead><tr><th style="text-align:left;padding:4px 8px;">Fuente</th><th style="text-align:left;padding:4px 8px;">Cardinal</th><th style="text-align:left;padding:4px 8px;">Fijo</th><th style="text-align:left;padding:4px 8px;">Mutable</th></tr></thead>',
+      '  <tbody>',
+      '    <tr><td style="padding:4px 8px;">Conteo (unitario)</td>'+
+      '      <td style="padding:4px 8px;">'+cell('Cardinal', rawMod.Cardinal||0, modTokens?modTokens.Cardinal:null)+'</td>'+
+      '      <td style="padding:4px 8px;">'+cell('Fijo', rawMod.Fijo||0, modTokens?modTokens.Fijo:null)+'</td>'+
+      '      <td style="padding:4px 8px;">'+cell('Mutable', rawMod.Mutable||0, modTokens?modTokens.Mutable:null)+'</td></tr>',
+      '    <tr><td style="padding:4px 8px;">Puntaje (ponderado)</td>'+
+      '      <td style="padding:4px 8px;">'+(hiMod(wMod.Cardinal)?'<span class="hi">'+fmt(wMod.Cardinal)+'</span>':fmt(wMod.Cardinal||0))+'</td>'+
+      '      <td style="padding:4px 8px;">'+(hiMod(wMod.Fijo)?'<span class="hi">'+fmt(wMod.Fijo)+'</span>':fmt(wMod.Fijo||0))+'</td>'+
+      '      <td style="padding:4px 8px;">'+(hiMod(wMod.Mutable)?'<span class="hi">'+fmt(wMod.Mutable)+'</span>':fmt(wMod.Mutable||0))+'</td></tr>',
+      '  </tbody>',
+      '</table>'
+    ].join('\n');
+    container.appendChild(mod);
   } catch(e) {
     try { console.warn('renderElementSummary failed', e); } catch(_){}
   }

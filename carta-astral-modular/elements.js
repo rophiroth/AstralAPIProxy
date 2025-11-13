@@ -1,4 +1,4 @@
-// elements.js — utilidades para conteo por elementos, modos y tokens
+// elements.js - utilidades para conteo por elementos, modalidades y tokens
 (function(){
   const SIGN_ELEMENT = {
     Aries: 'Fuego', Leo: 'Fuego', Sagittarius: 'Fuego',
@@ -17,13 +17,13 @@
     Sun: '\u2609', Moon: '\u263D', Mercury: '\u263F', Venus: '\u2640', Mars: '\u2642', Jupiter: '\u2643', Saturn: '\u2644', Uranus: '\u2645', Neptune: '\u2646', Pluto: '\u2647', Ascendant: '\u2191'
   };
 
-  // Etiquetas ES
+  // Etiquetas ES (con escapes para acentos)
   const PLANET_LABEL_ES = {
-    Sun:'Sol', Moon:'Luna', Mercury:'Mercurio', Venus:'Venus', Mars:'Marte', Jupiter:'Júpiter', Saturn:'Saturno',
-    Uranus:'Urano', Neptune:'Neptuno', Pluto:'Plutón', Ascendant:'Ascendente'
+    Sun:'Sol', Moon:'Luna', Mercury:'Mercurio', Venus:'Venus', Mars:'Marte', Jupiter:'J\u00FApiter', Saturn:'Saturno',
+    Uranus:'Urano', Neptune:'Neptuno', Pluto:'Plut\u00F3n', Ascendant:'Ascendente'
   };
   const SIGN_LABEL_ES = {
-    Aries:'Aries', Taurus:'Tauro', Gemini:'Géminis', Cancer:'Cáncer', Leo:'Leo', Virgo:'Virgo', Libra:'Libra', Scorpio:'Escorpio',
+    Aries:'Aries', Taurus:'Tauro', Gemini:'G\u00E9minis', Cancer:'C\u00E1ncer', Leo:'Leo', Virgo:'Virgo', Libra:'Libra', Scorpio:'Escorpio',
     Sagittarius:'Sagitario', Capricorn:'Capricornio', Aquarius:'Acuario', Pisces:'Piscis'
   };
 
@@ -37,10 +37,11 @@
   function elementFromSign(sign) { return SIGN_ELEMENT[sign] || ''; }
   function emptyElementCount() { return { Fuego: 0, Tierra: 0, Aire: 0, Agua: 0 }; }
 
+  // Conteos básicos (no ponderados)
   function countElementsForPlanets(planets) {
     const counts = emptyElementCount();
     if (!planets) return counts;
-    for (const [name, body] of Object.entries(planets)) {
+    for (const [, body] of Object.entries(planets)) {
       if (!body || typeof body.longitude !== 'number') continue;
       const sign = (typeof getZodiacSign === 'function') ? getZodiacSign(body.longitude) : null;
       if (!sign) continue;
@@ -75,8 +76,8 @@
     return { element: best, count: max > -Infinity ? max : 0 };
   }
 
-  // =====================
-  // Weighted scoring
+  // Ponderado: excluye Plutón; Sol/Luna/Asc x2; resto x1
+  // Devuelve: elements ponderados y polaridad (masc/fem) usando suma directa
   function computeWeightedElementsPolarity(planets, ascendantSign) {
     const elements = emptyElementCount();
     let masc = 0, fem = 0;
@@ -87,10 +88,9 @@
       const el = SIGN_ELEMENT[sign]; if (!el) return;
       const w = specialDouble.has(who) ? 2 : 1;
       elements[el] += w;
-      if (el === 'Fuego') { masc += 1 * w; }
-      else if (el === 'Aire') { masc += 0.75 * w; fem += 0.25 * w; }
-      else if (el === 'Tierra') { masc += 0.25 * w; fem += 0.75 * w; }
-      else if (el === 'Agua') { fem += 1 * w; }
+      // Polaridad simple: Fuego+Aire -> masc; Agua+Tierra -> fem
+      if (el === 'Fuego' || el === 'Aire') masc += w;
+      if (el === 'Agua' || el === 'Tierra') fem  += w;
     }
     for (const [name, body] of Object.entries(planets || {})) {
       if (excluded.has(name)) continue;
@@ -167,12 +167,12 @@
       const sign = (typeof getZodiacSign === 'function') ? getZodiacSign(lon) : null;
       if (!sign) continue;
       const el = SIGN_ELEMENT[sign]; if (!el) continue;
-      const dbl = specialDouble.has(name) ? '×2' : '';
+      const dbl = specialDouble.has(name) ? 'x2' : '';
       const token = `<span title="${(PLANET_LABEL_ES[name]||name)} en ${(SIGN_LABEL_ES[sign]||sign)}">${(PLANET_SYMBOL[name]||name)}${(SIGN_SYMBOL[sign]||'')}${dbl}</span>`;
       out[el].push(token);
     }
     if (ascendantSign) {
-      const el = SIGN_ELEMENT[ascendantSign]; if (el) out[el].push(`<span title="Ascendente">${PLANET_SYMBOL.Ascendant}</span>${(SIGN_SYMBOL[ascendantSign]||'')}×2`);
+      const el = SIGN_ELEMENT[ascendantSign]; if (el) out[el].push(`<span title="Ascendente">${PLANET_SYMBOL.Ascendant}${(SIGN_SYMBOL[ascendantSign]||'')}</span>x2`);
     }
     return out;
   }
@@ -189,12 +189,12 @@
       const sign = (typeof getZodiacSign === 'function') ? getZodiacSign(lon) : null;
       if (!sign) continue;
       const mod = SIGN_MODALITY[sign]; if (!mod) continue;
-      const dbl = specialDouble.has(name) ? '×2' : '';
+      const dbl = specialDouble.has(name) ? 'x2' : '';
       const token = `<span title="${(PLANET_LABEL_ES[name]||name)} en ${(SIGN_LABEL_ES[sign]||sign)}">${(PLANET_SYMBOL[name]||name)}${(SIGN_SYMBOL[sign]||'')}${dbl}</span>`;
       out[mod].push(token);
     }
     if (ascendantSign) {
-      const mod = SIGN_MODALITY[ascendantSign]; if (mod) out[mod].push(`<span title="Ascendente">${PLANET_SYMBOL.Ascendant}</span>${(SIGN_SYMBOL[ascendantSign]||'')}×2`);
+      const mod = SIGN_MODALITY[ascendantSign]; if (mod) out[mod].push(`<span title="Ascendente">${PLANET_SYMBOL.Ascendant}${(SIGN_SYMBOL[ascendantSign]||'')}</span>x2`);
     }
     return out;
   }
@@ -229,5 +229,4 @@
   window.listElementContributorsDetailed = listElementContributorsDetailed;
   window.listModalityContributorsDetailed = listModalityContributorsDetailed;
 })();
-
 

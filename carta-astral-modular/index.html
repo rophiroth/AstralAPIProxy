@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-css-loading="1">
 <head>
   <meta charset="UTF-8">
   <title>Carta Astral Modular</title>
@@ -10,24 +10,56 @@
       document.documentElement.setAttribute('data-theme', pref);
     } catch(e) {}
   </script>
-  <meta name="api-url" content="https://astralapiproxy.onrender.com/calculate" />
-  <link rel="stylesheet" href="styles.css">
+  <meta name="api-url" content="./proxy.php" />
+  <meta name="api-upstream-url" content="https://astralapiproxy.onrender.com/calculate" />
+  <link rel="icon" href="https://72.psyhackers.org/favicon.ico" type="image/x-icon">
+  <style>html[data-css-loading="1"] body{visibility:hidden}</style>
+  <script>
+    // Carga dinámica del CSS con cache-busting y sin FOUC
+    (function(){
+      try {
+        var v = Date.now();
+        var link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'styles.css?v=' + v;
+        link.onload = function(){ try{ document.documentElement.removeAttribute('data-css-loading'); }catch(_){}}
+        document.head.appendChild(link);
+      } catch(_) {
+        // Fallback sin versionado
+        var l2 = document.createElement('link'); l2.rel='stylesheet'; l2.href='styles.css';
+        l2.onload=function(){ try{ document.documentElement.removeAttribute('data-css-loading'); }catch(_){}}
+        document.head.appendChild(l2);
+      }
+    })();
+  </script>
+  <noscript><link rel="stylesheet" href="styles.css"></noscript>
 
 
 </head>
 <body>
   <div class="page">
-  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
-    <h1>Carta Astral Modular</h1>
-    <button id="themeToggle" type="button" class="theme-toggle" aria-label="Cambiar tema">🌓</button>
+  <div class="header-row">
+    <h1><span id="appTitle">Carta Astral Modular</span></h1>
+    <div class="header-actions">
+      <label for="langSelect" class="sr-only">Idioma</label>
+      <select id="langSelect" aria-label="Idioma">
+        <option value="es">Español</option>
+        <option value="en">English</option>
+      </select>
+      <button id="themeToggle" type="button" class="theme-toggle" aria-label="Cambiar tema">🌓</button>
+    </div>
   </div>
   <form id="astroForm" class="form-grid">
-    <label>Fecha y hora de nacimiento:
+    <label><span data-l10n="dateLabel">Fecha y hora de nacimiento:</span>
       <input type="datetime-local" id="datetime" value="1986-10-13T01:00">
     </label>
-    <label>Ubicación (Ciudad, País):
-      <input type="text" id="location" autocomplete="off" placeholder="Detectando ubicación...">
+    <label><span data-l10n="locationLabel">Ubicación (Ciudad, País):</span>
+      <div class="location-control">
+        <input type="text" id="location" autocomplete="off" placeholder="Escribe tu ciudad">
+        <button type="button" id="gpsButton" aria-label="Usar ubicación actual">📍</button>
+      </div>
       <div id="suggestions"></div>
+      <div class="gps-status" id="gpsStatus" aria-live="polite"></div>
     </label>
     <div id="coords"></div>
     <button type="submit">Calcular Carta</button>
@@ -47,13 +79,18 @@
           s.src = src + '?v=' + v;
           s.async = false; // mantener orden de carga
           s.onload = resolve;
-          s.onerror = reject;
+          s.onerror = function(e){
+            try { console.error('[loader] error', src, e); } catch(_){ }
+            // No bloquear la carga del resto
+            resolve();
+          };
           document.body.appendChild(s);
         });
       }
       var scripts = [
         'debug.js',
-        'icons.js',
+        'emojiFallback.js',
+        // 'icons.js', // omit to avoid production parse error; emojiFallback provides maps
         'astroUtils.js',
         'elements.js',
         'renderOutput.js',
@@ -82,3 +119,7 @@
   </div>
 </body>
 </html>
+
+
+
+

@@ -37,7 +37,13 @@
 
 </head>
 <body>
-  <div class="page">
+  <div id="loadingScreen" class="loading-screen">
+    <div class="loading">
+      <div class="spinner"></div>
+      <span data-l10n="loadingApp">Cargando módulo...</span>
+    </div>
+  </div>
+  <div class="page hidden" id="appShell">
   <div class="header-row">
     <h1><span id="appTitle">Carta Astral Modular</span></h1>
     <div class="header-actions">

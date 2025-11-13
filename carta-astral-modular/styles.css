@@ -28,6 +28,15 @@ body {
   background: var(--bg);
   color: var(--text);
 }
+.loading-screen {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
 /* Container */
 .page { max-width: 1200px; margin: 0 auto; }
 /* Header layout */

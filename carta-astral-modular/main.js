@@ -76,6 +76,8 @@ function initApp() {
   const coordsDiv = document.getElementById("coords");
   const gpsButton = document.getElementById("gpsButton");
   const langSelect = document.getElementById("langSelect");
+  const loadingScreen = document.getElementById("loadingScreen");
+  const appShell = document.getElementById("appShell");
 
   function setLocationFromSuggestion(label, lat, lon, { manual = false } = {}) {
     locationInput.value = label;
@@ -104,7 +106,8 @@ function initApp() {
       statusError: "GPS:",
       detectedPlaceholder: "Ubicación actual (Ubicación detectada)",
       suggestionNoResults: "No se encontraron resultados",
-      suggestionError: "No hay conexión"
+      suggestionError: "No hay conexión",
+      loadingApp: "Cargando módulo..."
     },
     en: {
       title: "Modular Birth Chart",
@@ -118,7 +121,8 @@ function initApp() {
       statusError: "GPS:",
       detectedPlaceholder: "Current location (Location detected)",
       suggestionNoResults: "No results found",
-      suggestionError: "No connection"
+      suggestionError: "No connection",
+      loadingApp: "Loading module..."
     }
   };
   let currentTranslations = translations.es;
@@ -182,6 +186,12 @@ function initApp() {
     const text = [base, extra].filter(Boolean).join(" ").trim();
     locationInput.placeholder = text || currentTranslations.placeholder;
   }
+  function revealApp() {
+    try {
+      if (loadingScreen) loadingScreen.classList.add('hidden');
+      if (appShell) appShell.classList.remove('hidden');
+    } catch (_){}
+  }
 
   function requestGeolocation({ force = false } = {}) {
     if (!navigator.geolocation) {
@@ -209,7 +219,10 @@ function initApp() {
     }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
   }
 
-    locationInput.addEventListener("input", () => {
+  locationInput.addEventListener("input", () => {
+    manualLocationSelected = false;
+    selectedLat = null;
+    selectedLon = null;
     setGpsStatus(null);
     clearTimeout(debounceTimeout);
     debounceTimeout = setTimeout(async () => {
@@ -289,9 +302,6 @@ function initApp() {
       requestGeolocation({ force: true });
     });
   }
-  window.addEventListener("load", () => {
-    requestGeolocation();
-  });
 
   document.addEventListener("click", (e) => {
     if (!suggestionsBox.contains(e.target) && e.target !== locationInput) {
@@ -397,6 +407,8 @@ function initApp() {
       debugValue("🔬 Error en fetch", err);
     }
   });
+
+  revealApp();
 }
 
 if (document.readyState === 'loading') {
@@ -418,15 +430,26 @@ if (document.readyState === 'loading') {
       setupTooltip(canvas, houses, orderPlanets(planets));
     } catch (e) { debugValue("rerenderCanvas error", e); }
   }
-  try {
-    const mo = new MutationObserver((mut) => {
-      for (const m of mut) { if (m.attributeName === 'data-theme') { rerenderCanvas(); } }
-    });
-    mo.observe(document.documentElement, { attributes: true });
-  } catch(_) {}
-  try { const tb = document.getElementById('themeToggle'); if (tb) tb.addEventListener('click', () => setTimeout(rerenderCanvas, 0)); } catch(_) {}
+try {
+  const mo = new MutationObserver((mut) => {
+    for (const m of mut) { if (m.attributeName === 'data-theme') { rerenderCanvas(); } }
+  });
+  mo.observe(document.documentElement, { attributes: true });
+} catch(_) {}
+try { const tb = document.getElementById('themeToggle'); if (tb) tb.addEventListener('click', () => setTimeout(rerenderCanvas, 0)); } catch(_) {}
 
 }
+
+try {
+  window.addEventListener('load', () => {
+    try {
+      const screen = document.getElementById('loadingScreen');
+      if (screen) screen.classList.add('hidden');
+      const shell = document.getElementById('appShell');
+      if (shell) shell.classList.remove('hidden');
+    } catch (_){}
+  });
+} catch (_){}
 
 
 

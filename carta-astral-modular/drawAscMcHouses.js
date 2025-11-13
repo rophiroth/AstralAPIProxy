@@ -16,11 +16,23 @@ const housePaths = {
   12: ['Binah','Chesed']
 };
 
+function chartLabel(key, fallback) {
+  try {
+    if (typeof window.getChartTranslation === 'function') {
+      return window.getChartTranslation(key, fallback);
+    }
+  } catch (_){}
+  return fallback || key;
+}
+
 function drawAscMc(ascendant, midheaven, ctx) {
   const tiferet = sefirotCoords['Tiferet'];
   const maljut  = sefirotCoords['Maljut'];
   const rootStyles = getComputedStyle(document.documentElement);
   const textColor = (rootStyles.getPropertyValue('--text') || '#111').trim();
+  const ascLabel = chartLabel('ascLabel', 'ASC');
+  const descLabel = chartLabel('descLabel', 'DESC');
+  const mcLabel = chartLabel('mcLabel', 'MC');
 
   const ascY  = tiferet[1] - 100;
   const descY = tiferet[1] + 63;
@@ -36,7 +48,7 @@ function drawAscMc(ascendant, midheaven, ctx) {
   ctx.textBaseline = 'middle';
   ctx.font = 'bold 13px sans-serif';
   ctx.fillStyle = textColor;
-  ctx.fillText(`ASC: ${(window.zodiacEmojis?.[ascendant.sign]||'')} ${decimals(ascendant.position,2)}\u00B0`, tiferet[0], ascY);
+  ctx.fillText(`${ascLabel}: ${(window.zodiacEmojis?.[ascendant.sign]||'')} ${decimals(ascendant.position,2)}\u00B0`, tiferet[0], ascY);
   ctx.restore();
 
   // DESC opposite
@@ -51,7 +63,7 @@ function drawAscMc(ascendant, midheaven, ctx) {
   ctx.font = 'bold 13px sans-serif';
   ctx.fillStyle = textColor;
   const descDegree = (ascendant.degree + 180) % 360;
-  ctx.fillText(`DESC: ${(window.zodiacEmojis?.[getZodiacSign(descDegree)]||'')} ${decimals((descDegree%30),2)}\u00B0`, tiferet[0], descY);
+  ctx.fillText(`${descLabel}: ${(window.zodiacEmojis?.[getZodiacSign(descDegree)]||'')} ${decimals((descDegree%30),2)}\u00B0`, tiferet[0], descY);
   ctx.restore();
 
   // MC at Maljut
@@ -65,7 +77,7 @@ function drawAscMc(ascendant, midheaven, ctx) {
   ctx.textBaseline = 'middle';
   ctx.font = 'bold 13px sans-serif';
   ctx.fillStyle = textColor;
-  ctx.fillText(`MC:${(window.zodiacEmojis?.[midheaven.sign]||'')}${decimals(midheaven.position,1)}\u00B0`, maljut[0], maljut[1]);
+  ctx.fillText(`${mcLabel}:${(window.zodiacEmojis?.[midheaven.sign]||'')}${decimals(midheaven.position,1)}\u00B0`, maljut[0], maljut[1]);
   ctx.restore();
 }
 

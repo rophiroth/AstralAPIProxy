@@ -58,6 +58,8 @@ function initApp() {
   let manualLocationSelected = false;
   let autoGeoRequested = false;
   let locationFetchController = null;
+  let ipLookupPending = false;
+  let ipBootstrapDone = false;
   const quickLocationHints = [
     { name: "Santiago, Chile", lat: -33.4489, lon: -70.6693, detail: "Capital de Chile" },
     { name: "Buenos Aires, Argentina", lat: -34.6037, lon: -58.3816, detail: "Capital de Argentina" },
@@ -105,9 +107,83 @@ function initApp() {
       statusDetected: "Ubicación detectada",
       statusError: "GPS:",
       detectedPlaceholder: "Ubicación actual (Ubicación detectada)",
+      statusDetectedBrowser: "Ubicación aproximada detectada",
       suggestionNoResults: "No se encontraron resultados",
       suggestionError: "No hay conexión",
-      loadingApp: "Cargando módulo..."
+      loadingApp: "Cargando módulo...",
+      errorUnavailable: "Servicio temporalmente no disponible. Intenta nuevamente en unos segundos.",
+      selectLocationMessage: "Selecciona una ubicación válida o permite el acceso a tu ubicación.",
+      calculatingMessage: "Calculando carta...",
+      gpsDenied: "sin permiso",
+      unexpectedError: "Error inesperado",
+      enochTitle: "Calendario de Enoch",
+      enochYear: "Año",
+      enochMonth: "Mes",
+      enochDay: "Día",
+      enochDayOfYear: "Día del año",
+      enochAddedWeek: "Semana adicional",
+      enochAstronomicalName: "Nombre (Astronómico)",
+      enochEnochName: "Nombre (Enoch)",
+      yesLabel: "Sí",
+      noLabel: "No",
+      planetsTitle: "Planetas",
+      housesTitle: "Casas astrológicas",
+      ascLabel: "Asc",
+      descLabel: "Desc",
+      mcLabel: "MC",
+      houseLabel: "Casa",
+      elementSummaryTitle: "Resumen elemental",
+      elementSourceUnit: "Conteo (unitario)",
+      elementSourceWeighted: "Puntaje (ponderado)",
+      elementPolarityTitle: "Polaridad",
+      polarityMasculine: "Masculino (Fuego + Aire)",
+      polarityFeminine: "Femenino (Agua + Tierra)",
+      tableSourceLabel: "Fuente",
+      modalitiesTitle: "Resumen por modalidades",
+      modalitiesSourceUnit: "Conteo (unitario)",
+      modalitiesSourceWeighted: "Puntaje (ponderado)",
+      notePluto: "Nota: se excluye Plutón; Sol, Luna y Ascendente puntúan x2 en los conteos ponderados.",
+      triadLabel: "Tríada",
+      triadMasculine: "Masculino (Fuego)",
+      triadNeutral: "Neutro (Aire)",
+      triadFeminine: "Femenino (Agua+Tierra)",
+      planetNames: {
+        Sun: "Sol",
+        Moon: "Luna",
+        Mercury: "Mercurio",
+        Venus: "Venus",
+        Mars: "Marte",
+        Jupiter: "Júpiter",
+        Saturn: "Saturno",
+        Uranus: "Urano",
+        Neptune: "Neptuno",
+        Pluto: "Plutón"
+      },
+      signNames: {
+        Aries: "Aries",
+        Taurus: "Tauro",
+        Gemini: "Géminis",
+        Cancer: "Cáncer",
+        Leo: "Leo",
+        Virgo: "Virgo",
+        Libra: "Libra",
+        Scorpio: "Escorpio",
+        Sagittarius: "Sagitario",
+        Capricorn: "Capricornio",
+        Aquarius: "Acuario",
+        Pisces: "Piscis"
+      },
+      elementNames: {
+        Fuego: "Fuego",
+        Tierra: "Tierra",
+        Aire: "Aire",
+        Agua: "Agua"
+      },
+      modalityNames: {
+        Cardinal: "Cardinal",
+        Fijo: "Fijo",
+        Mutable: "Mutable"
+      }
     },
     en: {
       title: "Modular Birth Chart",
@@ -119,13 +195,111 @@ function initApp() {
       statusSearching: "Looking up location...",
       statusDetected: "Location detected",
       statusError: "GPS:",
-      detectedPlaceholder: "Current location (Location detected)",
+      detectedPlaceholder: "Current location (Detected)",
+      statusDetectedBrowser: "Approximate location detected",
       suggestionNoResults: "No results found",
       suggestionError: "No connection",
-      loadingApp: "Loading module..."
+      loadingApp: "Loading module...",
+      errorUnavailable: "Service temporarily unavailable. Please try again in a moment.",
+      selectLocationMessage: "Choose a valid location or allow access to your location.",
+      calculatingMessage: "Calculating chart...",
+      gpsDenied: "permission denied",
+      unexpectedError: "Unexpected error",
+      enochTitle: "Enoch Calendar",
+      enochYear: "Year",
+      enochMonth: "Month",
+      enochDay: "Day",
+      enochDayOfYear: "Day of year",
+      enochAddedWeek: "Added week",
+      enochAstronomicalName: "Name (Astronomical)",
+      enochEnochName: "Name (Enoch)",
+      yesLabel: "Yes",
+      noLabel: "No",
+      planetsTitle: "Planets",
+      housesTitle: "Astrological Houses",
+      ascLabel: "Asc",
+      descLabel: "Desc",
+      mcLabel: "MC",
+      houseLabel: "House",
+      elementSummaryTitle: "Element Summary",
+      elementSourceUnit: "Count (unit)",
+      elementSourceWeighted: "Score (weighted)",
+      elementPolarityTitle: "Polarity",
+      polarityMasculine: "Masculine (Fire + Air)",
+      polarityFeminine: "Feminine (Water + Earth)",
+      tableSourceLabel: "Source",
+      modalitiesTitle: "Modalities Summary",
+      modalitiesSourceUnit: "Count (unit)",
+      modalitiesSourceWeighted: "Score (weighted)",
+      notePluto: "Note: Pluto is excluded; Sun, Moon and Ascendant count twice in weighted totals.",
+      triadLabel: "Triad",
+      triadMasculine: "Masculine (Fire)",
+      triadNeutral: "Neutral (Air)",
+      triadFeminine: "Feminine (Water+Earth)",
+      planetNames: {
+        Sun: "Sun",
+        Moon: "Moon",
+        Mercury: "Mercury",
+        Venus: "Venus",
+        Mars: "Mars",
+        Jupiter: "Jupiter",
+        Saturn: "Saturn",
+        Uranus: "Uranus",
+        Neptune: "Neptune",
+        Pluto: "Pluto"
+      },
+      signNames: {
+        Aries: "Aries",
+        Taurus: "Taurus",
+        Gemini: "Gemini",
+        Cancer: "Cancer",
+        Leo: "Leo",
+        Virgo: "Virgo",
+        Libra: "Libra",
+        Scorpio: "Scorpio",
+        Sagittarius: "Sagittarius",
+        Capricorn: "Capricorn",
+        Aquarius: "Aquarius",
+        Pisces: "Pisces"
+      },
+      elementNames: {
+        Fuego: "Fire",
+        Tierra: "Earth",
+        Aire: "Air",
+        Agua: "Water"
+      },
+      modalityNames: {
+        Cardinal: "Cardinal",
+        Fijo: "Fixed",
+        Mutable: "Mutable"
+      }
     }
   };
   let currentTranslations = translations.es;
+  let activeLang = 'es';
+  const t = (key, fallback) => (currentTranslations && currentTranslations[key]) || fallback || key;
+
+  function pushTranslationsToGlobal() {
+    try {
+      window.__chartTranslations = currentTranslations;
+      window.__chartLanguage = activeLang;
+      window.getChartTranslation = function(key, fallback) {
+        return (currentTranslations && currentTranslations[key]) || fallback || key;
+      };
+      window.translateSignName = function(sign) {
+        const dict = currentTranslations && currentTranslations.signNames;
+        return (dict && dict[sign]) || sign;
+      };
+      window.translatePlanetName = function(planet) {
+        const dict = currentTranslations && currentTranslations.planetNames;
+        return (dict && dict[planet]) || planet;
+      };
+      window.dispatchEvent(new CustomEvent('chart:language-change', {
+        detail: { lang: activeLang, translations: currentTranslations }
+      }));
+    } catch (_){}
+  }
+  pushTranslationsToGlobal();
 
   function applyLanguage(lang) {
     const tr = translations[lang] || translations.es;
@@ -133,10 +307,12 @@ function initApp() {
     const locationLabel = document.querySelector('[data-l10n="locationLabel"]');
     const submitBtn = document.querySelector('#astroForm button[type="submit"]');
     const titleEl = document.getElementById("appTitle");
+    const loadingLabel = document.querySelector('[data-l10n="loadingApp"]');
     if (titleEl) titleEl.textContent = tr.title;
     if (dateLabel) dateLabel.textContent = tr.dateLabel;
     if (locationLabel) locationLabel.textContent = tr.locationLabel;
     if (submitBtn) submitBtn.textContent = tr.submitButton;
+    if (loadingLabel) loadingLabel.textContent = tr.loadingApp;
     if (gpsButton) gpsButton.setAttribute("aria-label", tr.gpsLabel);
     if (locationInput && !manualLocationSelected) {
       locationInput.placeholder = tr.placeholder;
@@ -146,12 +322,18 @@ function initApp() {
       try { localStorage.setItem("chartLang", lang); } catch (_){}
     }
     currentTranslations = tr;
+    activeLang = lang;
+    pushTranslationsToGlobal();
   }
 
   const defaultLang = (navigator.language && navigator.language.toLowerCase().startsWith("es")) ? "es" : "en";
-  let activeLang = (function(){
-    try { return localStorage.getItem("chartLang") || defaultLang; } catch (_) { return defaultLang; }
-  })();
+  try {
+    const stored = localStorage.getItem("chartLang");
+    if (stored) activeLang = stored;
+    else activeLang = defaultLang;
+  } catch (_) {
+    activeLang = defaultLang;
+  }
   applyLanguage(activeLang);
   if (langSelect) {
     langSelect.value = activeLang;
@@ -213,14 +395,77 @@ function initApp() {
       autoGeoRequested = false;
       if (gpsButton) gpsButton.disabled = false;
     }, (err) => {
-      setGpsStatus("statusError", err && err.message ? err.message : "sin permiso");
+      setGpsStatus("statusError", err && err.message ? err.message : (currentTranslations.gpsDenied || ""));
       autoGeoRequested = false;
       if (gpsButton) gpsButton.disabled = false;
     }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
   }
 
+  async function attemptIpBootstrap() {
+    if (ipBootstrapDone || ipLookupPending) return;
+    if (!locationInput) return;
+    if (manualLocationSelected) return;
+    if ((locationInput.value || "").trim().length > 0) return;
+    ipLookupPending = true;
+    setGpsStatus("statusSearching");
+    const providers = [
+      {
+        url: "https://ipapi.co/json/",
+        map: (data) => {
+          const lat = parseFloat(data.latitude);
+          const lon = parseFloat(data.longitude);
+          if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+          const label = [data.city, data.region, data.country_name].filter(Boolean).join(", ") || data.ip || null;
+          return { lat, lon, label };
+        }
+      },
+      {
+        url: "https://ipwho.is/?fields=ip,success,city,region,country,latitude,longitude",
+        map: (data) => {
+          if (data.success === false) return null;
+          const lat = parseFloat(data.latitude);
+          const lon = parseFloat(data.longitude);
+          if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+          const label = [data.city, data.region, data.country].filter(Boolean).join(", ") || data.ip || null;
+          return { lat, lon, label };
+        }
+      }
+    ];
+    let applied = false;
+    for (const provider of providers) {
+      if (applied) break;
+      try {
+        const resp = await fetch(provider.url, { headers: { Accept: "application/json" } });
+        if (!resp.ok) continue;
+        const data = await resp.json();
+        const mapped = provider.map(data);
+        if (!mapped) continue;
+        if (manualLocationSelected || (locationInput.value || "").trim().length > 0) {
+          applied = true;
+          ipBootstrapDone = true;
+          break;
+        }
+        const label = mapped.label || currentTranslations.detectedPlaceholder;
+        setLocationFromSuggestion(label, mapped.lat, mapped.lon, { manual: false });
+        setGpsStatus("statusDetectedBrowser");
+        ipBootstrapDone = true;
+        applied = true;
+      } catch (providerErr) {
+        debugValue("ip bootstrap provider error", { url: provider.url, err: providerErr && providerErr.message });
+      }
+    }
+    if (!applied && !manualLocationSelected) {
+      setGpsStatus(null);
+    }
+    ipLookupPending = false;
+  }
+
+
+  }
+
   locationInput.addEventListener("input", () => {
     manualLocationSelected = false;
+    ipBootstrapDone = true;
     selectedLat = null;
     selectedLon = null;
     setGpsStatus(null);
@@ -318,13 +563,13 @@ function initApp() {
     const treeWrapper = document.querySelector('.tree-wrapper');
     // Mostrar estado de carga visible
     try { output.classList.remove('hidden'); } catch(_){}
-    output.innerHTML = '<div class="loading"><div class="spinner"></div><span>Calculando carta…</span></div>';
+    output.innerHTML = '<div class="loading"><div class="spinner"></div><span>' + t("calculatingMessage", "Calculando carta...") + '</span></div>';
     if (treeWrapper) treeWrapper.classList.add('hidden');
 
     debugValue("[submit] datos", { datetime, selectedLat, selectedLon });
 
     if (!selectedLat || !selectedLon) {
-      output.innerHTML = "<p>Selecciona una ubicación válida o permite el acceso a tu ubicación.</p>";
+      output.innerHTML = "<p>" + t("selectLocationMessage", "Selecciona una ubicación válida o permite el acceso a tu ubicación.") + "</p>";
       return;
     }
 	let tz = 'UTC';
@@ -403,11 +648,20 @@ function initApp() {
         if (treeWrapper) treeWrapper.classList.remove('hidden');
       }
     } catch (err) {
-      output.innerHTML = "<p>Error inesperado: " + (err && err.message ? err.message : String(err)) + "</p>";
+      const technical = (err && err.message) ? err.message : String(err);
+      if (/failed to fetch/i.test(technical)) {
+        const fallbackMsg = (currentTranslations && currentTranslations.errorUnavailable) ||
+          "Servicio temporalmente no disponible. Intenta nuevamente.";
+        output.innerHTML = "<p>" + fallbackMsg + "</p>";
+      } else {
+        output.innerHTML = "<p>" + t("unexpectedError", "Error inesperado") + ": " + technical + "</p>";
+      }
       debugValue("🔬 Error en fetch", err);
     }
   });
 
+  attemptIpBootstrap();
+  setTimeout(attemptIpBootstrap, 800);
   revealApp();
 }
 
@@ -450,6 +704,8 @@ try {
     } catch (_){}
   });
 } catch (_){}
+
+
 
 
 

@@ -39,6 +39,8 @@ body {
 }
 /* Container */
 .page { max-width: 1200px; margin: 0 auto; }
+.page.hidden { opacity: 0; pointer-events: none; }
+.loading-screen.hidden { display: none; }
 /* Header layout */
 .header-row {
   display: flex;

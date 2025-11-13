@@ -17,21 +17,54 @@ const hebrewHouseLetters = {
 };
 try { window.hebrewHouseLetters = hebrewHouseLetters; } catch(_) {}
 
+function chartTranslate(key, fallback) {
+  try {
+    if (typeof window.getChartTranslation === 'function') {
+      return window.getChartTranslation(key, fallback);
+    }
+  } catch (_){}
+  return fallback || key;
+}
+function chartTranslateSign(sign) {
+  try {
+    if (typeof window.translateSignName === 'function') {
+      return window.translateSignName(sign);
+    }
+  } catch (_){}
+  return sign;
+}
+function chartTranslatePlanet(planet) {
+  try {
+    if (typeof window.translatePlanetName === 'function') {
+      return window.translatePlanetName(planet);
+    }
+  } catch (_){}
+  return planet;
+}
+function chartTranslateElement(key, fallback) {
+  const dict = (window.__chartTranslations && window.__chartTranslations.elementNames) || null;
+  return (dict && dict[key]) || fallback || key;
+}
+function chartTranslateModality(key, fallback) {
+  const dict = (window.__chartTranslations && window.__chartTranslations.modalityNames) || null;
+  return (dict && dict[key]) || fallback || key;
+}
+
 function renderEnochInfo(container, enoch, lastSunLongitude){
   try {
     const shemAstron = (typeof getShemAstronomico==='function') ? getShemAstronomico(lastSunLongitude) : '';
     const shemEnoch  = (typeof getShemEnochiano==='function') ? getShemEnochiano(enoch.enoch_month, enoch.enoch_day, enoch.added_week) : '';
     container.innerHTML = [
       '<div style="background:var(--card-bg);color:var(--text);border:1px solid var(--border);padding:10px;border-radius:8px;">',
-      '  <h3>Calendario de Enoch</h3>',
+      '  <h3>' + chartTranslate('enochTitle', 'Calendario de Enoch') + '</h3>',
       '  <ul style="list-style:none;padding:0;margin:0 0 10px 0;">',
-      '    <li><strong>A\u00F1o:</strong> ' + enoch.enoch_year + '</li>',
-      '    <li><strong>Mes:</strong> ' + enoch.enoch_month + '</li>',
-      '    <li><strong>D\u00EDa:</strong> ' + enoch.enoch_day + '</li>',
-      '    <li><strong>D\u00EDa del a\u00F1o:</strong> ' + enoch.enoch_day_of_year + '</li>',
-      '    <li><strong>Semana adicional:</strong> ' + (enoch.added_week ? 'S\u00ED' : 'No') + '</li>',
-      '    <li><strong>Nombre (Astron\u00F3mico):</strong> <span class="shemHebrew metatron">' + shemAstron + '</span> <span class="shemHebrew stam">' + shemAstron + '</span></li>',
-      '    <li><strong>Nombre (Enoch):</strong> <span class="shemHebrew metatron">' + shemEnoch + '</span> <span class="shemHebrew stam">' + shemEnoch + '</span></li>',
+      '    <li><strong>' + chartTranslate('enochYear', 'Año') + ':</strong> ' + enoch.enoch_year + '</li>',
+      '    <li><strong>' + chartTranslate('enochMonth', 'Mes') + ':</strong> ' + enoch.enoch_month + '</li>',
+      '    <li><strong>' + chartTranslate('enochDay', 'Día') + ':</strong> ' + enoch.enoch_day + '</li>',
+      '    <li><strong>' + chartTranslate('enochDayOfYear', 'Día del año') + ':</strong> ' + enoch.enoch_day_of_year + '</li>',
+      '    <li><strong>' + chartTranslate('enochAddedWeek', 'Semana adicional') + ':</strong> ' + (enoch.added_week ? chartTranslate('yesLabel', 'Sí') : chartTranslate('noLabel', 'No')) + '</li>',
+      '    <li><strong>' + chartTranslate('enochAstronomicalName', 'Nombre (Astronómico)') + ':</strong> <span class="shemHebrew metatron">' + shemAstron + '</span> <span class="shemHebrew stam">' + shemAstron + '</span></li>',
+      '    <li><strong>' + chartTranslate('enochEnochName', 'Nombre (Enoch)') + ':</strong> <span class="shemHebrew metatron">' + shemEnoch + '</span> <span class="shemHebrew stam">' + shemEnoch + '</span></li>',
       '  </ul>',
       '</div>'
     ].join('\n');
@@ -45,7 +78,7 @@ function renderPlanetsAndHouses(container, planets, houses_data){
   // planets
   let html = [
     '<div style="background:var(--card-bg);color:var(--text);padding:10px;border-radius:8px;margin-top:10px;border:1px solid var(--border);">',
-    '  <h3>Planetas</h3>',
+    '  <h3>' + chartTranslate('planetsTitle', 'Planetas') + '</h3>',
     '  <ul style="list-style:none;padding:0;">'
   ];
   try {
@@ -56,21 +89,26 @@ function renderPlanetsAndHouses(container, planets, houses_data){
       const ze = (window.zodiacEmojis && window.zodiacEmojis[zodiacSign]) || '';
       const pEmoji = (window.planetEmojis && window.planetEmojis[name]) || '';
       const zEmoji = ze || '';
-      html.push('<li><span style="font-size:1.1em;margin-right:4px;">' + pEmoji + '</span> <strong>' + name + ':</strong> <span style="font-size:1.05em;margin-right:2px;">' + zEmoji + '</span> ' + zodiacSign + ' ' + (decimals(lon%30,4)) + '\u00B0 (' + decimals(lon,4) + '\u00B0)</li>');
+      const displayPlanet = chartTranslatePlanet(name);
+      const displaySign = chartTranslateSign(zodiacSign);
+      html.push('<li><span style="font-size:1.1em;margin-right:4px;">' + pEmoji + '</span> <strong>' + displayPlanet + ':</strong> <span style="font-size:1.05em;margin-right:2px;">' + zEmoji + '</span> ' + displaySign + ' ' + (decimals(lon%30,4)) + '\u00B0 (' + decimals(lon,4) + '\u00B0)</li>');
     }
   } catch(_){}
   html.push('  </ul>','</div>');
 
   // houses
-  html.push('<div style="background:var(--card-bg);color:var(--text);padding:10px;border-radius:8px;margin-top:10px;border:1px solid var(--border);">','  <h3>Casas Astrologicas</h3>','  <ul style="list-style:none;padding:0;">');
+  const ascLabel = chartTranslate('ascLabel', 'Asc');
+  const mcLabel = chartTranslate('mcLabel', 'MC');
+  const houseLabel = chartTranslate('houseLabel', 'Casa');
+  html.push('<div style="background:var(--card-bg);color:var(--text);padding:10px;border-radius:8px;margin-top:10px;border:1px solid var(--border);">','  <h3>' + chartTranslate('housesTitle', 'Casas Astrológicas') + '</h3>','  <ul style="list-style:none;padding:0;">');
   try {
-    html.push('<li><strong>Asc:</strong> ' + ((window.zodiacEmojis && window.zodiacEmojis[ascendant.sign])||'') + ' ' + ascendant.sign + ' ' + decimals(ascendant.position,4) + '\u00B0 ' + decimals(ascendant.degree,4) + '\u00B0</li>');
-    html.push('<li><strong>MC:</strong> ' + ((window.zodiacEmojis && window.zodiacEmojis[midheaven.sign])||'') + ' ' + midheaven.sign + ' ' + decimals(midheaven.position,4) + '\u00B0 ' + decimals(midheaven.degree,4) + '\u00B0</li>');
+    html.push('<li><strong>' + ascLabel + ':</strong> ' + ((window.zodiacEmojis && window.zodiacEmojis[ascendant.sign])||'') + ' ' + chartTranslateSign(ascendant.sign) + ' ' + decimals(ascendant.position,4) + '\u00B0 ' + decimals(ascendant.degree,4) + '\u00B0</li>');
+    html.push('<li><strong>' + mcLabel + ':</strong> ' + ((window.zodiacEmojis && window.zodiacEmojis[midheaven.sign])||'') + ' ' + chartTranslateSign(midheaven.sign) + ' ' + decimals(midheaven.position,4) + '\u00B0 ' + decimals(midheaven.degree,4) + '\u00B0</li>');
     for (const h of (houses||[])){
       const ze = (window.zodiacEmojis && window.zodiacEmojis[h.sign]) || '';
       const letter = (window.hebrewHouseLetters && window.hebrewHouseLetters[h.house]) || '';
       const letterHtml = letter ? ' <span style="font-family:\'StamHebrew\';margin-left:4px;">' + letter + '</span>' : '';
-      html.push('<li><strong>Casa ' + h.house + ':</strong> ' + (ze||'') + ' ' + h.sign + ' ' + decimals(h.position,4) + '\u00B0' + letterHtml + '</li>');
+      html.push('<li><strong>' + houseLabel + ' ' + h.house + ':</strong> ' + (ze||'') + ' ' + chartTranslateSign(h.sign) + ' ' + decimals(h.position,4) + '\u00B0' + letterHtml + '</li>');
     }
   } catch(_){}
   html.push('  </ul>','</div>');
@@ -105,16 +143,16 @@ function renderElementSummary(container, planets, ascendant){
     card.style.marginTop = '10px';
 
     card.innerHTML = [
-      '<h3>Resumen por Elementos</h3>',
+      '<h3>' + chartTranslate('elementSummaryTitle', 'Resumen por Elementos') + '</h3>',
       '<table style="border-collapse:collapse;">',
-      '  <thead><tr><th style="text-align:left;padding:4px 8px;">Fuente</th><th style="text-align:left;padding:4px 8px;">Fuego</th><th style="text-align:left;padding:4px 8px;">Tierra</th><th style="text-align:left;padding:4px 8px;">Aire</th><th style="text-align:left;padding:4px 8px;">Agua</th></tr></thead>',
+      '  <thead><tr><th style="text-align:left;padding:4px 8px;">' + chartTranslate('tableSourceLabel', 'Fuente') + '</th><th style="text-align:left;padding:4px 8px;">' + chartTranslateElement('Fuego', 'Fuego') + '</th><th style="text-align:left;padding:4px 8px;">' + chartTranslateElement('Tierra', 'Tierra') + '</th><th style="text-align:left;padding:4px 8px;">' + chartTranslateElement('Aire', 'Aire') + '</th><th style="text-align:left;padding:4px 8px;">' + chartTranslateElement('Agua', 'Agua') + '</th></tr></thead>',
       '  <tbody>',
-      '    <tr><td style="padding:4px 8px;">Conteo (unitario)</td>'+
+      '    <tr><td style="padding:4px 8px;">' + chartTranslate('elementSourceUnit', 'Conteo (unitario)') + '</td>'+
       '      <td style="padding:4px 8px;">'+cellUnit(raw.Fuego||0, tokens?tokens.Fuego:null)+'</td>'+
       '      <td style="padding:4px 8px;">'+cellUnit(raw.Tierra||0, tokens?tokens.Tierra:null)+'</td>'+
       '      <td style="padding:4px 8px;">'+cellUnit(raw.Aire||0, tokens?tokens.Aire:null)+'</td>'+
       '      <td style="padding:4px 8px;">'+cellUnit(raw.Agua||0, tokens?tokens.Agua:null)+'</td></tr>',
-      '    <tr><td style="padding:4px 8px;">Puntaje (ponderado)</td>'+
+      '    <tr><td style="padding:4px 8px;">' + chartTranslate('elementSourceWeighted', 'Puntaje (ponderado)') + '</td>'+
       '      <td style="padding:4px 8px;">'+(hi(counts.Fuego)?'<span class="hi">'+fmt(counts.Fuego)+'</span>':fmt(counts.Fuego||0))+'</td>'+
       '      <td style="padding:4px 8px;">'+(hi(counts.Tierra)?'<span class="hi">'+fmt(counts.Tierra)+'</span>':fmt(counts.Tierra||0))+'</td>'+
       '      <td style="padding:4px 8px;">'+(hi(counts.Aire)?'<span class="hi">'+fmt(counts.Aire)+'</span>':fmt(counts.Aire||0))+'</td>'+
@@ -122,14 +160,14 @@ function renderElementSummary(container, planets, ascendant){
       '  </tbody>',
       '</table>',
       '<div style="margin-top:8px;">'+
-        '<strong>Polaridad:</strong> Masculino (Fuego+Aire): '+fmt(mascW)+' | Femenino (Agua+Tierra): '+fmt(femW)+'</div>',
+        '<strong>' + chartTranslate('elementPolarityTitle', 'Polaridad') + ':</strong> ' + chartTranslate('polarityMasculine', 'Masculino (Fuego + Aire)') + ': '+fmt(mascW)+' | ' + chartTranslate('polarityFeminine', 'Femenino (Agua + Tierra)') + ': '+fmt(femW)+'</div>',
       (function(){
         var triM = Number(counts.Fuego||0);
         var triN = Number(counts.Aire||0);
         var triF = Number((counts.Agua||0) + (counts.Tierra||0));
         var triMax = Math.max(triM, triN, triF);
         var wrap = function(label, v){ return (Math.abs(v-triMax)<1e-6)?('<span class="hi">'+fmt(v)+'</span>'):fmt(v); };
-        return '<div style="margin-top:6px;"><strong>Tr\u00EDada:</strong> Masculino (Fuego): '+wrap('M',triM)+' | Neutro (Aire): '+wrap('N',triN)+' | Femenino (Agua+Tierra): '+wrap('F',triF)+'</div>';
+        return '<div style="margin-top:6px;"><strong>' + chartTranslate('triadLabel', 'Tr\u00EDada') + ':</strong> ' + chartTranslate('triadMasculine', 'Masculino (Fuego)') + ': '+wrap('M',triM)+' | ' + chartTranslate('triadNeutral', 'Neutro (Aire)') + ': '+wrap('N',triN)+' | ' + chartTranslate('triadFeminine', 'Femenino (Agua+Tierra)') + ': '+wrap('F',triF)+'</div>';
       })()
     ].join('\n');
 
@@ -139,7 +177,7 @@ function renderElementSummary(container, planets, ascendant){
     try {
       var note = document.createElement('div');
       note.className = 'note';
-      note.innerHTML = 'Nota: se excluye <strong>Plutón</strong>; <strong>Sol</strong>, <strong>Luna</strong> y <strong>Ascendente</strong> puntúan ×2 en los conteos ponderados.';
+      note.innerHTML = chartTranslate('notePluto', 'Nota: se excluye <strong>Plutón</strong>; <strong>Sol</strong>, <strong>Luna</strong> y <strong>Ascendente</strong> puntúan x2 en los conteos ponderados.');
       container.appendChild(note);
     } catch(_){}
 
@@ -157,15 +195,15 @@ function renderElementSummary(container, planets, ascendant){
     mod.style.borderRadius = '8px';
     mod.style.marginTop = '10px';
     mod.innerHTML = [
-      '<h3>Resumen por Modalidades</h3>',
+      '<h3>' + chartTranslate('modalitiesTitle', 'Resumen por Modalidades') + '</h3>',
       '<table style="border-collapse:collapse;">',
-      '  <thead><tr><th style="text-align:left;padding:4px 8px;">Fuente</th><th style="text-align:left;padding:4px 8px;">Cardinal</th><th style="text-align:left;padding:4px 8px;">Fijo</th><th style="text-align:left;padding:4px 8px;">Mutable</th></tr></thead>',
+      '  <thead><tr><th style="text-align:left;padding:4px 8px;">' + chartTranslate('tableSourceLabel', 'Fuente') + '</th><th style="text-align:left;padding:4px 8px;">' + chartTranslateModality('Cardinal', 'Cardinal') + '</th><th style="text-align:left;padding:4px 8px;">' + chartTranslateModality('Fijo', 'Fijo') + '</th><th style="text-align:left;padding:4px 8px;">' + chartTranslateModality('Mutable', 'Mutable') + '</th></tr></thead>',
       '  <tbody>',
-      '    <tr><td style="padding:4px 8px;">Conteo (unitario)</td>'+
+      '    <tr><td style="padding:4px 8px;">' + chartTranslate('modalitiesSourceUnit', 'Conteo (unitario)') + '</td>'+
       '      <td style="padding:4px 8px;">'+cell('Cardinal', rawMod.Cardinal||0, modTokens?modTokens.Cardinal:null)+'</td>'+
       '      <td style="padding:4px 8px;">'+cell('Fijo', rawMod.Fijo||0, modTokens?modTokens.Fijo:null)+'</td>'+
       '      <td style="padding:4px 8px;">'+cell('Mutable', rawMod.Mutable||0, modTokens?modTokens.Mutable:null)+'</td></tr>',
-      '    <tr><td style="padding:4px 8px;">Puntaje (ponderado)</td>'+
+      '    <tr><td style="padding:4px 8px;">' + chartTranslate('modalitiesSourceWeighted', 'Puntaje (ponderado)') + '</td>'+
       '      <td style="padding:4px 8px;">'+(hiMod(wMod.Cardinal)?'<span class="hi">'+fmt(wMod.Cardinal)+'</span>':fmt(wMod.Cardinal||0))+'</td>'+
       '      <td style="padding:4px 8px;">'+(hiMod(wMod.Fijo)?'<span class="hi">'+fmt(wMod.Fijo)+'</span>':fmt(wMod.Fijo||0))+'</td>'+
       '      <td style="padding:4px 8px;">'+(hiMod(wMod.Mutable)?'<span class="hi">'+fmt(wMod.Mutable)+'</span>':fmt(wMod.Mutable||0))+'</td></tr>',

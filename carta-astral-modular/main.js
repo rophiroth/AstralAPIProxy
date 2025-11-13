@@ -95,7 +95,12 @@ function initApp() {
       locationLabel: "Ubicación (Ciudad, País):",
       submitButton: "Calcular Carta",
       placeholder: "Escribe tu ciudad",
-      gpsLabel: "Usar ubicación actual"
+      gpsLabel: "Usar ubicación actual",
+      statusSearching: "Buscando ubicación...",
+      statusDetected: "Ubicación detectada",
+      statusError: "GPS:",
+      suggestionNoResults: "No se encontraron resultados",
+      suggestionError: "No hay conexión"
     },
     en: {
       title: "Modular Birth Chart",
@@ -103,9 +108,15 @@ function initApp() {
       locationLabel: "Location (City, Country):",
       submitButton: "Calculate Chart",
       placeholder: "Type your city",
-      gpsLabel: "Use current location"
+      gpsLabel: "Use current location",
+      statusSearching: "Looking up location...",
+      statusDetected: "Location detected",
+      statusError: "GPS:",
+      suggestionNoResults: "No results found",
+      suggestionError: "No connection"
     }
   };
+  let currentTranslations = translations.es;
 
   function applyLanguage(lang) {
     const tr = translations[lang] || translations.es;
@@ -125,6 +136,7 @@ function initApp() {
       langSelect.value = lang;
       try { localStorage.setItem("chartLang", lang); } catch (_){}
     }
+    currentTranslations = tr;
   }
 
   const defaultLang = (navigator.language && navigator.language.toLowerCase().startsWith("es")) ? "es" : "en";
@@ -155,15 +167,18 @@ function initApp() {
     suggestionsBox.appendChild(div);
   }
 
-  function setGpsStatus(text, isError = false) {
+function setGpsStatus(text, isError = false, isBusy = false) {
     if (!gpsStatus) return;
+    const hasText = Boolean(text && text.trim());
     gpsStatus.textContent = text || "";
     gpsStatus.classList.toggle("error", Boolean(isError));
+    gpsStatus.classList.toggle("busy", Boolean(isBusy));
+    gpsStatus.style.visibility = hasText ? "visible" : "hidden";
   }
 
   function requestGeolocation({ force = false } = {}) {
     if (!navigator.geolocation) {
-      setGpsStatus("GPS no disponible", true);
+      setGpsStatus(currentTranslations.statusError + " GPS no disponible", true);
       return;
     }
     if (manualLocationSelected && !force) {
@@ -174,15 +189,15 @@ function initApp() {
       return;
     }
     autoGeoRequested = true;
-    setGpsStatus("Detectando ubicación...");
+    setGpsStatus(currentTranslations.statusSearching, false, true);
     if (gpsButton) gpsButton.disabled = true;
     navigator.geolocation.getCurrentPosition(pos => {
-      setGpsStatus("Ubicación detectada");
+        setGpsStatus(currentTranslations.statusDetected);
       setLocationFromSuggestion("Ubicación actual", pos.coords.latitude, pos.coords.longitude);
       autoGeoRequested = false;
       if (gpsButton) gpsButton.disabled = false;
     }, (err) => {
-      setGpsStatus("GPS: " + (err.message || "sin permiso"), true);
+      setGpsStatus(currentTranslations.statusError + " " + (err.message || "sin permiso"), true);
       autoGeoRequested = false;
       if (gpsButton) gpsButton.disabled = false;
     }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
@@ -216,7 +231,7 @@ function initApp() {
 
       const loading = document.createElement("div");
       loading.className = "suggestion-loading";
-      loading.textContent = "Buscando…";
+      loading.textContent = currentTranslations.statusSearching;
       suggestionsBox.appendChild(loading);
 
       if (locationFetchController) {
@@ -247,7 +262,7 @@ function initApp() {
         if (!appended && suggestionsBox.querySelectorAll(".suggestion-item").length === 0) {
           const none = document.createElement("div");
           none.className = "suggestion-loading";
-          none.textContent = "No se encontraron resultados";
+          none.textContent = currentTranslations.suggestionNoResults;
           suggestionsBox.appendChild(none);
         }
       } catch (err) {
@@ -257,7 +272,7 @@ function initApp() {
         if (!suggestionsBox.querySelector(".suggestion-item")) {
           const errDiv = document.createElement("div");
           errDiv.className = "suggestion-loading";
-          errDiv.textContent = "No hay conexión";
+          errDiv.textContent = currentTranslations.suggestionError;
           suggestionsBox.appendChild(errDiv);
         }
       }

@@ -408,6 +408,7 @@ function initApp() {
     if ((locationInput.value || "").trim().length > 0) return;
     ipLookupPending = true;
     setGpsStatus("statusSearching");
+    debugValue("ip bootstrap start");
     const providers = [
       {
         url: "https://ipapi.co/json/",
@@ -450,17 +451,16 @@ function initApp() {
         setGpsStatus("statusDetectedBrowser");
         ipBootstrapDone = true;
         applied = true;
+        debugValue("ip bootstrap success", { provider: provider.url, label, lat: mapped.lat, lon: mapped.lon });
       } catch (providerErr) {
         debugValue("ip bootstrap provider error", { url: provider.url, err: providerErr && providerErr.message });
       }
     }
     if (!applied && !manualLocationSelected) {
       setGpsStatus(null);
+      debugValue("ip bootstrap failed all providers");
     }
     ipLookupPending = false;
-  }
-
-
   }
 
   locationInput.addEventListener("input", () => {

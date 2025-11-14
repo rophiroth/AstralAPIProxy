@@ -41,6 +41,14 @@ function chartTranslatePlanet(planet) {
   } catch (_){}
   return planet;
 }
+function chartTranslateAspect(type, fallback) {
+  try {
+    if (typeof window.translateAspectName === 'function') {
+      return window.translateAspectName(type);
+    }
+  } catch (_){}
+  return fallback || type;
+}
 function chartTranslateElement(key, fallback) {
   const dict = (window.__chartTranslations && window.__chartTranslations.elementNames) || null;
   return (dict && dict[key]) || fallback || key;
@@ -113,6 +121,30 @@ function renderPlanetsAndHouses(container, planets, houses_data){
   } catch(_){}
   html.push('  </ul>','</div>');
 
+  container.innerHTML += html.join('\n');
+}
+
+function renderAspectsTable(container, aspects) {
+  if (!Array.isArray(aspects) || aspects.length === 0) return;
+  const title = chartTranslate('aspectsTitle', 'Classical Aspects');
+  const typeLabel = chartTranslate('aspectTypeLabel', 'Aspect');
+  const planetsLabel = chartTranslate('aspectPlanetsLabel', 'Planets');
+  const orbLabel = chartTranslate('aspectOrbLabel', 'Orb');
+  const rows = aspects.map((asp) => {
+    const typeName = chartTranslateAspect(asp.type, asp.type);
+    const plist = chartTranslatePlanet(asp.planetA) + ' + ' + chartTranslatePlanet(asp.planetB);
+    const orb = (Math.round(Math.abs(asp.orb) * 100) / 100).toFixed(2) + '°';
+    return '<tr><td>' + typeName + '</td><td>' + plist + '</td><td>' + orb + '</td></tr>';
+  });
+  const html = [
+    '<div class="element-summary" style="margin-top:16px;">',
+    '  <h3>' + title + '</h3>',
+    '  <table style="border-collapse:collapse;width:100%;">',
+    '    <thead><tr><th style="text-align:left;padding:6px 8px;">' + typeLabel + '</th><th style="text-align:left;padding:6px 8px;">' + planetsLabel + '</th><th style="text-align:left;padding:6px 8px;">' + orbLabel + '</th></tr></thead>',
+    '    <tbody>' + rows.join('') + '</tbody>',
+    '  </table>',
+    '</div>'
+  ];
   container.innerHTML += html.join('\n');
 }
 
@@ -221,5 +253,6 @@ try {
   window.renderEnochInfo = renderEnochInfo;
   window.renderPlanetsAndHouses = renderPlanetsAndHouses;
   window.renderElementSummary = renderElementSummary;
+  window.renderAspectsTable = renderAspectsTable;
 } catch(_){}
 

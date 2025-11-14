@@ -24,7 +24,8 @@ const RESULT_MODULES = [
   'sefirotCoords.js',
   'drawAscMcHouses.js',
   'mapPlanetsToSefirot.js',
-  'drawTreeOfLife.js'
+  'drawTreeOfLife.js',
+  'drawClassicWheel.js'
 ];
 
 function ensureResultModules() {
@@ -36,17 +37,76 @@ function ensureResultModules() {
   return resultModulesPromise;
 }
 
+const ASPECT_DEFINITIONS = [
+  { key: 'conjunction', angle: 0, orb: 6 },
+  { key: 'sextile', angle: 60, orb: 4 },
+  { key: 'square', angle: 90, orb: 5 },
+  { key: 'trine', angle: 120, orb: 5 },
+  { key: 'opposition', angle: 180, orb: 6 }
+];
+
+function normalizeDegree(deg) {
+  let d = deg % 360;
+  if (d < 0) d += 360;
+  return d;
+}
+
+function computeClassicalAspects(planets) {
+  const entries = Object.entries(planets || {});
+  const results = [];
+  for (let i = 0; i < entries.length; i++) {
+    const [nameA, dataA] = entries[i];
+    const lonA = dataA && typeof dataA.longitude === 'number' ? normalizeDegree(dataA.longitude) : null;
+    if (lonA === null) continue;
+    for (let j = i + 1; j < entries.length; j++) {
+      const [nameB, dataB] = entries[j];
+      const lonB = dataB && typeof dataB.longitude === 'number' ? normalizeDegree(dataB.longitude) : null;
+      if (lonB === null) continue;
+      let diff = Math.abs(lonA - lonB);
+      if (diff > 180) diff = 360 - diff;
+      ASPECT_DEFINITIONS.forEach((def) => {
+        const delta = Math.abs(diff - def.angle);
+        if (delta <= def.orb) {
+          results.push({
+            type: def.key,
+            planetA: nameA,
+            planetB: nameB,
+            exact: def.angle,
+            actual: diff,
+            orb: delta
+          });
+        }
+      });
+    }
+  }
+  return results.sort((a, b) => a.orb - b.orb);
+}
+
 async function renderResultsView(data) {
   if (!data) return;
   await ensureResultModules();
   const output = document.getElementById("output");
+  if (!output) return;
   const treeWrapper = document.querySelector('.tree-wrapper');
-  const canvas = document.getElementById("treeOfLifeCanvas");
-  if (!output || !canvas) return;
-  const ctx = canvas.getContext("2d");
+  const treeCanvas = document.getElementById("treeOfLifeCanvas");
+  const classicWrapper = document.getElementById("classicChartWrapper");
+  const classicCanvas = document.getElementById("classicChartCanvas");
+  if (treeWrapper) treeWrapper.classList.add('hidden');
+  if (classicWrapper) classicWrapper.classList.add('hidden');
+  if (treeCanvas) {
+    const tctx = treeCanvas.getContext("2d");
+    if (tctx) tctx.clearRect(0, 0, treeCanvas.width, treeCanvas.height);
+  }
+  if (classicCanvas) {
+    const cctx = classicCanvas.getContext("2d");
+    if (cctx) cctx.clearRect(0, 0, classicCanvas.width, classicCanvas.height);
+  }
   output.innerHTML = "";
   output.classList.remove('hidden');
-  const { planets, enoch, houses_data } = data;
+  const aspects = computeClassicalAspects(data && data.planets ? data.planets : {});
+  const vizData = Object.assign({}, data, { classicAspects: aspects });
+  try { window.__lastCartaData = vizData; } catch (_) {}
+  const { planets, enoch, houses_data } = vizData;
   const oplanets = orderPlanets(planets);
 
   try {
@@ -67,17 +127,29 @@ async function renderResultsView(data) {
     } else { debugValue("renderElementSummary missing"); }
   } catch (resErr) { debugValue("renderElementSummary error", resErr); }
 
-  const drawAndShow = () => {
-    try { drawTreeOfLife(data, ctx); } catch (de) { debugValue("drawTreeOfLife error", de); }
-    try { setupTooltip(canvas, (houses_data && houses_data.houses) || [], oplanets); } catch (te) { debugValue("setupTooltip error", te); }
-    if (treeWrapper) treeWrapper.classList.remove('hidden');
+  try {
+    if (typeof window.renderAspectsTable === "function") {
+      renderAspectsTable(output, aspects);
+    } else { debugValue("renderAspectsTable missing"); }
+  } catch (aspErr) { debugValue("renderAspectsTable error", aspErr); }
+
+  const drawVisuals = () => {
+    if (treeCanvas && typeof window.drawTreeOfLife === "function") {
+      try { drawTreeOfLife(vizData, treeCanvas.getContext("2d")); } catch (de) { debugValue("drawTreeOfLife error", de); }
+      try { setupTooltip(treeCanvas, (houses_data && houses_data.houses) || [], oplanets); } catch (te) { debugValue("setupTooltip error", te); }
+      if (treeWrapper) treeWrapper.classList.remove('hidden');
+    }
+    if (classicCanvas && typeof window.drawClassicWheel === "function") {
+      try { drawClassicWheel(vizData, classicCanvas.getContext("2d")); } catch (ce) { debugValue("drawClassicWheel error", ce); }
+      if (classicWrapper) classicWrapper.classList.remove('hidden');
+    }
   };
 
   try {
-    document.fonts.load("20px 'StamHebrew'").then(drawAndShow);
+    document.fonts.load("20px 'StamHebrew'").then(drawVisuals);
   } catch (fe) {
     debugValue("fonts.load error", fe);
-    drawAndShow();
+    drawVisuals();
   }
 }
 
@@ -223,6 +295,10 @@ function initApp() {
       modalitiesTitle: "Resumen por modalidades",
       modalitiesSourceUnit: "Conteo (unitario)",
       modalitiesSourceWeighted: "Puntaje (ponderado)",
+      aspectsTitle: "Aspectos clásicos",
+      aspectTypeLabel: "Aspecto",
+      aspectPlanetsLabel: "Planetas",
+      aspectOrbLabel: "Orbe",
       notePluto: "Nota: se excluye Plutón; Sol, Luna y Ascendente puntúan x2 en los conteos ponderados.",
       triadLabel: "Tríada",
       triadMasculine: "Masculino (Fuego)",
@@ -276,6 +352,13 @@ function initApp() {
         Hod: "Hod",
         Yesod: "Yesod",
         Maljut: "Maljut"
+      },
+      aspectNames: {
+        conjunction: "Conjunción",
+        sextile: "Sextil",
+        square: "Cuadratura",
+        trine: "Trígono",
+        opposition: "Oposición"
       }
     },
     en: {
@@ -324,6 +407,10 @@ function initApp() {
       modalitiesTitle: "Modalities Summary",
       modalitiesSourceUnit: "Count (unit)",
       modalitiesSourceWeighted: "Score (weighted)",
+      aspectsTitle: "Classical Aspects",
+      aspectTypeLabel: "Aspect",
+      aspectPlanetsLabel: "Planets",
+      aspectOrbLabel: "Orb",
       notePluto: "Note: Pluto is excluded; Sun, Moon and Ascendant count twice in weighted totals.",
       triadLabel: "Triad",
       triadMasculine: "Masculine (Fire)",
@@ -377,6 +464,13 @@ function initApp() {
         Hod: "Hod",
         Yesod: "Yesod",
         Maljut: "Maljut"
+      },
+      aspectNames: {
+        conjunction: "Conjunction",
+        sextile: "Sextile",
+        square: "Square",
+        trine: "Trine",
+        opposition: "Opposition"
       }
     }
   };
@@ -398,6 +492,10 @@ function initApp() {
       window.translatePlanetName = function(planet) {
         const dict = currentTranslations && currentTranslations.planetNames;
         return (dict && dict[planet]) || planet;
+      };
+      window.translateAspectName = function(type) {
+        const dict = currentTranslations && currentTranslations.aspectNames;
+        return (dict && dict[type]) || type;
       };
       window.dispatchEvent(new CustomEvent('chart:language-change', {
         detail: { lang: activeLang, translations: currentTranslations }
@@ -710,7 +808,6 @@ function initApp() {
       const data = await response.json();
       await ensureResultModules();
       try { debugValue("[submit] json ok", Object.keys(data||{})); } catch(_){}
-      try { window.__lastCartaData = data; } catch(_){}
       await renderResultsView(data);
 } catch (err) {
       const technical = (err && err.message) ? err.message : String(err);
@@ -737,26 +834,42 @@ if (document.readyState === 'loading') {
   initApp();
   
   // re-render canvas when theme changes
-  async function rerenderCanvas() {
+  async function rerenderVisuals() {
     try {
       if (!window.__lastCartaData) return;
       await ensureResultModules();
-      const canvas = document.getElementById('treeOfLifeCanvas');
-      if (!canvas) return;
-      const ctx = canvas.getContext('2d');
-      if (typeof window.drawTreeOfLife !== 'function' || typeof window.setupTooltip !== 'function') return;
-      drawTreeOfLife(window.__lastCartaData, ctx);
-      const planets = (window.__lastCartaData && window.__lastCartaData.planets) || {};
-      const houses = (window.__lastCartaData && window.__lastCartaData.houses_data && window.__lastCartaData.houses_data.houses) || [];
-      setupTooltip(canvas, houses, orderPlanets(planets));
-    } catch (e) { debugValue("rerenderCanvas error", e); }
+      const data = window.__lastCartaData;
+
+      const treeCanvas = document.getElementById('treeOfLifeCanvas');
+      if (treeCanvas && typeof window.drawTreeOfLife === 'function') {
+        const tctx = treeCanvas.getContext('2d');
+        if (tctx) {
+          tctx.clearRect(0, 0, treeCanvas.width, treeCanvas.height);
+          drawTreeOfLife(data, tctx);
+          if (typeof window.setupTooltip === 'function') {
+            const planets = orderPlanets((data && data.planets) || {});
+            const houses = (data && data.houses_data && data.houses_data.houses) || [];
+            setupTooltip(treeCanvas, houses, planets);
+          }
+        }
+      }
+
+      const classicCanvas = document.getElementById('classicChartCanvas');
+      if (classicCanvas && typeof window.drawClassicWheel === 'function') {
+        const cctx = classicCanvas.getContext('2d');
+        if (cctx) {
+          cctx.clearRect(0, 0, classicCanvas.width, classicCanvas.height);
+          drawClassicWheel(data, cctx);
+        }
+      }
+    } catch (e) { debugValue("rerenderVisuals error", e); }
   }
 try {
   const mo = new MutationObserver((mut) => {
     for (const m of mut) {
       if (m.attributeName === 'data-theme') {
-        const res = rerenderCanvas();
-        if (res && typeof res.catch === 'function') res.catch((e) => debugValue("rerenderCanvas theme error", e));
+        const res = rerenderVisuals();
+        if (res && typeof res.catch === 'function') res.catch((e) => debugValue("rerenderVisuals theme error", e));
       }
     }
   });
@@ -765,8 +878,8 @@ try {
 try {
   const tb = document.getElementById('themeToggle');
   if (tb) tb.addEventListener('click', () => setTimeout(() => {
-    const res = rerenderCanvas();
-    if (res && typeof res.catch === 'function') res.catch((e) => debugValue("rerenderCanvas toggle error", e));
+    const res = rerenderVisuals();
+    if (res && typeof res.catch === 'function') res.catch((e) => debugValue("rerenderVisuals toggle error", e));
   }, 0));
 } catch(_) {}
 

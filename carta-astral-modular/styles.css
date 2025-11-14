@@ -28,6 +28,14 @@ body {
   background: var(--bg);
   color: var(--text);
 }
+@media (max-width: 768px) {
+  body {
+    padding: 0.75rem;
+  }
+  .page {
+    max-width: 100%;
+  }
+}
 .loading-screen {
   position: fixed;
   inset: 0;
@@ -169,10 +177,12 @@ canvas {
 }
 /* Contenedor fijo para el Arbol de la Vida */
 .tree-wrapper {
-  width: auto;
+  width: 100%;
   overflow-x: auto;
   margin: 0;
   padding: 0;
+  display: flex;
+  justify-content: center;
 }
 
 /* Evita espacios en blanco extra alrededor del canvas */
@@ -183,6 +193,22 @@ canvas {
   overflow-x: auto;    /* scroll si es necesario */
   box-shadow: 0 10px 24px rgba(16,24,40,0.12);
   border-radius: 12px;
+}
+.classic-chart-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  margin: 0;
+  padding: 12px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+.classic-chart-wrapper canvas {
+  display: block;
+  margin: 0 auto;
+  max-width: 100%;
+  height: auto;
 }
 
 .tooltip-box {
@@ -235,8 +261,14 @@ canvas {
   flex: 1 1 380px;
   max-width: 520px;
 }
-.layout .tree-wrapper {
-  flex: 0 0 640px;  /* reserva ancho del canvas */
+.visualizations {
+  flex: 0 0 640px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.visualizations > * {
+  flex: 0 0 auto;
 }
 
 /* Form mas compacto */
@@ -259,8 +291,8 @@ canvas {
   color: var(--muted);
 }
 #datetime, #location {
-  width: 240px;
-  height: 32px;
+  width: 220px;
+  height: 28px;
 }
 .form-grid button[type="submit"] {
   width: auto;
@@ -289,7 +321,7 @@ canvas {
 }
 .form-grid input {
   margin-top: 0;
-  min-height: 32px;
+  min-height: 28px;
 }
 .location-control {
   display: flex;
@@ -298,14 +330,14 @@ canvas {
 }
 .location-control input {
   flex: 1;
-  height: 32px;
-  min-height: 32px;
+  height: 28px;
+  min-height: 28px;
 }
 .location-control button {
   border: 1px solid var(--border);
   background: rgba(255,255,255,0.95);
   padding: 0 0.6rem;
-  height: 32px;
+  height: 28px;
   border-radius: 8px;
   font-size: 1rem;
   cursor: pointer;
@@ -322,5 +354,5 @@ label { margin-top: 0; }
 
 @media (max-width: 1100px) {
   .layout { flex-direction: column; }
-  .layout #output, .layout .tree-wrapper { max-width: 100%; flex: 1 1 auto; }
+  .layout #output, .visualizations { max-width: 100%; flex: 1 1 auto; }
 }

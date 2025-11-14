@@ -1,5 +1,86 @@
 // main.js
 
+const SCRIPT_VERSION = (typeof window !== 'undefined' && window.__assetVersion) || Date.now();
+
+function loadExternalScript(src) {
+  return new Promise((resolve) => {
+    const script = document.createElement('script');
+    script.src = src + '?v=' + SCRIPT_VERSION;
+    script.defer = true;
+    script.onload = resolve;
+    script.onerror = function(err) {
+      console.error('[lazy-loader] error', src, err);
+      resolve();
+    };
+    document.body.appendChild(script);
+  });
+}
+
+let resultModulesPromise = null;
+const RESULT_MODULES = [
+  'renderOutput.js',
+  'tooltips.js',
+  'shemot.js',
+  'sefirotCoords.js',
+  'drawAscMcHouses.js',
+  'mapPlanetsToSefirot.js',
+  'drawTreeOfLife.js'
+];
+
+function ensureResultModules() {
+  if (!resultModulesPromise) {
+    resultModulesPromise = Promise.all(
+      RESULT_MODULES.map((src) => loadExternalScript(src))
+    );
+  }
+  return resultModulesPromise;
+}
+
+async function renderResultsView(data) {
+  if (!data) return;
+  await ensureResultModules();
+  const output = document.getElementById("output");
+  const treeWrapper = document.querySelector('.tree-wrapper');
+  const canvas = document.getElementById("treeOfLifeCanvas");
+  if (!output || !canvas) return;
+  const ctx = canvas.getContext("2d");
+  output.innerHTML = "";
+  output.classList.remove('hidden');
+  const { planets, enoch, houses_data } = data;
+  const oplanets = orderPlanets(planets);
+
+  try {
+    if (typeof window.renderEnochInfo === "function") {
+      renderEnochInfo(output, enoch, planets.Sun && planets.Sun.longitude);
+    } else { debugValue("renderEnochInfo missing"); }
+  } catch (re) { debugValue("renderEnochInfo error", re); }
+
+  try {
+    if (typeof window.renderPlanetsAndHouses === "function") {
+      renderPlanetsAndHouses(output, oplanets, houses_data);
+    } else { debugValue("renderPlanetsAndHouses missing"); }
+  } catch (rph) { debugValue("renderPlanetsAndHouses error", rph); }
+
+  try {
+    if (typeof window.renderElementSummary === "function") {
+      renderElementSummary(output, oplanets, houses_data && houses_data.ascendant);
+    } else { debugValue("renderElementSummary missing"); }
+  } catch (resErr) { debugValue("renderElementSummary error", resErr); }
+
+  const drawAndShow = () => {
+    try { drawTreeOfLife(data, ctx); } catch (de) { debugValue("drawTreeOfLife error", de); }
+    try { setupTooltip(canvas, (houses_data && houses_data.houses) || [], oplanets); } catch (te) { debugValue("setupTooltip error", te); }
+    if (treeWrapper) treeWrapper.classList.remove('hidden');
+  };
+
+  try {
+    document.fonts.load("20px 'StamHebrew'").then(drawAndShow);
+  } catch (fe) {
+    debugValue("fonts.load error", fe);
+    drawAndShow();
+  }
+}
+
 function getApiUrl() {
   try {
     const meta = document.querySelector('meta[name="api-url"]');
@@ -116,7 +197,7 @@ function initApp() {
       calculatingMessage: "Calculando carta...",
       gpsDenied: "sin permiso",
       unexpectedError: "Error inesperado",
-      enochTitle: "Calendario de Enoch",
+      enochTitle: "Calendario de Enoj",
       enochYear: "Año",
       enochMonth: "Mes",
       enochDay: "Día",
@@ -183,6 +264,18 @@ function initApp() {
         Cardinal: "Cardinal",
         Fijo: "Fijo",
         Mutable: "Mutable"
+      },
+      sefirotNames: {
+        Keter: "Keter",
+        Chokhmah: "Jojmá",
+        Binah: "Biná",
+        Chesed: "Jesed",
+        Gevurah: "Guevurá",
+        Tiferet: "Tiferet",
+        Netzach: "Netsaj",
+        Hod: "Hod",
+        Yesod: "Yesod",
+        Maljut: "Maljut"
       }
     },
     en: {
@@ -272,6 +365,18 @@ function initApp() {
         Cardinal: "Cardinal",
         Fijo: "Fixed",
         Mutable: "Mutable"
+      },
+      sefirotNames: {
+        Keter: "Keter",
+        Chokhmah: "Chokhmah",
+        Binah: "Binah",
+        Chesed: "Chesed",
+        Gevurah: "Gevurah",
+        Tiferet: "Tiferet",
+        Netzach: "Netzach",
+        Hod: "Hod",
+        Yesod: "Yesod",
+        Maljut: "Maljut"
       }
     }
   };
@@ -324,6 +429,11 @@ function initApp() {
     currentTranslations = tr;
     activeLang = lang;
     pushTranslationsToGlobal();
+    try {
+      if (window.__lastCartaData) {
+        renderResultsView(window.__lastCartaData).catch((e) => debugValue("renderResults rerender error", e));
+      }
+    } catch(_){}
   }
 
   const defaultLang = (navigator.language && navigator.language.toLowerCase().startsWith("es")) ? "es" : "en";
@@ -598,56 +708,11 @@ function initApp() {
 
       debugValue("[submit] status", response.status, "url", response.url);
       const data = await response.json();
+      await ensureResultModules();
       try { debugValue("[submit] json ok", Object.keys(data||{})); } catch(_){}
       try { window.__lastCartaData = data; } catch(_){}
-	  const { planets, enoch, houses_data } = data;          // 鈫? bloque nuevo
-	  //const { ascendant, midheaven, houses } = houses_data;  // 鈫? lo que necesitaba el front
-      //const { planets, ascendant, midheaven, houses, enoch } = data;
-		oplanets = orderPlanets(planets); // 🔁 Ya no se reordena automáticamente
-      debugValue("馃獝 Respuesta del backend", data);
-
-      //const shemAstronomico = getShemAstronomico(planets.Sun.longitude);
-      //const shemEnoch = getShemEnochiano(enoch.enoch_month, enoch.enoch_day, enoch.added_week);
-
-	  // 1) Solo Enoj:
-      try {
-        if (typeof window.renderEnochInfo === "function") {
-          renderEnochInfo(output, enoch, planets.Sun && planets.Sun.longitude);
-        } else { debugValue("renderEnochInfo missing"); }
-      } catch (re) { debugValue("renderEnochInfo error", re); }
-
-      // 2) Opcional: toda la data de planetas y casas
-      //    comenta o descomenta esta línea según quieras listar:
-      try {
-        if (typeof window.renderPlanetsAndHouses === "function") {
-          renderPlanetsAndHouses(output, oplanets, houses_data);
-        } else { debugValue("renderPlanetsAndHouses missing"); }
-      } catch (rph) { debugValue("renderPlanetsAndHouses error", rph); }
-
-      // 2b) Resumen por elementos (planetas + ascendente) y mini IA
-      try {
-        if (typeof window.renderElementSummary === "function") {
-          renderElementSummary(output, oplanets, houses_data && houses_data.ascendant);
-        } else { debugValue("renderElementSummary missing"); }
-      } catch (resErr) { debugValue("renderElementSummary error", resErr); }
-
-      // 3) Dibuja en canvas
-
-      try {
-        document.fonts.load("20px 'StamHebrew'").then(() => {
-          try { drawTreeOfLife(data, ctx); } catch (de) { debugValue("drawTreeOfLife error", de); }
-          try { setupTooltip(canvas, (houses_data && houses_data.houses) || [], oplanets); } catch (te) { debugValue("setupTooltip error", te); }
-          try { output.classList.remove('hidden'); } catch(_){}
-          if (treeWrapper) treeWrapper.classList.remove('hidden');
-        });
-      } catch (fe) {
-        debugValue("fonts.load error", fe);
-        try { drawTreeOfLife(data, ctx); } catch (de2) { debugValue("drawTreeOfLife error 2", de2); }
-        try { setupTooltip(canvas, (houses_data && houses_data.houses) || [], oplanets); } catch (te2) { debugValue("setupTooltip error 2", te2); }
-        try { output.classList.remove('hidden'); } catch(_){}
-        if (treeWrapper) treeWrapper.classList.remove('hidden');
-      }
-    } catch (err) {
+      await renderResultsView(data);
+} catch (err) {
       const technical = (err && err.message) ? err.message : String(err);
       if (/failed to fetch/i.test(technical)) {
         const fallbackMsg = (currentTranslations && currentTranslations.errorUnavailable) ||
@@ -672,12 +737,14 @@ if (document.readyState === 'loading') {
   initApp();
   
   // re-render canvas when theme changes
-  function rerenderCanvas() {
+  async function rerenderCanvas() {
     try {
       if (!window.__lastCartaData) return;
+      await ensureResultModules();
       const canvas = document.getElementById('treeOfLifeCanvas');
       if (!canvas) return;
       const ctx = canvas.getContext('2d');
+      if (typeof window.drawTreeOfLife !== 'function' || typeof window.setupTooltip !== 'function') return;
       drawTreeOfLife(window.__lastCartaData, ctx);
       const planets = (window.__lastCartaData && window.__lastCartaData.planets) || {};
       const houses = (window.__lastCartaData && window.__lastCartaData.houses_data && window.__lastCartaData.houses_data.houses) || [];
@@ -686,11 +753,22 @@ if (document.readyState === 'loading') {
   }
 try {
   const mo = new MutationObserver((mut) => {
-    for (const m of mut) { if (m.attributeName === 'data-theme') { rerenderCanvas(); } }
+    for (const m of mut) {
+      if (m.attributeName === 'data-theme') {
+        const res = rerenderCanvas();
+        if (res && typeof res.catch === 'function') res.catch((e) => debugValue("rerenderCanvas theme error", e));
+      }
+    }
   });
   mo.observe(document.documentElement, { attributes: true });
 } catch(_) {}
-try { const tb = document.getElementById('themeToggle'); if (tb) tb.addEventListener('click', () => setTimeout(rerenderCanvas, 0)); } catch(_) {}
+try {
+  const tb = document.getElementById('themeToggle');
+  if (tb) tb.addEventListener('click', () => setTimeout(() => {
+    const res = rerenderCanvas();
+    if (res && typeof res.catch === 'function') res.catch((e) => debugValue("rerenderCanvas toggle error", e));
+  }, 0));
+} catch(_) {}
 
 }
 
@@ -704,6 +782,7 @@ try {
     } catch (_){}
   });
 } catch (_){}
+
 
 
 

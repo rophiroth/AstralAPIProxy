@@ -123,7 +123,7 @@ function drawHousesWithIcons(houses, ctx) {
     const rs = getComputedStyle(document.documentElement);
     const textColor = (rs.getPropertyValue('--text') || '#111').trim();
     const isDark = (document.documentElement.getAttribute('data-theme')||'').toLowerCase()==='dark';
-    const pillBg = isDark ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.75)';
+    const pillBg = isDark ? 'rgba(0,0,0,0.45)' : 'rgba(0,0,0,0.08)';
     ctx.save();
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -164,6 +164,9 @@ function drawHousesWithIcons(houses, ctx) {
     ctx.closePath();
     ctx.fillStyle = pillBg;
     ctx.fill();
+    ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+    ctx.lineWidth = 0.6;
+    ctx.stroke();
     ctx.fillStyle = textColor;
     ctx.fillText(label, x, y + 10);
 

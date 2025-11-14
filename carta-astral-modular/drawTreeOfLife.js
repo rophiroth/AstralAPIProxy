@@ -46,6 +46,14 @@ function drawSefirot(ctx, sefirotPlanets, planets) {
   const textColor = (rootStyles.getPropertyValue('--text') || '#111').trim();
   const nodeBg    = (rootStyles.getPropertyValue('--card-bg') || '#fff').trim();
   const borderCol = (rootStyles.getPropertyValue('--border') || '#ccc').trim();
+  const translateSefira = (name) => {
+    try {
+      const dict = window.__chartTranslations && window.__chartTranslations.sefirotNames;
+      return (dict && dict[name]) || name;
+    } catch (_) {
+      return name;
+    }
+  };
   for (const [sefira, [x, y]] of Object.entries(sefirotCoords)) {
     ctx.beginPath();
     ctx.arc(x, y, 40, 0, 2 * Math.PI);
@@ -56,7 +64,7 @@ function drawSefirot(ctx, sefirotPlanets, planets) {
     // Label
     ctx.font = '13px sans-serif';
     ctx.fillStyle = textColor;
-    ctx.fillText(sefira, x, y - 50);
+    ctx.fillText(translateSefira(sefira), x, y - 50);
 
     const planetName = sefirotPlanets[sefira];
     const planet = planets?.[planetName];

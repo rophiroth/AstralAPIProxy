@@ -56,7 +56,7 @@ function renderEnochInfo(container, enoch, lastSunLongitude){
     const shemEnoch  = (typeof getShemEnochiano==='function') ? getShemEnochiano(enoch.enoch_month, enoch.enoch_day, enoch.added_week) : '';
     container.innerHTML = [
       '<div style="background:var(--card-bg);color:var(--text);border:1px solid var(--border);padding:10px;border-radius:8px;">',
-      '  <h3>' + chartTranslate('enochTitle', 'Calendario de Enoch') + '</h3>',
+      '  <h3>' + chartTranslate('enochTitle', 'Calendario de Enoj') + '</h3>',
       '  <ul style="list-style:none;padding:0;margin:0 0 10px 0;">',
       '    <li><strong>' + chartTranslate('enochYear', 'Año') + ':</strong> ' + enoch.enoch_year + '</li>',
       '    <li><strong>' + chartTranslate('enochMonth', 'Mes') + ':</strong> ' + enoch.enoch_month + '</li>',

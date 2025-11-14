@@ -80,36 +80,31 @@
   <script>
     (function() {
       var v = Date.now();
-      function addJS(src) {
-        return new Promise(function(resolve, reject) {
+      window.__assetVersion = v;
+      function loadScript(src, opts) {
+        return new Promise(function(resolve) {
           var s = document.createElement('script');
           s.src = src + '?v=' + v;
-          s.async = false; // mantener orden de carga
+          if (opts && opts.defer) s.defer = true;
           s.onload = resolve;
           s.onerror = function(e){
-            try { console.error('[loader] error', src, e); } catch(_){ }
-            // No bloquear la carga del resto
+            console.error('[loader] error', src, e);
             resolve();
           };
           document.body.appendChild(s);
         });
       }
-      var scripts = [
+
+      var coreScripts = [
         'debug.js',
         'emojiFallback.js',
         // 'icons.js', // omit to avoid production parse error; emojiFallback provides maps
         'astroUtils.js',
-        'elements.js',
-        'renderOutput.js',
-        'tooltips.js',
-        'shemot.js',
-        'sefirotCoords.js',
-        'drawAscMcHouses.js',
-        'mapPlanetsToSefirot.js',
-        'drawTreeOfLife.js',
-        'main.js'
+        'elements.js'
       ];
-      scripts.reduce(function(p, src){ return p.then(function(){ return addJS(src); }); }, Promise.resolve());
+
+      Promise.all(coreScripts.map(function(src){ return loadScript(src, { defer: true }); }))
+        .then(function(){ return loadScript('main.js'); });
 
       // Theme toggle wiring
       try {

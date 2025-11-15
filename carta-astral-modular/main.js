@@ -769,10 +769,19 @@ function initApp() {
     const canvas = document.getElementById("treeOfLifeCanvas");
     const ctx = canvas.getContext("2d");
     const treeWrapper = document.querySelector('.tree-wrapper');
+    const classicWrapper = document.getElementById('classicChartWrapper');
+    const classicCanvas = document.getElementById('classicChartCanvas');
     // Mostrar estado de carga visible
     try { output.classList.remove('hidden'); } catch(_){}
     output.innerHTML = '<div class="loading"><div class="spinner"></div><span>' + t("calculatingMessage", "Calculando carta...") + '</span></div>';
     if (treeWrapper) treeWrapper.classList.add('hidden');
+    if (classicWrapper) classicWrapper.classList.add('hidden');
+    try {
+      if (classicCanvas) {
+        const cc = classicCanvas.getContext('2d');
+        if (cc) cc.clearRect(0, 0, classicCanvas.width, classicCanvas.height);
+      }
+    } catch (_){}
 
     debugValue("[submit] datos", { datetime, selectedLat, selectedLon });
 

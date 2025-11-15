@@ -48,8 +48,15 @@
 
   function toRadians(deg) {
     // Rotate so Ascendant sits at 9 o'clock and progression runs counterclockwise.
-    const adjusted = normalizeDeg(deg - rotationDeg);
-    return ((adjusted + 180) * Math.PI) / 180;
+    const diff = normalizeDeg(deg - rotationDeg);
+    return ((180 - diff) * Math.PI) / 180;
+  }
+
+  function project(cx, cy, angle, radius) {
+    return {
+      x: cx + Math.cos(angle) * radius,
+      y: cy + Math.sin(angle) * radius
+    };
   }
 
   function normalizeDeg(deg) {
@@ -67,8 +74,8 @@
       const end = toRadians(endDeg);
       ctx.beginPath();
       ctx.moveTo(centerX, centerY);
-      ctx.arc(centerX, centerY, radiusOuter, start, end, false);
-      ctx.arc(centerX, centerY, radiusInner, end, start, true);
+      ctx.arc(centerX, centerY, radiusOuter, start, end, true);
+      ctx.arc(centerX, centerY, radiusInner, end, start, false);
       ctx.closePath();
       ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.08)';
       ctx.fill();
@@ -82,13 +89,11 @@
     ctx.strokeStyle = 'rgba(132,87,207,0.45)';
     for (let deg = 0; deg < 360; deg += 60) {
       const angle = toRadians(deg);
-      const x1 = cx + Math.cos(angle) * radiusInner;
-      const y1 = cy + Math.sin(angle) * radiusInner;
-      const x2 = cx + Math.cos(angle) * radiusOuter;
-      const y2 = cy + Math.sin(angle) * radiusOuter;
+      const inner = project(cx, cy, angle, radiusInner);
+      const outer = project(cx, cy, angle, radiusOuter);
       ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.lineTo(x2, y2);
+      ctx.moveTo(inner.x, inner.y);
+      ctx.lineTo(outer.x, outer.y);
       ctx.stroke();
     }
     ctx.restore();
@@ -100,8 +105,7 @@
     ctx.lineWidth = 1.4;
     for (let i = 0; i < 12; i++) {
       const angle = toRadians(i * 30);
-      const x = cx + Math.cos(angle) * radius;
-      const y = cy + Math.sin(angle) * radius;
+      const { x, y } = project(cx, cy, angle, radius);
       ctx.beginPath();
       ctx.moveTo(cx, cy);
       ctx.lineTo(x, y);
@@ -121,9 +125,11 @@
       const r1 = major ? radiusInner - 14 : mid ? radiusInner - 10 : radiusInner - 6;
       const r2 = radiusInner;
       ctx.lineWidth = major ? 1.3 : 0.6;
+      const inner = project(cx, cy, angle, r1);
+      const outer = project(cx, cy, angle, r2);
       ctx.beginPath();
-      ctx.moveTo(cx + Math.cos(angle) * r1, cy + Math.sin(angle) * r1);
-      ctx.lineTo(cx + Math.cos(angle) * r2, cy + Math.sin(angle) * r2);
+      ctx.moveTo(inner.x, inner.y);
+      ctx.lineTo(outer.x, outer.y);
       ctx.stroke();
     }
     ctx.restore();
@@ -138,8 +144,7 @@
     for (let i = 0; i < 12; i++) {
       const info = zodiacOrder[i];
       const angle = toRadians(i * 30 + 15);
-      const x = cx + Math.cos(angle) * radius;
-      const y = cy + Math.sin(angle) * radius;
+      const { x, y } = project(cx, cy, angle, radius);
       const display = (window.zodiacEmojis && window.zodiacEmojis[info.key]) || info.glyph || info.key.slice(0, 2);
       ctx.fillText(display, x, y);
     }
@@ -162,8 +167,7 @@
       const deg = normalizeDeg(planet.longitude);
       const angle = toRadians(deg);
       const orbitalRadius = drawingAnchor - 12 - (idx % 2) * 12;
-      const x = cx + Math.cos(angle) * orbitalRadius;
-      const y = cy + Math.sin(angle) * orbitalRadius;
+      const { x, y } = project(cx, cy, angle, orbitalRadius);
       const symbol = (window.planetEmojis && window.planetEmojis[name]) || name.charAt(0);
       const color = planetColors[name] || '#90a4ae';
 
@@ -173,9 +177,11 @@
       ctx.lineWidth = 1.1;
       ctx.setLineDash([4, 3]);
       const guideStart = Math.min(guideOuter, orbitalRadius + 12);
+      const guideInner = project(cx, cy, angle, guideStart);
+      const guideOuterPt = project(cx, cy, angle, guideOuter + 6);
       ctx.beginPath();
-      ctx.moveTo(cx + Math.cos(angle) * guideStart, cy + Math.sin(angle) * guideStart);
-      ctx.lineTo(cx + Math.cos(angle) * (guideOuter + 6), cy + Math.sin(angle) * (guideOuter + 6));
+      ctx.moveTo(guideInner.x, guideInner.y);
+      ctx.lineTo(guideOuterPt.x, guideOuterPt.y);
       ctx.stroke();
       ctx.restore();
 
@@ -203,13 +209,11 @@
       if (!house || typeof house.degree !== 'number') return;
       const deg = normalizeDeg(house.degree);
       const angle = toRadians(deg);
-      const x1 = cx + Math.cos(angle) * radiusInner;
-      const y1 = cy + Math.sin(angle) * radiusInner;
-      const x2 = cx + Math.cos(angle) * radiusOuter;
-      const y2 = cy + Math.sin(angle) * radiusOuter;
+      const inner = project(cx, cy, angle, radiusInner);
+      const outer = project(cx, cy, angle, radiusOuter);
       ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.lineTo(x2, y2);
+      ctx.moveTo(inner.x, inner.y);
+      ctx.lineTo(outer.x, outer.y);
       ctx.stroke();
     });
     ctx.restore();
@@ -228,8 +232,7 @@
       const letter = letters[house.house];
       if (!letter) return;
       const angle = toRadians(normalizeDeg(house.degree) + 2);
-      const x = cx + Math.cos(angle) * (radius - 24);
-      const y = cy + Math.sin(angle) * (radius - 24);
+      const { x, y } = project(cx, cy, angle, radius - 24);
       ctx.fillText(letter, x, y);
     });
     ctx.restore();
@@ -248,16 +251,20 @@
       ctx.strokeStyle = axisColors.asc;
       ctx.beginPath();
       ctx.moveTo(cx, cy);
-      ctx.lineTo(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius);
+      const ascPoint = project(cx, cy, angle, radius);
+      ctx.lineTo(ascPoint.x, ascPoint.y);
       ctx.stroke();
       ctx.beginPath();
       ctx.moveTo(cx, cy);
-      ctx.lineTo(cx + Math.cos(descAngle) * radius, cy + Math.sin(descAngle) * radius);
+      const descPoint = project(cx, cy, descAngle, radius);
+      ctx.lineTo(descPoint.x, descPoint.y);
       ctx.stroke();
       ctx.fillStyle = textColor;
       ctx.font = '12px sans-serif';
-      ctx.fillText('ASC', cx + Math.cos(angle) * (radius + 12), cy + Math.sin(angle) * (radius + 12));
-      ctx.fillText('DESC', cx + Math.cos(descAngle) * (radius + 12), cy + Math.sin(descAngle) * (radius + 12));
+      const ascLabel = project(cx, cy, angle, radius + 12);
+      const descLabel = project(cx, cy, descAngle, radius + 12);
+      ctx.fillText('ASC', ascLabel.x, ascLabel.y);
+      ctx.fillText('DESC', descLabel.x, descLabel.y);
     }
     if (mc && typeof mc.degree === 'number') {
       const angle = toRadians(normalizeDeg(mc.degree));
@@ -265,16 +272,20 @@
       ctx.strokeStyle = axisColors.mc;
       ctx.beginPath();
       ctx.moveTo(cx, cy);
-      ctx.lineTo(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius);
+      const mcPoint = project(cx, cy, angle, radius);
+      ctx.lineTo(mcPoint.x, mcPoint.y);
       ctx.stroke();
       ctx.beginPath();
       ctx.moveTo(cx, cy);
-      ctx.lineTo(cx + Math.cos(icAngle) * radius, cy + Math.sin(icAngle) * radius);
+      const icPoint = project(cx, cy, icAngle, radius);
+      ctx.lineTo(icPoint.x, icPoint.y);
       ctx.stroke();
       ctx.fillStyle = textColor;
       ctx.font = '12px sans-serif';
-      ctx.fillText('MC', cx + Math.cos(angle) * (radius + 12), cy + Math.sin(angle) * (radius + 12));
-      ctx.fillText('IC', cx + Math.cos(icAngle) * (radius + 12), cy + Math.sin(icAngle) * (radius + 12));
+      const mcLabel = project(cx, cy, angle, radius + 12);
+      const icLabel = project(cx, cy, icAngle, radius + 12);
+      ctx.fillText('MC', mcLabel.x, mcLabel.y);
+      ctx.fillText('IC', icLabel.x, icLabel.y);
     }
     ctx.restore();
   }

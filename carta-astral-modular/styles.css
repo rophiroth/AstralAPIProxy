@@ -285,6 +285,7 @@ canvas {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  position: relative;
 }
 .form-field label {
   font-size: 0.85rem;
@@ -292,7 +293,7 @@ canvas {
 }
 #datetime, #location {
   width: 220px;
-  height: 28px;
+  height: 24px;
 }
 .form-grid button[type="submit"] {
   width: auto;
@@ -321,7 +322,7 @@ canvas {
 }
 .form-grid input {
   margin-top: 0;
-  min-height: 28px;
+  min-height: 24px;
 }
 .location-control {
   display: flex;
@@ -330,14 +331,14 @@ canvas {
 }
 .location-control input {
   flex: 1;
-  height: 28px;
-  min-height: 28px;
+  height: 24px;
+  min-height: 24px;
 }
 .location-control button {
   border: 1px solid var(--border);
   background: rgba(255,255,255,0.95);
   padding: 0 0.6rem;
-  height: 28px;
+  height: 26px;
   border-radius: 8px;
   font-size: 1rem;
   cursor: pointer;
@@ -347,6 +348,9 @@ canvas {
 }
 .location-control button:hover {
   background: rgba(109,58,191,0.08);
+}
+.location-field #suggestions {
+  z-index: 20;
 }
 label { margin-top: 0; }
 /* Si no hay sugerencias, no mostrar el contenedor */

@@ -113,6 +113,13 @@ body {
   flex-wrap: wrap;
   gap: 16px;
 }
+.header-row h1 a#brandLink {
+  color: inherit;
+  text-decoration: none;
+}
+.header-row h1 a#brandLink:hover {
+  text-decoration: underline;
+}
 .header-actions {
   display: flex;
   align-items: center;

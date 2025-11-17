@@ -39,7 +39,7 @@ function drawTreeOfLife(data, ctx) {
       const scaledHeight = height * drawScale;
       const verticalNudge = (typeof window !== 'undefined' && window.__TREE_VERTICAL_NUDGE) || 0;
       const offsetX = marginX + Math.max(0, (availableWidth - scaledWidth) / 2);
-      const offsetY = Math.max(marginTop, marginTop + Math.max(0, (availableHeight - scaledHeight) / 2) - verticalNudge);
+      const offsetY = Math.max(marginTop * 0.75, marginTop + Math.max(0, (availableHeight - scaledHeight) / 2) - verticalNudge);
       ctx.save();
       ctx.translate(offsetX, offsetY);
       ctx.scale(drawScale, drawScale);

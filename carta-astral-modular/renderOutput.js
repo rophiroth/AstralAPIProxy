@@ -53,8 +53,7 @@ function renderSignIcon(sign) {
   const glyph = getSignGlyph(sign);
   const color = resolveSignColor(sign);
   const styleAttr = color ? ' style="color:' + color + ';"' : '';
-  const dot = color ? '<span class="sign-color-dot" style="background:' + color + ';"></span>' : '';
-  return '<span class="sign-iconic" data-sign="' + sign + '"' + styleAttr + '>' + dot + '<span class="sign-glyph">' + glyph + '</span></span>';
+  return '<span class="sign-iconic" data-sign="' + sign + '"' + styleAttr + '>' + glyph + '</span>';
 }
 
 function chartTranslate(key, fallback) {

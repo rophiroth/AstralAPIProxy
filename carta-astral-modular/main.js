@@ -281,7 +281,8 @@ function initApp() {
 
   const translations = {
     es: {
-      title: "Carta Astral Modular",
+      title: "Carta Astral del Árbol de la Vida",
+      brandUrl: "https://sabiduriaholistica.org",
       dateLabel: "Fecha y hora de nacimiento:",
       locationLabel: "Ubicación (Ciudad, País):",
       submitButton: "Calcular Carta",
@@ -393,7 +394,8 @@ function initApp() {
       }
     },
     en: {
-      title: "Modular Birth Chart",
+      title: "Tree of Life Astral Chart",
+      brandUrl: "https://psyhackers.org",
       dateLabel: "Birth date and time:",
       locationLabel: "Location (City, Country):",
       submitButton: "Calculate Chart",
@@ -541,8 +543,10 @@ function initApp() {
     const locationLabel = document.querySelector('[data-l10n="locationLabel"]');
     const submitBtn = document.querySelector('#astroForm button[type="submit"]');
     const titleEl = document.getElementById("appTitle");
+    const brandLink = document.getElementById("brandLink");
     const loadingLabel = document.querySelector('[data-l10n="loadingApp"]');
     if (titleEl) titleEl.textContent = tr.title;
+    if (brandLink && tr.brandUrl) brandLink.setAttribute('href', tr.brandUrl);
     if (dateLabel) dateLabel.textContent = tr.dateLabel;
     if (locationLabel) locationLabel.textContent = tr.locationLabel;
     if (submitBtn) submitBtn.textContent = tr.submitButton;
@@ -551,6 +555,7 @@ function initApp() {
     if (locationInput && !manualLocationSelected) {
       locationInput.placeholder = tr.placeholder;
     }
+    document.title = tr.title;
     if (langSelect) {
       langSelect.value = lang;
       try { localStorage.setItem("chartLang", lang); } catch (_){}

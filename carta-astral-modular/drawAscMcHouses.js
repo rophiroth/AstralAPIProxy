@@ -16,6 +16,41 @@ const housePaths = {
   12: ['Binah','Chesed']
 };
 
+const fallbackSignGlyphs = {
+  Aries:'\u2648', Taurus:'\u2649', Gemini:'\u264A', Cancer:'\u264B',
+  Leo:'\u264C', Virgo:'\u264D', Libra:'\u264E', Scorpio:'\u264F',
+  Sagittarius:'\u2650', Capricorn:'\u2651', Aquarius:'\u2652', Pisces:'\u2653'
+};
+const ASC_FALLBACK_SIGN_COLORS = {
+  Aries: '#ff4d4f',
+  Taurus: '#ff9c2f',
+  Gemini: '#ffe34d',
+  Cancer: '#2dd5c4',
+  Leo: '#ff6ec7',
+  Virgo: '#7dde5b',
+  Libra: '#5b9fff',
+  Scorpio: '#9a6bff',
+  Sagittarius: '#ff8f3f',
+  Capricorn: '#c28f62',
+  Aquarius: '#3dd4ff',
+  Pisces: '#8c93ff'
+};
+const getSignGlyphLocal = (sign) => {
+  try {
+    if (typeof window.getSignGlyph === 'function') return window.getSignGlyph(sign);
+  } catch (_){}
+  return fallbackSignGlyphs[sign] || (window.zodiacEmojis?.[sign] || sign.slice(0,2));
+};
+function getSignColor(sign) {
+  if (!sign) return '#fff';
+  try {
+    const palette = (typeof window !== 'undefined' && window.SIGN_COLORS) || ASC_FALLBACK_SIGN_COLORS;
+    return (palette && palette[sign]) || ASC_FALLBACK_SIGN_COLORS[sign] || '#fff';
+  } catch (_){
+    return ASC_FALLBACK_SIGN_COLORS[sign] || '#fff';
+  }
+}
+
 function chartLabel(key, fallback) {
   try {
     if (typeof window.getChartTranslation === 'function') {
@@ -30,55 +65,69 @@ function drawAscMc(ascendant, midheaven, ctx) {
   const maljut  = sefirotCoords['Maljut'];
   const rootStyles = getComputedStyle(document.documentElement);
   const textColor = (rootStyles.getPropertyValue('--text') || '#111').trim();
+  const scale = (typeof window !== 'undefined' && window.__TREE_SCALE) || 1;
   const ascLabel = chartLabel('ascLabel', 'ASC');
   const descLabel = chartLabel('descLabel', 'DESC');
   const mcLabel = chartLabel('mcLabel', 'MC');
+  const emojiFont = `${28 * scale}px 'Segoe UI Symbol', 'Noto Sans Symbols', 'Arial Unicode MS'`;
 
-  const ascY  = tiferet[1] - 100;
-  const descY = tiferet[1] + 63;
+  const ascY  = tiferet[1] - 90 * scale;
+  const descY = tiferet[1] + 80 * scale;
 
-  // ASC
-  ctx.beginPath();
-  ctx.fillStyle = 'lightgreen';
-  ctx.fill();
-  ctx.stroke();
+  function drawAxis(label, signName, degree, baseX, baseY, opts) {
+    const glyph = getSignGlyphLocal(signName);
+    const signColor = getSignColor(signName) || textColor;
+    const degreeText = `${degree}\u00B0`;
+    const center = opts && opts.center;
+    ctx.save();
+    ctx.textBaseline = 'middle';
+    if (center) {
+      ctx.textAlign = 'center';
+      ctx.font = `bold ${15 * scale}px sans-serif`;
+      ctx.fillStyle = textColor;
+      ctx.fillText(`${label}:`, baseX, baseY - 18 * scale);
+      const lineY = baseY + 4 * scale;
+      const degreeTextCenter = `${degree}\u00B0`;
+      ctx.font = emojiFont;
+      const glyphWidth = ctx.measureText(glyph).width || (18 * scale);
+      ctx.font = `bold ${15 * scale}px sans-serif`;
+      const degreeWidth = ctx.measureText(degreeTextCenter).width;
+      const gap = 10 * scale;
+      const total = glyphWidth + gap + degreeWidth;
+      const start = baseX - total / 2;
+      ctx.font = emojiFont;
+      ctx.textAlign = 'left';
+      ctx.fillStyle = signColor;
+      ctx.fillText(glyph, start, lineY);
+      ctx.font = `bold ${15 * scale}px sans-serif`;
+      ctx.fillStyle = textColor;
+      ctx.fillText(degreeTextCenter, start + glyphWidth + gap, lineY);
+    } else {
+      ctx.textAlign = 'left';
+      ctx.font = `bold ${15 * scale}px sans-serif`;
+      ctx.fillStyle = textColor;
+      const labelText = `${label}: `;
+      ctx.fillText(labelText, baseX, baseY);
+      let cursor = baseX + ctx.measureText(labelText).width;
+      ctx.font = emojiFont;
+      const glyphWidth = ctx.measureText(glyph).width || (18 * scale);
+      ctx.fillStyle = signColor;
+      ctx.fillText(glyph, cursor, baseY + 2 * scale);
+      cursor += glyphWidth + 8 * scale;
+      ctx.font = `bold ${15 * scale}px sans-serif`;
+      ctx.fillStyle = textColor;
+      ctx.fillText(`${degree}\u00B0`, cursor, baseY);
+    }
+    ctx.restore();
+  }
 
-  ctx.save();
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.font = 'bold 13px sans-serif';
-  ctx.fillStyle = textColor;
-  ctx.fillText(`${ascLabel}: ${(window.zodiacEmojis?.[ascendant.sign]||'')} ${decimals(ascendant.position,2)}\u00B0`, tiferet[0], ascY);
-  ctx.restore();
+  const baseX = tiferet[0] - 70 * scale;
+  drawAxis(ascLabel, ascendant.sign, decimals(ascendant.position, 2), baseX, ascY);
 
-  // DESC opposite
-  ctx.beginPath();
-  ctx.fillStyle = 'lightblue';
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.save();
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.font = 'bold 13px sans-serif';
-  ctx.fillStyle = textColor;
   const descDegree = (ascendant.degree + 180) % 360;
-  ctx.fillText(`${descLabel}: ${(window.zodiacEmojis?.[getZodiacSign(descDegree)]||'')} ${decimals((descDegree%30),2)}\u00B0`, tiferet[0], descY);
-  ctx.restore();
+  drawAxis(descLabel, getZodiacSign(descDegree), decimals((descDegree % 30), 2), baseX, descY);
 
-  // MC at Maljut
-  ctx.beginPath();
-  ctx.fillStyle = 'lightcoral';
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.save();
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.font = 'bold 13px sans-serif';
-  ctx.fillStyle = textColor;
-  ctx.fillText(`${mcLabel}:${(window.zodiacEmojis?.[midheaven.sign]||'')}${decimals(midheaven.position,1)}\u00B0`, maljut[0], maljut[1]);
-  ctx.restore();
+  drawAxis(mcLabel, midheaven.sign, decimals(midheaven.position, 1), maljut[0], maljut[1] + 16 * scale, { center: true });
 }
 
 function drawHousesLines(houses, ctx) {
@@ -106,6 +155,7 @@ function drawHousesLines(houses, ctx) {
 
 function drawHousesWithIcons(houses, ctx) {
   if (!Array.isArray(houses)) return;
+  const scale = (typeof window !== 'undefined' && window.__TREE_SCALE) || 1;
   houses.forEach(h => {
     if (!h || !h.house || !h.sign) return;
 
@@ -127,36 +177,45 @@ function drawHousesWithIcons(houses, ctx) {
     ctx.save();
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = '14px sans-serif';
+    ctx.font = `${14 * scale}px sans-serif`;
     ctx.fillStyle = textColor;
 
-    const emoji = (typeof getZodiacEmoji==='function') ? getZodiacEmoji(h.sign) : (window.zodiacEmojis?.[h.sign]||'');
+    const glyph = getSignGlyphLocal(h.sign);
+    const signColor = getSignColor(h.sign);
     const letter = (window.hebrewHouseLetters && window.hebrewHouseLetters[h.house]) || '';
     const pos = decimals(h.position,2);
+    const degreeText = `${pos}\u00B0`;
 
     // Line 1: house number + letter
     const houseLabel = `#${h.house}`;
-    ctx.font = '14px sans-serif';
+    ctx.font = `${14 * scale}px sans-serif`;
     const labelWidth = ctx.measureText(houseLabel).width;
-    ctx.fillText(houseLabel, x - 18, y - 16);
+    ctx.fillText(houseLabel, x - 18, y - 16 * scale);
     if (letter) {
-      ctx.font = "18px 'StamHebrew', sans-serif";
-      ctx.fillText(letter, x - 18 + labelWidth + 8, y - 16);
-      ctx.font = '14px sans-serif';
+      ctx.font = `${18 * scale}px 'StamHebrew', sans-serif`;
+      ctx.fillText(letter, x - 18 + labelWidth + 8, y - 16 * scale);
+      ctx.font = `${14 * scale}px sans-serif`;
     }
 
     // Line 2: sign + degree with pill background for contrast
-    const label = `${emoji}${pos}\u00B0`;
-    ctx.font = '14px sans-serif';
-    const w = ctx.measureText(label).width + 10;
-    const hgt = 18;
-    const rx = x - w/2, ry = y + 10 - hgt/2, r = 6;
+    const emojiFont = `${22 * scale}px 'Segoe UI Symbol', 'Noto Sans Symbols', 'Arial Unicode MS'`;
+    ctx.font = emojiFont;
+    const glyphWidth = ctx.measureText(glyph).width || (16 * scale);
+    const degreeFont = `${14 * scale}px sans-serif`;
+    ctx.font = degreeFont;
+    const degreeWidth = ctx.measureText(degreeText).width;
+    const paddingX = 10 * scale;
+    const contentWidth = glyphWidth + degreeWidth + paddingX * 3;
+    const hgt = 22 * scale;
+    const rx = x - contentWidth / 2;
+    const ry = y + 10 * scale - hgt / 2;
+    const r = 6 * scale;
     ctx.beginPath();
     ctx.moveTo(rx + r, ry);
-    ctx.lineTo(rx + w - r, ry);
-    ctx.quadraticCurveTo(rx + w, ry, rx + w, ry + r);
-    ctx.lineTo(rx + w, ry + hgt - r);
-    ctx.quadraticCurveTo(rx + w, ry + hgt, rx + w - r, ry + hgt);
+    ctx.lineTo(rx + contentWidth - r, ry);
+    ctx.quadraticCurveTo(rx + contentWidth, ry, rx + contentWidth, ry + r);
+    ctx.lineTo(rx + contentWidth, ry + hgt - r);
+    ctx.quadraticCurveTo(rx + contentWidth, ry + hgt, rx + contentWidth - r, ry + hgt);
     ctx.lineTo(rx + r, ry + hgt);
     ctx.quadraticCurveTo(rx, ry + hgt, rx, ry + hgt - r);
     ctx.lineTo(rx, ry + r);
@@ -167,8 +226,16 @@ function drawHousesWithIcons(houses, ctx) {
     ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
     ctx.lineWidth = 0.6;
     ctx.stroke();
+    const textBaseline = y + 10 * scale + 1 * scale;
+    ctx.textAlign = 'left';
+    ctx.font = emojiFont;
+    ctx.fillStyle = signColor;
+    ctx.fillText(glyph, rx + paddingX, textBaseline);
+    ctx.font = degreeFont;
     ctx.fillStyle = textColor;
-    ctx.fillText(label, x, y + 10);
+    const degreeX = rx + paddingX + glyphWidth + paddingX * 0.8;
+    ctx.fillText(degreeText, degreeX, textBaseline);
+    ctx.textAlign = 'center';
 
     ctx.restore();
   });

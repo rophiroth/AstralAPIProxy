@@ -91,6 +91,7 @@ async function renderResultsView(data) {
   const treeCanvas = document.getElementById("treeOfLifeCanvas");
   const classicWrapper = document.getElementById("classicChartWrapper");
   const classicCanvas = document.getElementById("classicChartCanvas");
+  const aspectsContainer = document.getElementById("aspectsTableContainer");
   if (treeWrapper) treeWrapper.classList.add('hidden');
   if (classicWrapper) classicWrapper.classList.add('hidden');
   if (treeCanvas) {
@@ -100,6 +101,10 @@ async function renderResultsView(data) {
   if (classicCanvas) {
     const cctx = classicCanvas.getContext("2d");
     if (cctx) cctx.clearRect(0, 0, classicCanvas.width, classicCanvas.height);
+  }
+  if (aspectsContainer) {
+    aspectsContainer.innerHTML = '';
+    aspectsContainer.classList.add('hidden');
   }
   output.innerHTML = "";
   output.classList.remove('hidden');
@@ -129,7 +134,7 @@ async function renderResultsView(data) {
 
   try {
     if (typeof window.renderAspectsTable === "function") {
-      renderAspectsTable(output, aspects);
+      renderAspectsTable(aspectsContainer || output, aspects);
     } else { debugValue("renderAspectsTable missing"); }
   } catch (aspErr) { debugValue("renderAspectsTable error", aspErr); }
 
@@ -233,6 +238,32 @@ function initApp() {
   const langSelect = document.getElementById("langSelect");
   const loadingScreen = document.getElementById("loadingScreen");
   const appShell = document.getElementById("appShell");
+  const langCompactQuery = (typeof window !== 'undefined' && window.matchMedia) ? window.matchMedia('(max-width: 560px)') : null;
+  const syncLangOptionLabels = () => {
+    if (!langSelect) return;
+    const map = (langCompactQuery && langCompactQuery.matches)
+      ? { es: 'Es', en: 'En' }
+      : { es: 'Espa\u00f1ol', en: 'English' };
+    Array.from(langSelect.options || []).forEach((opt) => {
+      const key = (opt.value || '').toLowerCase();
+      if (map[key]) opt.textContent = map[key];
+    });
+  };
+  syncLangOptionLabels();
+  if (langCompactQuery) {
+    if (typeof langCompactQuery.addEventListener === 'function') {
+      langCompactQuery.addEventListener('change', syncLangOptionLabels);
+    } else if (typeof langCompactQuery.addListener === 'function') {
+      langCompactQuery.addListener(syncLangOptionLabels);
+    }
+  }
+  if (locationInput) {
+    locationInput.addEventListener("focus", () => {
+      try {
+        locationInput.select();
+      } catch (_) {}
+    });
+  }
 
   function setLocationFromSuggestion(label, lat, lon, { manual = false } = {}) {
     locationInput.value = label;

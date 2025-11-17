@@ -16,6 +16,45 @@ const hebrewHouseLetters = {
  12:"\u05E7"  // ק
 };
 try { window.hebrewHouseLetters = hebrewHouseLetters; } catch(_) {}
+const localSignGlyphs = {
+  Aries:'\u2648', Taurus:'\u2649', Gemini:'\u264A', Cancer:'\u264B',
+  Leo:'\u264C', Virgo:'\u264D', Libra:'\u264E', Scorpio:'\u264F',
+  Sagittarius:'\u2650', Capricorn:'\u2651', Aquarius:'\u2652', Pisces:'\u2653'
+};
+const RENDER_FALLBACK_SIGN_COLORS = {
+  Aries: '#ff4d4f',
+  Taurus: '#ff9c2f',
+  Gemini: '#ffe34d',
+  Cancer: '#2dd5c4',
+  Leo: '#ff6ec7',
+  Virgo: '#7dde5b',
+  Libra: '#5b9fff',
+  Scorpio: '#9a6bff',
+  Sagittarius: '#ff8f3f',
+  Capricorn: '#c28f62',
+  Aquarius: '#3dd4ff',
+  Pisces: '#8c93ff'
+};
+function getSignGlyph(sign) {
+  const map = (typeof window !== 'undefined' && window.SIGN_SYMBOL) || localSignGlyphs;
+  return (map && map[sign]) || localSignGlyphs[sign] || sign.slice(0,2);
+}
+function resolveSignColor(sign) {
+  if (!sign) return '';
+  try {
+    const palette = (typeof window !== 'undefined' && window.SIGN_COLORS) || RENDER_FALLBACK_SIGN_COLORS;
+    return (palette && palette[sign]) || RENDER_FALLBACK_SIGN_COLORS[sign] || '';
+  } catch (_){
+    return RENDER_FALLBACK_SIGN_COLORS[sign] || '';
+  }
+}
+function renderSignIcon(sign) {
+  if (!sign) return '';
+  const glyph = getSignGlyph(sign);
+  const color = resolveSignColor(sign);
+  const styleAttr = color ? ' style="color:' + color + ';"' : '';
+  return '<span class="sign-iconic" data-sign="' + sign + '"' + styleAttr + '>' + glyph + '</span>';
+}
 
 function chartTranslate(key, fallback) {
   try {
@@ -81,63 +120,111 @@ function renderEnochInfo(container, enoch, lastSunLongitude){
   }
 }
 
+
 function renderPlanetsAndHouses(container, planets, houses_data){
   const { ascendant, midheaven, houses } = houses_data || {};
-  // planets
+  const buildPlanetBadge = (name) => {
+    const icon = (window.planetEmojis && window.planetEmojis[name]) || '';
+    return '<span class="planet-badge" data-planet="' + name + '">' +
+      (icon ? '<span class="planet-icon">' + icon + '</span>' : '') +
+      '<span class="planet-name">' + chartTranslatePlanet(name) + '</span>' +
+      '<span class="planet-colon">:</span></span>';
+  };
+  const buildSignBadge = (sign) => {
+    if (!sign) return '';
+    return '<span class="sign-badge" data-sign="' + sign + '">' +
+      renderSignIcon(sign) +
+      '<span>' + chartTranslateSign(sign) + '</span></span>';
+  };
+  const buildDegreeLabel = (value, absolute) => {
+    const local = decimals(value, 2);
+    const abs = (typeof absolute === 'number') ? ' (' + decimals(absolute, 2) + '\u00B0)' : '';
+    return '<span class="degree-value">' + local + '\u00B0' + abs + '</span>';
+  };
+
   let html = [
-    '<div style="background:var(--card-bg);color:var(--text);padding:10px;border-radius:8px;margin-top:10px;border:1px solid var(--border);">',
+    '<div style="background:var(--card-bg);color:var(--text);padding:10px;border-radius:8px;margin-top:10px;border:1px solid var(--border);max-width:560px;margin-left:auto;margin-right:auto;">',
     '  <h3>' + chartTranslate('planetsTitle', 'Planetas') + '</h3>',
-    '  <ul style="list-style:none;padding:0;">'
+    '  <ul class="data-list planet-list">'
   ];
   try {
     for (const [name, body] of Object.entries(planets||{})){
       const lon = body && typeof body.longitude==='number' ? body.longitude : null;
       if (lon==null) continue;
       const zodiacSign = (typeof getZodiacSign==='function') ? getZodiacSign(lon) : '';
-      const ze = (window.zodiacEmojis && window.zodiacEmojis[zodiacSign]) || '';
-      const pEmoji = (window.planetEmojis && window.planetEmojis[name]) || '';
-      const zEmoji = ze || '';
-      const displayPlanet = chartTranslatePlanet(name);
-      const displaySign = chartTranslateSign(zodiacSign);
-      html.push('<li><span style="font-size:1.1em;margin-right:4px;">' + pEmoji + '</span> <strong>' + displayPlanet + ':</strong> <span style="font-size:1.05em;margin-right:2px;">' + zEmoji + '</span> ' + displaySign + ' ' + (decimals(lon%30,4)) + '\u00B0 (' + decimals(lon,4) + '\u00B0)</li>');
+      html.push('<li>' + buildPlanetBadge(name) + ' ' + buildSignBadge(zodiacSign) + ' ' + buildDegreeLabel(lon % 30, lon) + '</li>');
     }
-  } catch(_){}
+  } catch(_){ }
   html.push('  </ul>','</div>');
 
-  // houses
   const ascLabel = chartTranslate('ascLabel', 'Asc');
   const mcLabel = chartTranslate('mcLabel', 'MC');
   const houseLabel = chartTranslate('houseLabel', 'Casa');
-  html.push('<div style="background:var(--card-bg);color:var(--text);padding:10px;border-radius:8px;margin-top:10px;border:1px solid var(--border);">','  <h3>' + chartTranslate('housesTitle', 'Casas Astrológicas') + '</h3>','  <ul style="list-style:none;padding:0;">');
+  html.push('<div style="background:var(--card-bg);color:var(--text);padding:10px;border-radius:8px;margin-top:10px;border:1px solid var(--border);max-width:560px;margin-left:auto;margin-right:auto;">','  <h3>' + chartTranslate('housesTitle', 'Casas Astrol\u00f3gicas') + '</h3>','  <ul class="data-list houses-list">');
   try {
-    html.push('<li><strong>' + ascLabel + ':</strong> ' + ((window.zodiacEmojis && window.zodiacEmojis[ascendant.sign])||'') + ' ' + chartTranslateSign(ascendant.sign) + ' ' + decimals(ascendant.position,4) + '\u00B0 ' + decimals(ascendant.degree,4) + '\u00B0</li>');
-    html.push('<li><strong>' + mcLabel + ':</strong> ' + ((window.zodiacEmojis && window.zodiacEmojis[midheaven.sign])||'') + ' ' + chartTranslateSign(midheaven.sign) + ' ' + decimals(midheaven.position,4) + '\u00B0 ' + decimals(midheaven.degree,4) + '\u00B0</li>');
-    for (const h of (houses||[])){
-      const ze = (window.zodiacEmojis && window.zodiacEmojis[h.sign]) || '';
-      const letter = (window.hebrewHouseLetters && window.hebrewHouseLetters[h.house]) || '';
-      const letterHtml = letter ? ' <span style="font-family:\'StamHebrew\';margin-left:4px;">' + letter + '</span>' : '';
-      html.push('<li><strong>' + houseLabel + ' ' + h.house + ':</strong> ' + (ze||'') + ' ' + chartTranslateSign(h.sign) + ' ' + decimals(h.position,4) + '\u00B0' + letterHtml + '</li>');
+    if (ascendant) {
+      html.push('<li><span class="house-id">' + ascLabel + ':</span> ' + buildSignBadge(ascendant.sign) + ' ' + buildDegreeLabel(ascendant.position, ascendant.degree) + '</li>');
     }
-  } catch(_){}
+    if (midheaven) {
+      html.push('<li><span class="house-id">' + mcLabel + ':</span> ' + buildSignBadge(midheaven.sign) + ' ' + buildDegreeLabel(midheaven.position, midheaven.degree) + '</li>');
+    }
+    for (const h of (houses||[])){
+      const letter = (window.hebrewHouseLetters && window.hebrewHouseLetters[h.house]) || '';
+      const letterHtml = letter ? '<span class="house-letter">' + letter + '</span>' : '';
+      html.push('<li><span class="house-id">#' + h.house + letterHtml + ':</span> ' + buildSignBadge(h.sign) + ' ' + buildDegreeLabel(h.position) + '</li>');
+    }
+  } catch(_){ }
   html.push('  </ul>','</div>');
 
   container.innerHTML += html.join('\n');
 }
 
+
+
 function renderAspectsTable(container, aspects) {
-  if (!Array.isArray(aspects) || aspects.length === 0) return;
+  if (!container) return;
+  if (!Array.isArray(aspects) || aspects.length === 0) {
+    try { if (container.id === 'aspectsTableContainer') { container.innerHTML = ''; container.classList.add('hidden'); } } catch(_){ }
+    return;
+  }
   const title = chartTranslate('aspectsTitle', 'Classical Aspects');
   const typeLabel = chartTranslate('aspectTypeLabel', 'Aspect');
   const planetsLabel = chartTranslate('aspectPlanetsLabel', 'Planets');
   const orbLabel = chartTranslate('aspectOrbLabel', 'Orb');
+  const defaultAspectSymbols = {
+    conjunction: '\u260C',
+    opposition: '\u260D',
+    square: '\u25A1',
+    trine: '\u25B3',
+    sextile: '\u2736'
+  };
+  const getPlanetIcon = (name) => {
+    try {
+      if (typeof window.getPlanetEmoji === 'function') return window.getPlanetEmoji(name);
+    } catch(_){ }
+    return (window.planetEmojis && window.planetEmojis[name]) || '';
+  };
+  const getAspectSymbol = (type) => {
+    return (window.aspectSymbols && window.aspectSymbols[type]) || defaultAspectSymbols[type] || '';
+  };
+  const planetChip = (name) => {
+    const icon = getPlanetIcon(name);
+    const label = chartTranslatePlanet(name);
+    return '<span class="planet-chip" data-planet="' + name + '">' + (icon ? '<span class="planet-icon">' + icon + '</span>' : '') + '<span>' + label + '</span></span>';
+  };
   const rows = aspects.map((asp) => {
     const typeName = chartTranslateAspect(asp.type, asp.type);
-    const plist = chartTranslatePlanet(asp.planetA) + ' + ' + chartTranslatePlanet(asp.planetB);
-    const orb = (Math.round(Math.abs(asp.orb) * 100) / 100).toFixed(2) + '°';
-    return '<tr><td>' + typeName + '</td><td>' + plist + '</td><td>' + orb + '</td></tr>';
+    const typeSymbol = getAspectSymbol(asp.type);
+    const plist = '<div class="aspect-planets">' + planetChip(asp.planetA) + '<span class="planet-chip-sep">+</span>' + planetChip(asp.planetB) + '</div>';
+    const orb = (Math.round(Math.abs(asp.orb) * 100) / 100).toFixed(2) + '\u00B0';
+    return '<tr>' +
+      '<td><div class="aspect-type-cell" data-aspect="' + asp.type + '">' + (typeSymbol ? '<span class="aspect-icon">' + typeSymbol + '</span>' : '') + '<span>' + typeName + '</span></div></td>' +
+      '<td>' + plist + '</td>' +
+      '<td>' + orb + '</td>' +
+    '</tr>';
   });
   const html = [
-    '<div class="element-summary" style="margin-top:16px;">',
+    '<div class="element-summary aspects-card" style="margin-top:16px;">',
     '  <h3>' + title + '</h3>',
     '  <table style="border-collapse:collapse;width:100%;">',
     '    <thead><tr><th style="text-align:left;padding:6px 8px;">' + typeLabel + '</th><th style="text-align:left;padding:6px 8px;">' + planetsLabel + '</th><th style="text-align:left;padding:6px 8px;">' + orbLabel + '</th></tr></thead>',
@@ -145,8 +232,14 @@ function renderAspectsTable(container, aspects) {
     '  </table>',
     '</div>'
   ];
-  container.innerHTML += html.join('\n');
+  if (container.id === 'aspectsTableContainer') {
+    container.innerHTML = html.join('\n');
+    try { container.classList.remove('hidden'); } catch(_){ }
+  } else {
+    container.innerHTML += html.join('\n');
+  }
 }
+
 
 // =============== Summaries ===============
 function renderElementSummary(container, planets, ascendant){
@@ -161,9 +254,15 @@ function renderElementSummary(container, planets, ascendant){
     const tokens = (window.listElementContributorsDetailed) ? window.listElementContributorsDetailed(planets, ascSign) : null;
     const fmt = (n) => (Math.abs(n-Math.round(n))<1e-9 ? Math.round(n) : (Math.round(n*100)/100).toFixed(2));
 
-    const cellUnit = (val, list) => '<div class="cell-top">'+fmt(val)+'</div><div class="cell-sub">'+(list && list.length? list.join(' ') : '-')+'</div>';
+    const formatList = (arr) => {
+      if (!arr || !arr.length) return '-';
+      return '<div class="token-column">' +
+        arr.map((item) => '<span class="token-chip">' + item + '</span>').join('') +
+        '</div>';
+    };
+    const cellUnit = (val, list) => '<div class="cell-top">'+fmt(val)+'</div><div class="cell-sub">'+formatList(list)+'</div>';
     // same cell formatter for modalidades
-    const cell = (_key, val, list) => '<div class="cell-top">'+fmt(val)+'</div><div class="cell-sub">'+(list && list.length? list.join(' ') : '-')+'</div>';
+    const cell = (_key, val, list) => '<div class="cell-top">'+fmt(val)+'</div><div class="cell-sub">'+formatList(list)+'</div>';
     const maxVal = Math.max(Number(counts.Fuego||0), Number(counts.Tierra||0), Number(counts.Aire||0), Number(counts.Agua||0));
     const hi = (v) => Math.abs(Number(v)-maxVal) < 1e-6;
 

@@ -37,9 +37,29 @@
   };
 
   const axisColors = {
-    asc: '#b388ff',  // Ascendente (púrpura)
+    asc: '#b388ff',  // Ascendente (p�rpura)
     mc: '#c62828'
   };
+
+  const CLASSIC_FALLBACK_SIGN_COLORS = {
+    Aries: '#ff4d4f',
+    Taurus: '#ff9c2f',
+    Gemini: '#ffe34d',
+    Cancer: '#2dd5c4',
+    Leo: '#ff6ec7',
+    Virgo: '#7dde5b',
+    Libra: '#5b9fff',
+    Scorpio: '#9a6bff',
+    Sagittarius: '#ff8f3f',
+    Capricorn: '#c28f62',
+    Aquarius: '#3dd4ff',
+    Pisces: '#8c93ff'
+  };
+
+  function getSignColor(sign) {
+    const globalPalette = (typeof window !== 'undefined' && window.SIGN_COLORS) || null;
+    return (globalPalette && globalPalette[sign]) || CLASSIC_FALLBACK_SIGN_COLORS[sign] || '#fff';
+  }
 
   let rotationDeg = 0;
   function setRotation(deg) {
@@ -137,7 +157,6 @@
 
   function drawSignLabels(ctx, cx, cy, radius) {
     ctx.save();
-    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text') || '#fff';
     ctx.font = '16px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -146,6 +165,7 @@
       const angle = toRadians(i * 30 + 15);
       const { x, y } = project(cx, cy, angle, radius);
       const display = (window.zodiacEmojis && window.zodiacEmojis[info.key]) || info.glyph || info.key.slice(0, 2);
+      ctx.fillStyle = getSignColor(info.key);
       ctx.fillText(display, x, y);
     }
     ctx.restore();

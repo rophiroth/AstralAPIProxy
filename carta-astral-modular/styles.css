@@ -13,6 +13,21 @@
   --border: #e4e7ec;
   --muted: #667085;
   --shadow: 0 8px 24px rgba(16,24,40,0.08);
+  --aspect-conjunction-bg: #ffe8c2;
+  --aspect-conjunction-text: #4d2c00;
+  --aspect-conjunction-border: #ffd48a;
+  --aspect-sextile-bg: #d0f3ff;
+  --aspect-sextile-text: #053044;
+  --aspect-sextile-border: #8bdcff;
+  --aspect-square-bg: #ffd4c7;
+  --aspect-square-text: #4c1606;
+  --aspect-square-border: #ff9b7a;
+  --aspect-trine-bg: #ddf7df;
+  --aspect-trine-text: #103919;
+  --aspect-trine-border: #9ee3a5;
+  --aspect-opposition-bg: #ffd2d8;
+  --aspect-opposition-text: #4c0d18;
+  --aspect-opposition-border: #ff99a7;
 }
 [data-theme='dark'] {
   --bg: #0f1115;
@@ -21,19 +36,40 @@
   --border: #303642;
   --muted: #9aa4b2;
   --shadow: 0 10px 28px rgba(0,0,0,0.45);
+  --aspect-conjunction-bg: rgba(255, 204, 128, 0.28);
+  --aspect-conjunction-text: #fff6dc;
+  --aspect-conjunction-border: rgba(255, 204, 128, 0.55);
+  --aspect-sextile-bg: rgba(111, 201, 255, 0.25);
+  --aspect-sextile-text: #e5f7ff;
+  --aspect-sextile-border: rgba(111, 201, 255, 0.5);
+  --aspect-square-bg: rgba(255, 155, 122, 0.28);
+  --aspect-square-text: #ffe5db;
+  --aspect-square-border: rgba(255, 155, 122, 0.55);
+  --aspect-trine-bg: rgba(124, 212, 136, 0.26);
+  --aspect-trine-text: #e8ffe9;
+  --aspect-trine-border: rgba(124, 212, 136, 0.55);
+  --aspect-opposition-bg: rgba(255, 153, 167, 0.3);
+  --aspect-opposition-text: #ffe8ec;
+  --aspect-opposition-border: rgba(255, 153, 167, 0.55);
 }
 body {
   font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, sans-serif;
-  padding: 2rem;
+  padding: 0.5rem 2rem 1.75rem;
   background: var(--bg);
   color: var(--text);
+  overflow-x: hidden;
 }
 @media (max-width: 768px) {
   body {
-    padding: 0.75rem;
+    padding: 0.2rem 0.3rem 0.9rem;
   }
   .page {
     max-width: 100%;
+  }
+}
+@media (max-width: 560px) {
+  body {
+    padding: 0rem;
   }
 }
 .loading-screen {
@@ -46,20 +82,48 @@ body {
   z-index: 999;
 }
 /* Container */
-.page { max-width: 1200px; margin: 0 auto; }
+.page {
+  width: 100%;
+  max-width: min(1380px, 95vw);
+  margin: 0 auto;
+}
+@media (min-width: 1500px) {
+  body {
+    padding-left: 1rem;
+    padding-right: 1.5rem;
+  }
+  .page {
+    max-width: min(1500px, 96vw);
+  }
+}
+@media (max-width: 600px) {
+  .page {
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+  }
+}
 .page.hidden { opacity: 0; pointer-events: none; }
 .loading-screen.hidden { display: none; }
 /* Header layout */
 .header-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 16px;
 }
 .header-actions {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-left: auto;
+}
+@media (max-width: 540px) {
+  .header-actions select {
+    padding: 0.15rem 0.4rem;
+    font-size: 0.85rem;
+  }
 }
 .header-actions select {
   background: transparent;
@@ -78,7 +142,7 @@ body {
   clip: rect(0,0,0,0);
   border: 0;
 }
-/* Título más protagonista con gradiente sutil */
+/* TÃ­tulo mÃ¡s protagonista con gradiente sutil */
 h1 { 
   font-weight: 800; 
   letter-spacing: -0.02em; 
@@ -87,6 +151,7 @@ h1 {
   color: var(--text);
   background: linear-gradient(135deg, #6d3abf, #8457cf);
   -webkit-background-clip: text; background-clip: text; color: transparent;
+  margin: 0;
 }
 label {
   display: block;
@@ -178,37 +243,353 @@ canvas {
 /* Contenedor fijo para el Arbol de la Vida */
 .tree-wrapper {
   width: 100%;
-  overflow-x: auto;
+  overflow-x: hidden;
   margin: 0;
-  padding: 0;
+  padding: 10px;
   display: flex;
   justify-content: center;
-}
-
-/* Evita espacios en blanco extra alrededor del canvas */
-.tree-wrapper canvas {
-  display: block;
-  margin: 0;
-  padding: 0;          /* elimina padding interno */
-  overflow-x: auto;    /* scroll si es necesario */
-  box-shadow: 0 10px 24px rgba(16,24,40,0.12);
-  border-radius: 12px;
-}
-.classic-chart-wrapper {
-  width: 100%;
-  overflow-x: auto;
-  margin: 0;
-  padding: 12px;
+  box-sizing: border-box;
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: 12px;
   box-shadow: var(--shadow);
 }
+
+/* Evita espacios en blanco extra alrededor del canvas */
+.tree-wrapper canvas {
+  display: block;
+  margin: 0 auto;
+  padding: 0;
+  width: min(100%, 960px);
+  max-width: 960px;
+  overflow-x: auto;
+  border-radius: 8px;
+}
+.classic-chart-wrapper {
+  width: 100%;
+  overflow-x: hidden;
+  margin: 0;
+  padding: 10px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  box-sizing: border-box;
+}
 .classic-chart-wrapper canvas {
   display: block;
   margin: 0 auto;
-  max-width: 100%;
+  max-width: 960px;
+  width: min(100%, 960px);
   height: auto;
+}
+@media (max-width: 900px) {
+  .tree-wrapper canvas,
+  .classic-chart-wrapper canvas {
+    width: 100%;
+    max-width: 100%;
+  }
+}
+@media (max-width: 680px) {
+  .visualizations {
+    width: 100vw;
+    margin-left: calc(50% - 50vw);
+  }
+  .tree-wrapper,
+  .classic-chart-wrapper {
+    width: 100vw;
+    margin-left: calc(50% - 50vw);
+  }
+  .tree-wrapper canvas,
+  .classic-chart-wrapper canvas {
+    width: 100vw;
+    max-width: 100vw;
+  }
+  .classic-chart-wrapper {
+    padding: 10px 0;
+  }
+  .tree-wrapper canvas {
+    border-radius: 0;
+    box-shadow: none;
+    border: none;
+  }
+}
+@media (max-width: 520px) {
+  .classic-chart-wrapper {
+    padding: 6px 0;
+    border: none;
+    box-shadow: none;
+    background: transparent;
+  }
+  .tree-wrapper canvas {
+    border: none;
+  }
+}
+.aspects-table {
+  width: 100%;
+  margin-top: 16px;
+}
+.aspects-card {
+  background: transparent;
+  padding: 0;
+}
+.aspect-type-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+.aspect-type-cell[data-aspect="conjunction"] {
+  background: var(--aspect-conjunction-bg);
+  color: var(--aspect-conjunction-text);
+  border-color: var(--aspect-conjunction-border);
+}
+.aspect-type-cell[data-aspect="sextile"] {
+  background: var(--aspect-sextile-bg);
+  color: var(--aspect-sextile-text);
+  border-color: var(--aspect-sextile-border);
+}
+.aspect-type-cell[data-aspect="square"] {
+  background: var(--aspect-square-bg);
+  color: var(--aspect-square-text);
+  border-color: var(--aspect-square-border);
+}
+.aspect-type-cell[data-aspect="trine"] {
+  background: var(--aspect-trine-bg);
+  color: var(--aspect-trine-text);
+  border-color: var(--aspect-trine-border);
+}
+.aspect-type-cell[data-aspect="opposition"] {
+  background: var(--aspect-opposition-bg);
+  color: var(--aspect-opposition-text);
+  border-color: var(--aspect-opposition-border);
+}
+.aspect-icon {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+.aspect-planets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.planet-chip,
+.planet-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  line-height: 1.2;
+  font-weight: 600;
+  color: var(--text);
+  border: none;
+  background: transparent;
+}
+.planet-colon {
+  color: var(--muted);
+  margin: 0 4px;
+}
+.planet-chip .planet-icon,
+.planet-badge .planet-icon {
+  font-size: 1.1rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  margin-right: 0;
+}
+.planet-name {
+  color: var(--text);
+}
+.sign-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-weight: 600;
+  color: var(--text);
+}
+.sign-badge .sign-icon {
+  font-weight: 700;
+}
+.sign-iconic {
+  font-weight: 700;
+  margin-right: 4px;
+  display: inline-flex;
+  align-items: center;
+}
+.sign-badge[data-sign="Aries"] .sign-icon, .sign-iconic[data-sign="Aries"] { color: #ff4d4f; }
+.sign-badge[data-sign="Taurus"] .sign-icon, .sign-iconic[data-sign="Taurus"] { color: #ff9c2f; }
+.sign-badge[data-sign="Gemini"] .sign-icon, .sign-iconic[data-sign="Gemini"] { color: #ffe34d; }
+.sign-badge[data-sign="Cancer"] .sign-icon, .sign-iconic[data-sign="Cancer"] { color: #2dd5c4; }
+.sign-badge[data-sign="Leo"] .sign-icon, .sign-iconic[data-sign="Leo"] { color: #ff6ec7; }
+.sign-badge[data-sign="Virgo"] .sign-icon, .sign-iconic[data-sign="Virgo"] { color: #7dde5b; }
+.sign-badge[data-sign="Libra"] .sign-icon, .sign-iconic[data-sign="Libra"] { color: #5b9fff; }
+.sign-badge[data-sign="Scorpio"] .sign-icon, .sign-iconic[data-sign="Scorpio"] { color: #9a6bff; }
+.sign-badge[data-sign="Sagittarius"] .sign-icon, .sign-iconic[data-sign="Sagittarius"] { color: #ff8f3f; }
+.sign-badge[data-sign="Capricorn"] .sign-icon, .sign-iconic[data-sign="Capricorn"] { color: #c28f62; }
+.sign-badge[data-sign="Aquarius"] .sign-icon, .sign-iconic[data-sign="Aquarius"] { color: #3dd4ff; }
+.sign-badge[data-sign="Pisces"] .sign-icon, .sign-iconic[data-sign="Pisces"] { color: #8c93ff; }
+.sign-token {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 600;
+  margin-right: 6px;
+  color: var(--text);
+}
+.sign-token[data-sign="Aries"] { color: #ff4d4f; }
+.sign-token[data-sign="Taurus"] { color: #ff9c2f; }
+.sign-token[data-sign="Gemini"] { color: #ffe34d; }
+.sign-token[data-sign="Cancer"] { color: #2dd5c4; }
+.sign-token[data-sign="Leo"] { color: #ff6ec7; }
+.sign-token[data-sign="Virgo"] { color: #7dde5b; }
+.sign-token[data-sign="Libra"] { color: #5b9fff; }
+.sign-token[data-sign="Scorpio"] { color: #9a6bff; }
+.sign-token[data-sign="Sagittarius"] { color: #ff8f3f; }
+.sign-token[data-sign="Capricorn"] { color: #c28f62; }
+.sign-token[data-sign="Aquarius"] { color: #3dd4ff; }
+.sign-token[data-sign="Pisces"] { color: #8c93ff; }
+.planet-chip-sep {
+  font-weight: 600;
+  color: var(--muted);
+}
+.planet-badge .planet-icon,
+.planet-chip .planet-icon {
+  font-weight: 700;
+}
+.planet-badge[data-planet="Sun"] .planet-icon,
+.planet-chip[data-planet="Sun"] .planet-icon { color: #4dd0e1; }
+.planet-badge[data-planet="Moon"] .planet-icon,
+.planet-chip[data-planet="Moon"] .planet-icon { color: #ffb74d; }
+.planet-badge[data-planet="Mercury"] .planet-icon,
+.planet-chip[data-planet="Mercury"] .planet-icon { color: #fdd835; }
+.planet-badge[data-planet="Venus"] .planet-icon,
+.planet-chip[data-planet="Venus"] .planet-icon { color: #81c784; }
+.planet-badge[data-planet="Mars"] .planet-icon,
+.planet-chip[data-planet="Mars"] .planet-icon { color: #42a5f5; }
+.planet-badge[data-planet="Jupiter"] .planet-icon,
+.planet-chip[data-planet="Jupiter"] .planet-icon,
+.planet-badge[data-planet="Ascendant"] .planet-icon,
+.planet-chip[data-planet="Ascendant"] .planet-icon { color: #b388ff; }
+.planet-badge[data-planet="Saturn"] .planet-icon,
+.planet-chip[data-planet="Saturn"] .planet-icon { color: #ab47bc; }
+.planet-badge[data-planet="Uranus"] .planet-icon,
+.planet-chip[data-planet="Uranus"] .planet-icon { color: #ec407a; }
+.planet-badge[data-planet="Neptune"] .planet-icon,
+.planet-chip[data-planet="Neptune"] .planet-icon { color: #f48fb1; }
+.planet-badge[data-planet="Pluto"] .planet-icon,
+.planet-chip[data-planet="Pluto"] .planet-icon { color: #90a4ae; }
+.planet-badge[data-planet="Midheaven"] .planet-icon,
+.planet-chip[data-planet="Midheaven"] .planet-icon { color: #ef5350; }
+.sign-badge[data-sign="Aries"] { background: #ffe0e1; color: #5a1012; border-color: #ffb3b7; }
+.sign-badge[data-sign="Taurus"] { background: #ffe9d5; color: #5f2905; border-color: #ffc48d; }
+.sign-badge[data-sign="Gemini"] { background: #fff8d0; color: #675000; border-color: #ffe992; }
+.sign-badge[data-sign="Cancer"] { background: #d4fbf5; color: #04423b; border-color: #9deee3; }
+.sign-badge[data-sign="Leo"] { background: #ffe0f2; color: #67143f; border-color: #ffb3dd; }
+.sign-badge[data-sign="Virgo"] { background: #e5fad9; color: #213f12; border-color: #c0efad; }
+.sign-badge[data-sign="Libra"] { background: #ddebff; color: #082a5a; border-color: #aacdff; }
+.sign-badge[data-sign="Scorpio"] { background: #e9deff; color: #2a195a; border-color: #c8b0ff; }
+.sign-badge[data-sign="Sagittarius"] { background: #ffe8d6; color: #5f2a06; border-color: #ffc294; }
+.sign-badge[data-sign="Capricorn"] { background: #f0e1d3; color: #3d2412; border-color: #d9ba98; }
+.sign-badge[data-sign="Aquarius"] { background: #dbf6ff; color: #06455a; border-color: #adebff; }
+.sign-badge[data-sign="Pisces"] { background: #e5e7ff; color: #20245e; border-color: #c4c7ff; }
+[data-theme='dark'] .sign-badge[data-sign="Aries"] {
+  background: rgba(255, 77, 79, 0.28);
+  color: #ffe7e6;
+  border-color: rgba(255, 77, 79, 0.55);
+}
+[data-theme='dark'] .sign-badge[data-sign="Taurus"] {
+  background: rgba(255, 156, 47, 0.24);
+  color: #fff0e4;
+  border-color: rgba(255, 156, 47, 0.5);
+}
+[data-theme='dark'] .sign-badge[data-sign="Gemini"] {
+  background: rgba(255, 227, 77, 0.24);
+  color: #fff8d2;
+  border-color: rgba(255, 227, 77, 0.5);
+}
+[data-theme='dark'] .sign-badge[data-sign="Cancer"] {
+  background: rgba(45, 213, 196, 0.24);
+  color: #e7fffb;
+  border-color: rgba(45, 213, 196, 0.55);
+}
+[data-theme='dark'] .sign-badge[data-sign="Leo"] {
+  background: rgba(255, 110, 199, 0.28);
+  color: #ffe7f4;
+  border-color: rgba(255, 110, 199, 0.55);
+}
+[data-theme='dark'] .sign-badge[data-sign="Virgo"] {
+  background: rgba(125, 222, 91, 0.25);
+  color: #f3ffe9;
+  border-color: rgba(125, 222, 91, 0.5);
+}
+[data-theme='dark'] .sign-badge[data-sign="Libra"] {
+  background: rgba(91, 159, 255, 0.24);
+  color: #e6f0ff;
+  border-color: rgba(91, 159, 255, 0.5);
+}
+[data-theme='dark'] .sign-badge[data-sign="Scorpio"] {
+  background: rgba(154, 107, 255, 0.25);
+  color: #f0ecff;
+  border-color: rgba(154, 107, 255, 0.55);
+}
+[data-theme='dark'] .sign-badge[data-sign="Sagittarius"] {
+  background: rgba(255, 143, 63, 0.24);
+  color: #fff3e7;
+  border-color: rgba(255, 143, 63, 0.5);
+}
+[data-theme='dark'] .sign-badge[data-sign="Capricorn"] {
+  background: rgba(194, 143, 98, 0.28);
+  color: #f8eee3;
+  border-color: rgba(194, 143, 98, 0.5);
+}
+[data-theme='dark'] .sign-badge[data-sign="Aquarius"] {
+  background: rgba(61, 212, 255, 0.25);
+  color: #e6fbff;
+  border-color: rgba(61, 212, 255, 0.5);
+}
+[data-theme='dark'] .sign-badge[data-sign="Pisces"] {
+  background: rgba(140, 147, 255, 0.26);
+  color: #f1f0ff;
+  border-color: rgba(140, 147, 255, 0.55);
+}
+.planet-chip-sep {
+  font-weight: 600;
+  color: var(--muted);
+}
+.degree-value {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+.data-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.data-list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.house-id {
+  font-weight: 600;
+  color: var(--text);
+}
+.house-letter {
+  font-family: 'StamHebrew';
+  margin-left: 4px;
+  font-size: 1.05rem;
 }
 
 .tooltip-box {
@@ -218,14 +599,28 @@ canvas {
 /* Mejoras tabla de resumen elementos */
 .element-summary table { width: 100%; border-collapse: collapse; }
 .element-summary table { table-layout: fixed; }
-.element-summary th, .element-summary td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.element-summary th,
+.element-summary td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 1.05rem;
+  line-height: 1.35;
+}
 .element-summary thead th { color: var(--muted); font-weight: 600; }
 .element-summary tbody tr:hover { background: rgba(255,255,255,0.04); }
 .element-summary td{vertical-align:top;}
+.element-summary th:first-child,
+.element-summary td:first-child { width: 32%; }
+.element-summary th:not(:first-child),
+.element-summary td:not(:first-child) { width: 22%; }
 .element-summary .cell-top{display:block;text-align:left;}
-.element-summary .cell-sub{display:block;word-break:break-word;}
+.element-summary .cell-sub{
+  display:block;
+  word-break:break-word;
+  margin-top:4px;
+}
 
-/* Destacado para máximos empatados */
+/* Destacado para mÃ¡ximos empatados */
 .element-summary .hi {
   background: rgba(255, 196, 0, 0.25);
   padding: 2px 6px;
@@ -235,10 +630,25 @@ canvas {
 
 /* Subtexto de celdas (aportantes) */
 .element-summary .cell-top { font-weight: 600; }
-.element-summary .cell-sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.element-summary .cell-sub { color: var(--muted); font-size: 0.92rem; }
 /* keep cell heights consistent */
 .element-summary .cell-top { min-height: 18px; }
 .element-summary .cell-sub { min-height: 18px; line-height: 1.2; }
+.element-summary .token-column {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.element-summary .token-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: inherit;
+}
+.element-summary .token-chip > span {
+  display: inline-flex;
+  align-items: center;
+}
 
 /* Loading indicator */
 .loading { display: inline-flex; align-items: center; gap: 8px; color: var(--text); }
@@ -248,27 +658,74 @@ canvas {
 /* Small note text */
 .note { color: var(--muted); font-size: 12px; margin-top: 8px; }
 
-.theme-toggle { all: unset; cursor: pointer; color: var(--text); border: 1px solid var(--border); padding: 4px 8px; border-radius: 8px; line-height: 1; font-size: 14px; position: fixed; top: 12px; right: 12px; z-index: 1000; background: var(--card-bg); box-shadow: var(--shadow); }
+.theme-toggle {
+  all: unset;
+  cursor: pointer;
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 4px 10px;
+  border-radius: 8px;
+  line-height: 1;
+  font-size: 14px;
+  background: var(--card-bg);
+  box-shadow: var(--shadow);
+}
 .theme-toggle:hover { background: rgba(0,0,0,0.03); }
 
 /* Layout responsive para resultados */
 .layout {
   display: flex;
-  gap: 16px;
-  align-items: flex-start;
+  gap: 20px;
+  align-items: stretch;
+  width: 100%;
 }
 .layout #output {
-  flex: 1 1 380px;
-  max-width: 520px;
+  flex: 1 1 50%;
+  max-width: none;
 }
 .visualizations {
-  flex: 0 0 640px;
+  flex: 1 1 50%;
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-width: 0;
 }
 .visualizations > * {
   flex: 0 0 auto;
+}
+@media (min-width: 1300px) {
+  .layout {
+    gap: 28px;
+  }
+  .layout #output {
+    flex: 0 0 420px;
+    max-width: 420px;
+  }
+  .visualizations {
+    flex: 1 1 auto;
+    gap: 20px;
+  }
+}
+@media (max-width: 1100px) {
+  .layout {
+    flex-direction: column;
+  }
+  .layout #output,
+  .visualizations {
+    flex: 1 1 auto;
+    max-width: 100%;
+  }
+}
+
+#output > div {
+  max-width: 560px;
+  margin-left: auto;
+  margin-right: auto;
+}
+@media (min-width: 1300px) {
+  #output > div {
+    max-width: 520px;
+  }
 }
 
 /* Form mas compacto */

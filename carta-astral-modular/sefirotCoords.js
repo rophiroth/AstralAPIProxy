@@ -1,19 +1,40 @@
 // sefirotCoords.js
-const X_CENTER = 300;   // mitad de 900px
-const X_OFFSET = 220;   // separación horizontal desde el centro
+const BASE_CENTER = 400;
+const BASE_OFFSET = 250;
 
-const sefirotCoords = {
-  "Keter":    [X_CENTER,               70],
-  "Chokhmah": [X_CENTER + X_OFFSET,   150],
-  "Binah":    [X_CENTER - X_OFFSET,   150],
-  "Chesed":   [X_CENTER + X_OFFSET,   280],
-  "Gevurah":  [X_CENTER - X_OFFSET,   280],
-  "Tiferet":  [X_CENTER,               390],
-  "Netzach":  [X_CENTER + X_OFFSET,   420],
-  "Hod":      [X_CENTER - X_OFFSET,   420],
-  "Yesod":    [X_CENTER,               530],
-  "Maljut":   [X_CENTER,               630]
+function computeTreeScale() {
+  if (typeof window === 'undefined') return 1;
+  const width = window.innerWidth || document.documentElement.clientWidth || 1200;
+  if (width >= 1800) return 1.08;
+  if (width >= 1500) return 1.02;
+  if (width >= 1200) return 0.98;
+  if (width <= 420) return 1.85;
+  if (width <= 520) return 1.65;
+  if (width <= 640) return 1.45;
+  if (width <= 900) return 1.18;
+  return 1.05;
+}
+
+const TREE_SCALE = computeTreeScale();
+try { window.__TREE_SCALE = TREE_SCALE; } catch (_){}
+
+const baseCoords = {
+  "Keter":    [BASE_CENTER,               225],
+  "Chokhmah": [BASE_CENTER + BASE_OFFSET, 275],
+  "Binah":    [BASE_CENTER - BASE_OFFSET, 275],
+  "Chesed":   [BASE_CENTER + BASE_OFFSET, 412],
+  "Gevurah":  [BASE_CENTER - BASE_OFFSET, 412],
+  "Tiferet":  [BASE_CENTER,               475],
+  "Netzach":  [BASE_CENTER + BASE_OFFSET, 545],
+  "Hod":      [BASE_CENTER - BASE_OFFSET, 545],
+  "Yesod":    [BASE_CENTER,               645],
+  "Maljut":   [BASE_CENTER,               785]
 };
+
+const scalePoint = ([x, y]) => [x * TREE_SCALE, y * TREE_SCALE];
+const sefirotCoords = Object.fromEntries(
+  Object.entries(baseCoords).map(([key, coord]) => [key, scalePoint(coord)])
+);
 
 function getHouseCoords(houses) {
   const coords = [];
@@ -38,4 +59,3 @@ function getHouseCoords(houses) {
 
 // Hazla disponible globalmente si se necesita
 window.getHouseCoords = getHouseCoords;
-

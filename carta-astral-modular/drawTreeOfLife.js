@@ -12,6 +12,17 @@ function drawTreeOfLife(data, ctx) {
     ctx.restore();
     const styleScale = (typeof window !== 'undefined' && window.__TREE_SCALE) || 1;
     const dynamicFit = (typeof window !== 'undefined' && !!window.__TREE_DYNAMIC_FIT);
+    let originalMaljut = null;
+    let maljutShiftValue = 0;
+    if (dynamicFit) {
+      try {
+        maljutShiftValue = (typeof window !== 'undefined' && window.__TREE_MALJUT_SHIFT) || 0;
+        if (maljutShiftValue && sefirotCoords && Array.isArray(sefirotCoords.Maljut)) {
+          originalMaljut = sefirotCoords.Maljut.slice();
+          sefirotCoords.Maljut = [originalMaljut[0], originalMaljut[1] - maljutShiftValue];
+        }
+      } catch (_){}
+    }
     const coords = Object.values(sefirotCoords);
     const xs = coords.map(([x]) => x);
     const ys = coords.map(([, y]) => y);
@@ -24,8 +35,8 @@ function drawTreeOfLife(data, ctx) {
       const marginXBase = (typeof window !== 'undefined' && window.__TREE_MARGIN_X) || 28;
       const marginTopBase = (typeof window !== 'undefined' && window.__TREE_MARGIN_TOP) || 82;
       const marginBottomBase = (typeof window !== 'undefined' && window.__TREE_MARGIN_BOTTOM) || 12;
-      const horizontalMarginMin = Math.max(24, ctx.canvas.width * 0.028);
-      const verticalMarginMin = Math.max(48, ctx.canvas.height * 0.05);
+      const horizontalMarginMin = Math.max(26, ctx.canvas.width * 0.03);
+      const verticalMarginMin = Math.max(42, ctx.canvas.height * 0.045);
       const marginX = Math.max(marginXBase * marginFactor, horizontalMarginMin);
       const marginTop = Math.max(marginTopBase * marginFactor, verticalMarginMin);
       const marginBottom = Math.max(marginBottomBase * marginFactor, verticalMarginMin);
@@ -39,7 +50,7 @@ function drawTreeOfLife(data, ctx) {
       const scaledHeight = height * drawScale;
       const verticalNudge = (typeof window !== 'undefined' && window.__TREE_VERTICAL_NUDGE) || 0;
       const offsetX = marginX + Math.max(0, (availableWidth - scaledWidth) / 2);
-      const offsetY = Math.max(marginTop * 0.55, marginTop + Math.max(0, (availableHeight - scaledHeight) / 2) - verticalNudge);
+      const offsetY = Math.max(marginTop, marginTop + Math.max(0, (availableHeight - scaledHeight) / 2) - verticalNudge);
       ctx.save();
       ctx.translate(offsetX, offsetY);
       ctx.scale(drawScale, drawScale);
@@ -84,6 +95,11 @@ function drawTreeOfLife(data, ctx) {
     drawHousesWithIcons(houses, ctx);
 
     ctx.restore();
+    if (originalMaljut) {
+      try {
+        sefirotCoords.Maljut = originalMaljut;
+      } catch (_){ }
+    }
   } catch (err) {
     console.error('[drawTree] error', err);
   }

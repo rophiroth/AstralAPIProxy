@@ -82,18 +82,19 @@ function renderTreeMobile(vizData) {
   wrapper.appendChild(canvas);
   anchor.appendChild(wrapper);
 
-  const overrideKeys = ['__TREE_DYNAMIC_FIT','__TREE_SCALE','__TREE_MARGIN_FACTOR','__TREE_MARGIN_X','__TREE_MARGIN_TOP','__TREE_MARGIN_BOTTOM','__TREE_VERTICAL_NUDGE'];
+  const overrideKeys = ['__TREE_DYNAMIC_FIT','__TREE_SCALE','__TREE_MARGIN_FACTOR','__TREE_MARGIN_X','__TREE_MARGIN_TOP','__TREE_MARGIN_BOTTOM','__TREE_VERTICAL_NUDGE','__TREE_MALJUT_SHIFT'];
   const previous = {};
   try {
     if (typeof window !== 'undefined') {
       const overrides = {
         __TREE_DYNAMIC_FIT: true,
         __TREE_SCALE: 1,
-        __TREE_MARGIN_FACTOR: 0.95,
-        __TREE_MARGIN_X: 30,
-        __TREE_MARGIN_TOP: 112,
-        __TREE_MARGIN_BOTTOM: 54,
-        __TREE_VERTICAL_NUDGE: 150
+        __TREE_MARGIN_FACTOR: 0.92,
+        __TREE_MARGIN_X: 28,
+        __TREE_MARGIN_TOP: 102,
+        __TREE_MARGIN_BOTTOM: 56,
+        __TREE_VERTICAL_NUDGE: 40,
+        __TREE_MALJUT_SHIFT: 50
       };
       overrideKeys.forEach((key) => {
         if (Object.prototype.hasOwnProperty.call(window, key)) {

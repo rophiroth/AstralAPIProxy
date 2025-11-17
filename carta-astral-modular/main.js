@@ -77,7 +77,7 @@ function renderTreeMobile(vizData) {
 
   const canvas = document.createElement('canvas');
   canvas.width = 1024;
-  canvas.height = Math.min(1160, Math.max(980, estimateTreeMobileHeight(canvas.width)));
+  canvas.height = Math.min(1120, Math.max(960, estimateTreeMobileHeight(canvas.width)));
 
   wrapper.appendChild(canvas);
   anchor.appendChild(wrapper);
@@ -93,7 +93,7 @@ function renderTreeMobile(vizData) {
         __TREE_MARGIN_X: 26,
         __TREE_MARGIN_TOP: 96,
         __TREE_MARGIN_BOTTOM: 60,
-        __TREE_VERTICAL_NUDGE: 30,
+        __TREE_VERTICAL_NUDGE: 15,
         __TREE_MALJUT_SHIFT: 32
       };
       overrideKeys.forEach((key) => {

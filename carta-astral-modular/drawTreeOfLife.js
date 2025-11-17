@@ -83,6 +83,19 @@ try {
     window.SIGN_COLORS = window.SIGN_COLORS || SIGN_COLORS;
   }
 } catch(_){}
+const FALLBACK_SIGN_GLYPHS = {
+  Aries:'\u2648', Taurus:'\u2649', Gemini:'\u264A', Cancer:'\u264B',
+  Leo:'\u264C', Virgo:'\u264D', Libra:'\u264E', Scorpio:'\u264F',
+  Sagittarius:'\u2650', Capricorn:'\u2651', Aquarius:'\u2652', Pisces:'\u2653'
+};
+function getTreeSignGlyph(sign) {
+  try {
+    const map = (typeof window !== 'undefined' && window.SIGN_SYMBOL) || FALLBACK_SIGN_GLYPHS;
+    return (map && map[sign]) || FALLBACK_SIGN_GLYPHS[sign] || sign.slice(0,2);
+  } catch (_){
+    return FALLBACK_SIGN_GLYPHS[sign] || sign.slice(0,2);
+  }
+}
 const PLANET_COLORS = {
   Sun: '#4dd0e1',
   Moon: '#ff9e40',
@@ -133,7 +146,7 @@ function drawSefirot(ctx, sefirotPlanets, planets) {
     if (planet && typeof planet.longitude === 'number') {
       const degree = decimals((planet.longitude % 30), 2);
       const sign = getZodiacSign(planet.longitude);
-      const zodiacEmoji = (typeof getZodiacEmoji==='function') ? getZodiacEmoji(sign) : (window.zodiacEmojis?.[sign]||'');
+      const zodiacGlyph = getTreeSignGlyph(sign);
       const planetEmoji = (typeof getPlanetEmoji==='function') ? getPlanetEmoji(planetName) : (window.planetEmojis?.[planetName]||'');
       const signColor = SIGN_COLORS[sign] || textColor;
 
@@ -150,7 +163,7 @@ function drawSefirot(ctx, sefirotPlanets, planets) {
       ctx.font = `${emojiSize}px 'Segoe UI Symbol', 'Noto Sans Symbols', 'Arial Unicode MS'`;
       ctx.textAlign = 'center';
       ctx.fillStyle = signColor;
-      ctx.fillText(zodiacEmoji, emojiCenter, signBaseline);
+      ctx.fillText(zodiacGlyph, emojiCenter, signBaseline);
 
       ctx.textAlign = 'left';
       ctx.font = `${15 * scale}px sans-serif`;

@@ -86,17 +86,24 @@ function drawAscMc(ascendant, midheaven, ctx) {
       ctx.font = `bold ${15 * scale}px sans-serif`;
       ctx.fillStyle = textColor;
       ctx.fillText(`${label}:`, baseX, baseY - 18 * scale);
-      const lineY = baseY - 12 * scale;
+      const lineY = baseY - 10 * scale;
       const degreeTextCenter = `${degree}\u00B0`;
       ctx.font = emojiFont;
+      const glyphWidth = ctx.measureText(glyph).width || (18 * scale);
+      ctx.font = `bold ${15 * scale}px sans-serif`;
+      const degreeWidth = ctx.measureText(degreeTextCenter).width;
+      const gap = 12 * scale;
+      const total = glyphWidth + gap + degreeWidth;
+      const start = baseX - total / 2;
+
+      ctx.font = emojiFont;
+      ctx.textAlign = 'left';
       ctx.fillStyle = signColor;
-      const offset = 24 * scale;
-      ctx.textAlign = 'right';
-      ctx.fillText(glyph, baseX - offset, lineY);
+      ctx.fillText(glyph, start, lineY);
+
       ctx.font = `bold ${15 * scale}px sans-serif`;
       ctx.fillStyle = textColor;
-      ctx.textAlign = 'left';
-      ctx.fillText(degreeTextCenter, baseX + offset, lineY);
+      ctx.fillText(degreeTextCenter, start + glyphWidth + gap, lineY);
     } else {
       ctx.textAlign = 'left';
       ctx.font = `bold ${15 * scale}px sans-serif`;

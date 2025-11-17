@@ -24,8 +24,8 @@ function drawTreeOfLife(data, ctx) {
       const marginXBase = (typeof window !== 'undefined' && window.__TREE_MARGIN_X) || 28;
       const marginTopBase = (typeof window !== 'undefined' && window.__TREE_MARGIN_TOP) || 82;
       const marginBottomBase = (typeof window !== 'undefined' && window.__TREE_MARGIN_BOTTOM) || 12;
-      const horizontalMarginMin = Math.max(36, ctx.canvas.width * 0.045);
-      const verticalMarginMin = Math.max(60, ctx.canvas.height * 0.06);
+      const horizontalMarginMin = Math.max(30, ctx.canvas.width * 0.035);
+      const verticalMarginMin = Math.max(52, ctx.canvas.height * 0.055);
       const marginX = Math.max(marginXBase * marginFactor, horizontalMarginMin);
       const marginTop = Math.max(marginTopBase * marginFactor, verticalMarginMin);
       const marginBottom = Math.max(marginBottomBase * marginFactor, verticalMarginMin);
@@ -34,12 +34,12 @@ function drawTreeOfLife(data, ctx) {
       const availableWidth = Math.max(20, ctx.canvas.width - 2 * marginX);
       const availableHeight = Math.max(20, ctx.canvas.height - marginTop - marginBottom);
       const baseScale = Math.min(availableWidth / width, availableHeight / height);
-      const drawScale = baseScale * 0.85;
+      const drawScale = baseScale * 0.95;
       const scaledWidth = width * drawScale;
       const scaledHeight = height * drawScale;
       const verticalNudge = (typeof window !== 'undefined' && window.__TREE_VERTICAL_NUDGE) || 0;
       const offsetX = marginX + Math.max(0, (availableWidth - scaledWidth) / 2);
-      const offsetY = Math.max(0, marginTop + Math.max(0, (availableHeight - scaledHeight) / 2) - verticalNudge);
+      const offsetY = Math.max(marginTop, marginTop + Math.max(0, (availableHeight - scaledHeight) / 2) - verticalNudge);
       ctx.save();
       ctx.translate(offsetX, offsetY);
       ctx.scale(drawScale, drawScale);

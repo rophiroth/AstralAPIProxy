@@ -77,7 +77,7 @@ function renderTreeMobile(vizData) {
 
   const canvas = document.createElement('canvas');
   canvas.width = 1024;
-  canvas.height = Math.min(1150, Math.max(940, estimateTreeMobileHeight(canvas.width)));
+  canvas.height = Math.min(1160, Math.max(980, estimateTreeMobileHeight(canvas.width)));
 
   wrapper.appendChild(canvas);
   anchor.appendChild(wrapper);
@@ -89,12 +89,12 @@ function renderTreeMobile(vizData) {
       const overrides = {
         __TREE_DYNAMIC_FIT: true,
         __TREE_SCALE: 1,
-        __TREE_MARGIN_FACTOR: 0.92,
-        __TREE_MARGIN_X: 28,
-        __TREE_MARGIN_TOP: 102,
-        __TREE_MARGIN_BOTTOM: 56,
-        __TREE_VERTICAL_NUDGE: 40,
-        __TREE_MALJUT_SHIFT: 50
+        __TREE_MARGIN_FACTOR: 0.9,
+        __TREE_MARGIN_X: 26,
+        __TREE_MARGIN_TOP: 96,
+        __TREE_MARGIN_BOTTOM: 60,
+        __TREE_VERTICAL_NUDGE: 30,
+        __TREE_MALJUT_SHIFT: 32
       };
       overrideKeys.forEach((key) => {
         if (Object.prototype.hasOwnProperty.call(window, key)) {

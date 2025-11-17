@@ -10,7 +10,8 @@ function drawTreeOfLife(data, ctx) {
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     ctx.restore();
-    const treeScale = (typeof window !== 'undefined' && window.__TREE_SCALE) || 1;
+    const styleScale = (typeof window !== 'undefined' && window.__TREE_SCALE) || 1;
+    const dynamicFit = (typeof window !== 'undefined' && !!window.__TREE_DYNAMIC_FIT);
     const coords = Object.values(sefirotCoords);
     const xs = coords.map(([x]) => x);
     const ys = coords.map(([, y]) => y);
@@ -18,19 +19,47 @@ function drawTreeOfLife(data, ctx) {
     const maxX = Math.max.apply(null, xs);
     const minY = Math.min.apply(null, ys);
     const maxY = Math.max.apply(null, ys);
-    const marginX = 28 * treeScale;
-    const marginTop = 82 * treeScale;
-    const marginBottom = 12 * treeScale;
-    const offsetX = marginX + (ctx.canvas.width - 2 * marginX - (maxX - minX)) / 2 - minX;
-    let offsetY = marginTop - minY;
-    const maxAllowedY = ctx.canvas.height - marginBottom;
-    const maxAfterOffset = maxY + offsetY;
-    if (maxAfterOffset > maxAllowedY) {
-      offsetY -= (maxAfterOffset - maxAllowedY);
+    if (dynamicFit) {
+      const marginFactor = (typeof window !== 'undefined' && window.__TREE_MARGIN_FACTOR) || 1;
+      const marginXBase = (typeof window !== 'undefined' && window.__TREE_MARGIN_X) || 28;
+      const marginTopBase = (typeof window !== 'undefined' && window.__TREE_MARGIN_TOP) || 82;
+      const marginBottomBase = (typeof window !== 'undefined' && window.__TREE_MARGIN_BOTTOM) || 12;
+      const horizontalMarginMin = Math.max(30, ctx.canvas.width * 0.035);
+      const verticalMarginMin = Math.max(48, ctx.canvas.height * 0.05);
+      const marginX = Math.max(marginXBase * marginFactor, horizontalMarginMin);
+      const marginTop = Math.max(marginTopBase * marginFactor, verticalMarginMin);
+      const marginBottom = Math.max(marginBottomBase * marginFactor, verticalMarginMin);
+      const width = Math.max(1, maxX - minX);
+      const height = Math.max(1, maxY - minY);
+      const availableWidth = Math.max(20, ctx.canvas.width - 2 * marginX);
+      const availableHeight = Math.max(20, ctx.canvas.height - marginTop - marginBottom);
+      const baseScale = Math.min(availableWidth / width, availableHeight / height);
+      const drawScale = baseScale * 0.9;
+      const scaledWidth = width * drawScale;
+      const scaledHeight = height * drawScale;
+      const verticalNudge = (typeof window !== 'undefined' && window.__TREE_VERTICAL_NUDGE) || 0;
+      const offsetX = marginX + Math.max(0, (availableWidth - scaledWidth) / 2);
+      const offsetY = Math.max(0, marginTop + Math.max(0, (availableHeight - scaledHeight) / 2) - verticalNudge);
+      ctx.save();
+      ctx.translate(offsetX, offsetY);
+      ctx.scale(drawScale, drawScale);
+      ctx.translate(-minX, -minY);
+    } else {
+      const treeScale = styleScale;
+      const marginX = 28 * treeScale;
+      const marginTop = 82 * treeScale;
+      const marginBottom = 12 * treeScale;
+      const offsetX = marginX + (ctx.canvas.width - 2 * marginX - (maxX - minX)) / 2 - minX;
+      let offsetY = marginTop - minY;
+      const maxAllowedY = ctx.canvas.height - marginBottom;
+      const maxAfterOffset = maxY + offsetY;
+      if (maxAfterOffset > maxAllowedY) {
+        offsetY -= (maxAfterOffset - maxAllowedY);
+      }
+      ctx.save();
+      ctx.translate(offsetX, offsetY);
     }
-    ctx.save();
-    ctx.translate(offsetX, offsetY);
-    ctx.font = `${12 * treeScale}px sans-serif`;
+    ctx.font = `${12 * styleScale}px sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 

@@ -28,6 +28,130 @@ const RESULT_MODULES = [
   'drawClassicWheel.js'
 ];
 
+let pendingMobileTreeRender = null;
+
+
+function estimateTreeMobileHeight(baseWidth) {
+  const fallbackRatio = 1.24;
+  try {
+    const referenceWidth = baseWidth && baseWidth > 0 ? baseWidth : 1024;
+    let coordsSource = null;
+    if (typeof window !== 'undefined' && window.sefirotCoords) {
+      coordsSource = window.sefirotCoords;
+    } else if (typeof sefirotCoords !== 'undefined') {
+      coordsSource = sefirotCoords;
+    }
+    if (!coordsSource) return Math.round(referenceWidth * fallbackRatio);
+    const coords = Object.values(coordsSource);
+    if (!coords.length) return Math.round(referenceWidth * fallbackRatio);
+    const xs = coords.map(([x]) => x);
+    const ys = coords.map(([, y]) => y);
+    const minX = Math.min.apply(null, xs);
+    const maxX = Math.max.apply(null, xs);
+    const minY = Math.min.apply(null, ys);
+    const maxY = Math.max.apply(null, ys);
+    const baseWidthSpan = Math.max(1, maxX - minX);
+    const baseHeightSpan = Math.max(1, maxY - minY);
+    const ratio = baseHeightSpan / baseWidthSpan;
+    const padding = 1.12;
+    return Math.round(referenceWidth * ratio * padding);
+  } catch (_){
+    const ref = baseWidth && baseWidth > 0 ? baseWidth : 1024;
+    return Math.round(ref * fallbackRatio);
+  }
+}
+function renderTreeMobile(vizData) {
+
+  const anchor = document.getElementById('treeMobileAnchor');
+
+  if (!anchor) return;
+
+  const shouldShow = window.matchMedia('(max-width: 900px)').matches;
+
+  anchor.innerHTML = '';
+
+  if (!shouldShow) return;
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'tree-mobile-container';
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = Math.min(1380, Math.max(1100, estimateTreeMobileHeight(canvas.width)));
+
+  wrapper.appendChild(canvas);
+  anchor.appendChild(wrapper);
+
+  const overrideKeys = ['__TREE_DYNAMIC_FIT','__TREE_SCALE','__TREE_MARGIN_FACTOR','__TREE_MARGIN_X','__TREE_MARGIN_TOP','__TREE_MARGIN_BOTTOM','__TREE_VERTICAL_NUDGE'];
+  const previous = {};
+  try {
+    if (typeof window !== 'undefined') {
+      const overrides = {
+        __TREE_DYNAMIC_FIT: true,
+        __TREE_SCALE: 1,
+        __TREE_MARGIN_FACTOR: 0.92,
+        __TREE_MARGIN_X: 32,
+        __TREE_MARGIN_TOP: 94,
+        __TREE_MARGIN_BOTTOM: 56,
+        __TREE_VERTICAL_NUDGE: 32
+      };
+      overrideKeys.forEach((key) => {
+        if (Object.prototype.hasOwnProperty.call(window, key)) {
+          previous[key] = { exists: true, value: window[key] };
+        } else {
+          previous[key] = { exists: false };
+        }
+        window[key] = overrides[key];
+      });
+    }
+    drawTreeOfLife(vizData, canvas.getContext('2d'));
+  } catch (err) {
+    console.warn('[tree-mobile] draw error', err);
+  } finally {
+    try {
+      if (typeof window !== 'undefined') {
+        overrideKeys.forEach((key) => {
+          const state = previous[key];
+          if (state && state.exists) {
+            window[key] = state.value;
+          } else {
+            delete window[key];
+          }
+        });
+      }
+    } catch (_){ }
+  }
+
+}
+
+
+
+function scheduleTreeMobileRender(vizData) {
+
+  if (pendingMobileTreeRender) {
+
+    cancelAnimationFrame(pendingMobileTreeRender);
+
+  }
+
+  pendingMobileTreeRender = requestAnimationFrame(() => renderTreeMobile(vizData));
+
+}
+
+
+
+try {
+
+  window.addEventListener('resize', () => {
+
+    try { if (window.__lastCartaData) scheduleTreeMobileRender(window.__lastCartaData); } catch (_){ }
+
+  });
+
+} catch (_){ }
+
+
+
 function ensureResultModules() {
   if (!resultModulesPromise) {
     resultModulesPromise = Promise.all(
@@ -92,6 +216,20 @@ async function renderResultsView(data) {
   const classicWrapper = document.getElementById("classicChartWrapper");
   const classicCanvas = document.getElementById("classicChartCanvas");
   const aspectsContainer = document.getElementById("aspectsTableContainer");
+  if (treeWrapper) {
+    const anchor = document.getElementById('treeMobileAnchor');
+    if (anchor && anchor.contains(treeWrapper)) {
+      anchor.removeChild(treeWrapper);
+    }
+  }
+  if (treeWrapper && output.contains(treeWrapper)) {
+    try {
+      const vizHome = document.querySelector('.visualizations');
+      if (vizHome) {
+        vizHome.insertBefore(treeWrapper, vizHome.firstChild || null);
+      }
+    } catch (_){ }
+  }
   if (treeWrapper) treeWrapper.classList.add('hidden');
   if (classicWrapper) classicWrapper.classList.add('hidden');
   if (treeCanvas) {
@@ -117,6 +255,7 @@ async function renderResultsView(data) {
   try {
     if (typeof window.renderEnochInfo === "function") {
       renderEnochInfo(output, enoch, planets.Sun && planets.Sun.longitude);
+      scheduleTreeMobileRender(vizData);
     } else { debugValue("renderEnochInfo missing"); }
   } catch (re) { debugValue("renderEnochInfo error", re); }
 
@@ -140,6 +279,13 @@ async function renderResultsView(data) {
 
   const drawVisuals = () => {
     if (treeCanvas && typeof window.drawTreeOfLife === "function") {
+      try {
+        const inlineMobile = window.matchMedia('(max-width: 900px)').matches;
+        const desiredHeight = inlineMobile ? 980 : 740;
+        if (treeCanvas.height !== desiredHeight) treeCanvas.height = desiredHeight;
+        if (treeCanvas.width !== 960) treeCanvas.width = 960;
+        if (treeWrapper) treeWrapper.classList.toggle('mobile-hidden', inlineMobile);
+      } catch (_){ }
       try { drawTreeOfLife(vizData, treeCanvas.getContext("2d")); } catch (de) { debugValue("drawTreeOfLife error", de); }
       try { setupTooltip(treeCanvas, (houses_data && houses_data.houses) || [], oplanets); } catch (te) { debugValue("setupTooltip error", te); }
       if (treeWrapper) treeWrapper.classList.remove('hidden');
@@ -148,6 +294,7 @@ async function renderResultsView(data) {
       try { drawClassicWheel(vizData, classicCanvas.getContext("2d")); } catch (ce) { debugValue("drawClassicWheel error", ce); }
       if (classicWrapper) classicWrapper.classList.remove('hidden');
     }
+    scheduleTreeMobileRender(vizData);
   };
 
   try {
@@ -207,29 +354,6 @@ async function fetchWithFallback(primaryUrl, fallbackUrl, makeOptions) {
 function initApp() {
   debugValue("馃寪 Main.js cargado");
 
-  let selectedLat = null;
-  // cache for redraw on theme change (global to allow theme observer
-  // to trigger once the DOM is ready). This avoids flickering.
-  try { if (typeof window.__lastCartaData === 'undefined') window.__lastCartaData = null; } catch(_){}
-  let selectedLon = null;
-  let debounceTimeout;
-  let manualLocationSelected = false;
-  let autoGeoRequested = false;
-  let locationFetchController = null;
-  let ipLookupPending = false;
-  let ipBootstrapDone = false;
-  const quickLocationHints = [
-    { name: "Santiago, Chile", lat: -33.4489, lon: -70.6693, detail: "Capital de Chile" },
-    { name: "Buenos Aires, Argentina", lat: -34.6037, lon: -58.3816, detail: "Capital de Argentina" },
-    { name: "Madrid, España", lat: 40.4168, lon: -3.7038, detail: "España" },
-    { name: "Ciudad de México, México", lat: 19.4326, lon: -99.1332, detail: "México" },
-    { name: "Bogotá, Colombia", lat: 4.7110, lon: -74.0721, detail: "Colombia" },
-    { name: "Lima, Perú", lat: -12.0464, lon: -77.0428, detail: "Perú" },
-    { name: "Montevideo, Uruguay", lat: -34.9011, lon: -56.1645, detail: "Uruguay" },
-    { name: "Quito, Ecuador", lat: -0.1807, lon: -78.4678, detail: "Ecuador" },
-    { name: "Caracas, Venezuela", lat: 10.4806, lon: -66.9036, detail: "Venezuela" },
-    { name: "São Paulo, Brasil", lat: -23.5505, lon: -46.6333, detail: "Brasil" }
-  ];
 
   const locationInput = document.getElementById("location");
   const suggestionsBox = document.getElementById("suggestions");
@@ -243,7 +367,7 @@ function initApp() {
     if (!langSelect) return;
     const map = (langCompactQuery && langCompactQuery.matches)
       ? { es: 'Es', en: 'En' }
-      : { es: 'Espa\u00f1ol', en: 'English' };
+      : { es: 'Espa�ol', en: 'English' };
     Array.from(langSelect.options || []).forEach((opt) => {
       const key = (opt.value || '').toLowerCase();
       if (map[key]) opt.textContent = map[key];
@@ -257,263 +381,22 @@ function initApp() {
       langCompactQuery.addListener(syncLangOptionLabels);
     }
   }
-  if (locationInput) {
-    locationInput.addEventListener("focus", () => {
-      try {
-        locationInput.select();
-      } catch (_) {}
-    });
-  }
 
-  function setLocationFromSuggestion(label, lat, lon, { manual = false } = {}) {
-    locationInput.value = label;
-    selectedLat = lat;
-    selectedLon = lon;
-    if (!manual) {
-      setGpsStatus("detectedPlaceholder");
-    } else {
-      locationInput.placeholder = currentTranslations.placeholder;
-    }
-    suggestionsBox.innerHTML = "";
-    debugValue("Detected location", label, lat, lon);
-    manualLocationSelected = manual;
-  }
-
-  const translations = {
-    es: {
-      title: "Carta Astral del Árbol de la Vida",
-      brandUrl: "https://sabiduriaholistica.org",
-      dateLabel: "Fecha y hora de nacimiento:",
-      locationLabel: "Ubicación (Ciudad, País):",
-      submitButton: "Calcular Carta",
-      placeholder: "Escribe tu ciudad",
-      gpsLabel: "Usar ubicación actual",
-      statusSearching: "Buscando ubicación...",
-      statusDetected: "Ubicación detectada",
-      statusError: "GPS:",
-      detectedPlaceholder: "Ubicación actual (Ubicación detectada)",
-      statusDetectedBrowser: "Ubicación aproximada detectada",
-      suggestionNoResults: "No se encontraron resultados",
-      suggestionError: "No hay conexión",
-      loadingApp: "Cargando módulo...",
-      errorUnavailable: "Servicio temporalmente no disponible. Intenta nuevamente en unos segundos.",
-      selectLocationMessage: "Selecciona una ubicación válida o permite el acceso a tu ubicación.",
-      calculatingMessage: "Calculando carta...",
-      gpsDenied: "sin permiso",
-      unexpectedError: "Error inesperado",
-      enochTitle: "Calendario de Enoj",
-      enochYear: "Año",
-      enochMonth: "Mes",
-      enochDay: "Día",
-      enochDayOfYear: "Día del año",
-      enochAddedWeek: "Semana adicional",
-      enochAstronomicalName: "Nombre (Astronómico)",
-      enochEnochName: "Nombre (Enoch)",
-      yesLabel: "Sí",
-      noLabel: "No",
-      planetsTitle: "Planetas",
-      housesTitle: "Casas astrológicas",
-      ascLabel: "Asc",
-      descLabel: "Desc",
-      mcLabel: "MC",
-      houseLabel: "Casa",
-      elementSummaryTitle: "Resumen elemental",
-      elementSourceUnit: "Conteo (unitario)",
-      elementSourceWeighted: "Puntaje (ponderado)",
-      elementPolarityTitle: "Polaridad",
-      polarityMasculine: "Masculino (Fuego + Aire)",
-      polarityFeminine: "Femenino (Agua + Tierra)",
-      tableSourceLabel: "Fuente",
-      modalitiesTitle: "Resumen por modalidades",
-      modalitiesSourceUnit: "Conteo (unitario)",
-      modalitiesSourceWeighted: "Puntaje (ponderado)",
-      aspectsTitle: "Aspectos clásicos",
-      aspectTypeLabel: "Aspecto",
-      aspectPlanetsLabel: "Planetas",
-      aspectOrbLabel: "Orbe",
-      notePluto: "Nota: se excluye Plutón; Sol, Luna y Ascendente puntúan x2 en los conteos ponderados.",
-      triadLabel: "Tríada",
-      triadMasculine: "Masculino (Fuego)",
-      triadNeutral: "Neutro (Aire)",
-      triadFeminine: "Femenino (Agua+Tierra)",
-      planetNames: {
-        Sun: "Sol",
-        Moon: "Luna",
-        Mercury: "Mercurio",
-        Venus: "Venus",
-        Mars: "Marte",
-        Jupiter: "Júpiter",
-        Saturn: "Saturno",
-        Uranus: "Urano",
-        Neptune: "Neptuno",
-        Pluto: "Plutón"
-      },
-      signNames: {
-        Aries: "Aries",
-        Taurus: "Tauro",
-        Gemini: "Géminis",
-        Cancer: "Cáncer",
-        Leo: "Leo",
-        Virgo: "Virgo",
-        Libra: "Libra",
-        Scorpio: "Escorpio",
-        Sagittarius: "Sagitario",
-        Capricorn: "Capricornio",
-        Aquarius: "Acuario",
-        Pisces: "Piscis"
-      },
-      elementNames: {
-        Fuego: "Fuego",
-        Tierra: "Tierra",
-        Aire: "Aire",
-        Agua: "Agua"
-      },
-      modalityNames: {
-        Cardinal: "Cardinal",
-        Fijo: "Fijo",
-        Mutable: "Mutable"
-      },
-      sefirotNames: {
-        Keter: "Keter",
-        Chokhmah: "Jojmá",
-        Binah: "Biná",
-        Chesed: "Jesed",
-        Gevurah: "Guevurá",
-        Tiferet: "Tiferet",
-        Netzach: "Netsaj",
-        Hod: "Hod",
-        Yesod: "Yesod",
-        Maljut: "Maljut"
-      },
-      aspectNames: {
-        conjunction: "Conjunción",
-        sextile: "Sextil",
-        square: "Cuadratura",
-        trine: "Trígono",
-        opposition: "Oposición"
-      }
-    },
-    en: {
-      title: "Tree of Life Astral Chart",
-      brandUrl: "https://psyhackers.org",
-      dateLabel: "Birth date and time:",
-      locationLabel: "Location (City, Country):",
-      submitButton: "Calculate Chart",
-      placeholder: "Type your city",
-      gpsLabel: "Use current location",
-      statusSearching: "Looking up location...",
-      statusDetected: "Location detected",
-      statusError: "GPS:",
-      detectedPlaceholder: "Current location (Detected)",
-      statusDetectedBrowser: "Approximate location detected",
-      suggestionNoResults: "No results found",
-      suggestionError: "No connection",
-      loadingApp: "Loading module...",
-      errorUnavailable: "Service temporarily unavailable. Please try again in a moment.",
-      selectLocationMessage: "Choose a valid location or allow access to your location.",
-      calculatingMessage: "Calculating chart...",
-      gpsDenied: "permission denied",
-      unexpectedError: "Unexpected error",
-      enochTitle: "Enoch Calendar",
-      enochYear: "Year",
-      enochMonth: "Month",
-      enochDay: "Day",
-      enochDayOfYear: "Day of year",
-      enochAddedWeek: "Added week",
-      enochAstronomicalName: "Name (Astronomical)",
-      enochEnochName: "Name (Enoch)",
-      yesLabel: "Yes",
-      noLabel: "No",
-      planetsTitle: "Planets",
-      housesTitle: "Astrological Houses",
-      ascLabel: "Asc",
-      descLabel: "Desc",
-      mcLabel: "MC",
-      houseLabel: "House",
-      elementSummaryTitle: "Element Summary",
-      elementSourceUnit: "Count (unit)",
-      elementSourceWeighted: "Score (weighted)",
-      elementPolarityTitle: "Polarity",
-      polarityMasculine: "Masculine (Fire + Air)",
-      polarityFeminine: "Feminine (Water + Earth)",
-      tableSourceLabel: "Source",
-      modalitiesTitle: "Modalities Summary",
-      modalitiesSourceUnit: "Count (unit)",
-      modalitiesSourceWeighted: "Score (weighted)",
-      aspectsTitle: "Classical Aspects",
-      aspectTypeLabel: "Aspect",
-      aspectPlanetsLabel: "Planets",
-      aspectOrbLabel: "Orb",
-      notePluto: "Note: Pluto is excluded; Sun, Moon and Ascendant count twice in weighted totals.",
-      triadLabel: "Triad",
-      triadMasculine: "Masculine (Fire)",
-      triadNeutral: "Neutral (Air)",
-      triadFeminine: "Feminine (Water+Earth)",
-      planetNames: {
-        Sun: "Sun",
-        Moon: "Moon",
-        Mercury: "Mercury",
-        Venus: "Venus",
-        Mars: "Mars",
-        Jupiter: "Jupiter",
-        Saturn: "Saturn",
-        Uranus: "Uranus",
-        Neptune: "Neptune",
-        Pluto: "Pluto"
-      },
-      signNames: {
-        Aries: "Aries",
-        Taurus: "Taurus",
-        Gemini: "Gemini",
-        Cancer: "Cancer",
-        Leo: "Leo",
-        Virgo: "Virgo",
-        Libra: "Libra",
-        Scorpio: "Scorpio",
-        Sagittarius: "Sagittarius",
-        Capricorn: "Capricorn",
-        Aquarius: "Aquarius",
-        Pisces: "Pisces"
-      },
-      elementNames: {
-        Fuego: "Fire",
-        Tierra: "Earth",
-        Aire: "Air",
-        Agua: "Water"
-      },
-      modalityNames: {
-        Cardinal: "Cardinal",
-        Fijo: "Fixed",
-        Mutable: "Mutable"
-      },
-      sefirotNames: {
-        Keter: "Keter",
-        Chokhmah: "Chokhmah",
-        Binah: "Binah",
-        Chesed: "Chesed",
-        Gevurah: "Gevurah",
-        Tiferet: "Tiferet",
-        Netzach: "Netzach",
-        Hod: "Hod",
-        Yesod: "Yesod",
-        Maljut: "Maljut"
-      },
-      aspectNames: {
-        conjunction: "Conjunction",
-        sextile: "Sextile",
-        square: "Square",
-        trine: "Trine",
-        opposition: "Opposition"
-      }
-    }
-  };
-  let currentTranslations = translations.es;
-  let activeLang = 'es';
+  const translationsAPI = (typeof window !== "undefined" && window.ChartTranslations) || null;
+  const availableTranslations = translationsAPI ? translationsAPI.translations : { es: {} };
   const t = (key, fallback) => (currentTranslations && currentTranslations[key]) || fallback || key;
+  let activeLang = (translationsAPI && translationsAPI.defaultLang) || 'es';
+  let currentTranslations = translationsAPI && typeof translationsAPI.getTranslation === 'function'
+    ? translationsAPI.getTranslation(activeLang)
+    : (availableTranslations[activeLang] || {});
 
   function pushTranslationsToGlobal() {
+    if (translationsAPI && typeof translationsAPI.pushToGlobal === 'function') {
+      currentTranslations = translationsAPI.pushToGlobal(activeLang) || currentTranslations;
+      return;
+    }
     try {
-      window.__chartTranslations = currentTranslations;
+      window.__chartTranslations = currentTranslations || {};
       window.__chartLanguage = activeLang;
       window.getChartTranslation = function(key, fallback) {
         return (currentTranslations && currentTranslations[key]) || fallback || key;
@@ -533,12 +416,41 @@ function initApp() {
       window.dispatchEvent(new CustomEvent('chart:language-change', {
         detail: { lang: activeLang, translations: currentTranslations }
       }));
-    } catch (_){}
+    } catch (_){ }
   }
   pushTranslationsToGlobal();
 
+
+  function revealApp() {
+    try {
+      if (loadingScreen) loadingScreen.classList.add('hidden');
+      if (appShell) appShell.classList.remove('hidden');
+    } catch (_){ }
+  }
+
+  const locationController = (typeof window !== 'undefined' && typeof window.initLocationModule === 'function')
+    ? window.initLocationModule({
+        locationInput,
+        suggestionsBox,
+        gpsButton,
+        debugValue,
+        getTranslations: () => currentTranslations
+      })
+    : null;
+
+
+  const getSelectedCoords = () => {
+    if (locationController && typeof locationController.getCoords === 'function') {
+      return locationController.getCoords();
+    }
+    return { lat: null, lon: null };
+  };
+
+
   function applyLanguage(lang) {
-    const tr = translations[lang] || translations.es;
+    const tr = (translationsAPI && typeof translationsAPI.getTranslation === "function")
+      ? translationsAPI.getTranslation(lang)
+      : (availableTranslations[lang] || availableTranslations.es || {});
     const dateLabel = document.querySelector('[data-l10n="dateLabel"]');
     const locationLabel = document.querySelector('[data-l10n="locationLabel"]');
     const submitBtn = document.querySelector('#astroForm button[type="submit"]');
@@ -552,25 +464,24 @@ function initApp() {
     if (submitBtn) submitBtn.textContent = tr.submitButton;
     if (loadingLabel) loadingLabel.textContent = tr.loadingApp;
     if (gpsButton) gpsButton.setAttribute("aria-label", tr.gpsLabel);
-    if (locationInput && !manualLocationSelected) {
-      locationInput.placeholder = tr.placeholder;
-    }
-    document.title = tr.title;
+    document.title = tr.title || document.title;
     if (langSelect) {
       langSelect.value = lang;
-      try { localStorage.setItem("chartLang", lang); } catch (_){}
+      try { localStorage.setItem("chartLang", lang); } catch (_){ }
     }
-    currentTranslations = tr;
+    currentTranslations = tr || {};
     activeLang = lang;
     pushTranslationsToGlobal();
     try {
       if (window.__lastCartaData) {
         renderResultsView(window.__lastCartaData).catch((e) => debugValue("renderResults rerender error", e));
       }
-    } catch(_){}
+    } catch(_){ }
   }
 
-  const defaultLang = (navigator.language && navigator.language.toLowerCase().startsWith("es")) ? "es" : "en";
+  const navigatorDefault = (navigator.language && navigator.language.toLowerCase().startsWith("es")) ? "es" : "en";
+  const moduleDefault = (translationsAPI && translationsAPI.defaultLang) || 'es';
+  const defaultLang = availableTranslations[navigatorDefault] ? navigatorDefault : moduleDefault;
   try {
     const stored = localStorage.getItem("chartLang");
     if (stored) activeLang = stored;
@@ -587,216 +498,6 @@ function initApp() {
     });
   }
 
-  function appendSuggestion(label, lat, lon, detail) {
-    const div = document.createElement("div");
-    div.className = "suggestion-item";
-    const span = document.createElement("span");
-    span.textContent = label;
-    div.appendChild(span);
-    if (detail) {
-      const small = document.createElement("small");
-      small.textContent = detail;
-      div.appendChild(small);
-    }
-      div.addEventListener("click", () => { setLocationFromSuggestion(label, lat, lon, { manual: true }); });
-    suggestionsBox.appendChild(div);
-  }
-
-  function setGpsStatus(key, extra = "") {
-    if (!locationInput || manualLocationSelected) return;
-    if (!key) {
-      locationInput.placeholder = currentTranslations.placeholder;
-      return;
-    }
-    const base = currentTranslations[key] || "";
-    const text = [base, extra].filter(Boolean).join(" ").trim();
-    locationInput.placeholder = text || currentTranslations.placeholder;
-  }
-  function revealApp() {
-    try {
-      if (loadingScreen) loadingScreen.classList.add('hidden');
-      if (appShell) appShell.classList.remove('hidden');
-    } catch (_){}
-  }
-
-  function requestGeolocation({ force = false } = {}) {
-    if (!navigator.geolocation) {
-      setGpsStatus(null);
-      return;
-    }
-    if (manualLocationSelected && !force) {
-      return;
-    }
-    if (autoGeoRequested && !force) {
-      return;
-    }
-    autoGeoRequested = true;
-    setGpsStatus("statusSearching");
-    if (gpsButton) gpsButton.disabled = true;
-    navigator.geolocation.getCurrentPosition(pos => {
-      setLocationFromSuggestion(currentTranslations.detectedPlaceholder, pos.coords.latitude, pos.coords.longitude);
-      setGpsStatus("detectedPlaceholder");
-      autoGeoRequested = false;
-      if (gpsButton) gpsButton.disabled = false;
-    }, (err) => {
-      setGpsStatus("statusError", err && err.message ? err.message : (currentTranslations.gpsDenied || ""));
-      autoGeoRequested = false;
-      if (gpsButton) gpsButton.disabled = false;
-    }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
-  }
-
-  async function attemptIpBootstrap() {
-    if (ipBootstrapDone || ipLookupPending) return;
-    if (!locationInput) return;
-    if (manualLocationSelected) return;
-    if ((locationInput.value || "").trim().length > 0) return;
-    ipLookupPending = true;
-    setGpsStatus("statusSearching");
-    debugValue("ip bootstrap start");
-    const providers = [
-      {
-        url: "https://ipapi.co/json/",
-        map: (data) => {
-          const lat = parseFloat(data.latitude);
-          const lon = parseFloat(data.longitude);
-          if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-          const label = [data.city, data.region, data.country_name].filter(Boolean).join(", ") || data.ip || null;
-          return { lat, lon, label };
-        }
-      },
-      {
-        url: "https://ipwho.is/?fields=ip,success,city,region,country,latitude,longitude",
-        map: (data) => {
-          if (data.success === false) return null;
-          const lat = parseFloat(data.latitude);
-          const lon = parseFloat(data.longitude);
-          if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-          const label = [data.city, data.region, data.country].filter(Boolean).join(", ") || data.ip || null;
-          return { lat, lon, label };
-        }
-      }
-    ];
-    let applied = false;
-    for (const provider of providers) {
-      if (applied) break;
-      try {
-        const resp = await fetch(provider.url, { headers: { Accept: "application/json" } });
-        if (!resp.ok) continue;
-        const data = await resp.json();
-        const mapped = provider.map(data);
-        if (!mapped) continue;
-        if (manualLocationSelected || (locationInput.value || "").trim().length > 0) {
-          applied = true;
-          ipBootstrapDone = true;
-          break;
-        }
-        const label = mapped.label || currentTranslations.detectedPlaceholder;
-        setLocationFromSuggestion(label, mapped.lat, mapped.lon, { manual: false });
-        setGpsStatus("statusDetectedBrowser");
-        ipBootstrapDone = true;
-        applied = true;
-        debugValue("ip bootstrap success", { provider: provider.url, label, lat: mapped.lat, lon: mapped.lon });
-      } catch (providerErr) {
-        debugValue("ip bootstrap provider error", { url: provider.url, err: providerErr && providerErr.message });
-      }
-    }
-    if (!applied && !manualLocationSelected) {
-      setGpsStatus(null);
-      debugValue("ip bootstrap failed all providers");
-    }
-    ipLookupPending = false;
-  }
-
-  locationInput.addEventListener("input", () => {
-    manualLocationSelected = false;
-    ipBootstrapDone = true;
-    selectedLat = null;
-    selectedLon = null;
-    setGpsStatus(null);
-    clearTimeout(debounceTimeout);
-    debounceTimeout = setTimeout(async () => {
-      const query = locationInput.value.trim();
-      if (query.length < 2) {
-        suggestionsBox.innerHTML = "";
-        return;
-      }
-
-      const normalized = query.toLowerCase();
-      suggestionsBox.innerHTML = "";
-      const seen = new Set();
-      const quickMatches = quickLocationHints
-        .filter(item => item.name.toLowerCase().includes(normalized))
-        .sort((a, b) => {
-          const aStarts = a.name.toLowerCase().startsWith(normalized) ? 0 : 1;
-          const bStarts = b.name.toLowerCase().startsWith(normalized) ? 0 : 1;
-          return aStarts - bStarts;
-        })
-        .slice(0, 4);
-      quickMatches.forEach(item => {
-        appendSuggestion(item.name, item.lat, item.lon, item.detail + " (rápido)");
-        seen.add(item.name.toLowerCase());
-      });
-
-      const loading = document.createElement("div");
-      loading.className = "suggestion-loading";
-      loading.textContent = currentTranslations.statusSearching;
-      suggestionsBox.appendChild(loading);
-
-      if (locationFetchController) {
-        locationFetchController.abort();
-      }
-      locationFetchController = new AbortController();
-      const signal = locationFetchController.signal;
-      try {
-        const response = await fetch(
-          "https://nominatim.openstreetmap.org/search?q=" + encodeURIComponent(query) +
-          "&format=json&addressdetails=1&limit=6&accept-language=es",
-          { signal }
-        );
-        const places = await response.json();
-        if (signal.aborted) return;
-        loading.remove();
-        let appended = false;
-        for (const place of places) {
-          const placeKey = (place.display_name || "").toLowerCase();
-          if (seen.has(placeKey)) continue;
-          if (!["city", "town", "village", "administrative", "state", "country", "region"].includes(place.type)) continue;
-          const detail = place.type ? place.type.charAt(0).toUpperCase() + place.type.slice(1) : "";
-          appendSuggestion(place.display_name, parseFloat(place.lat), parseFloat(place.lon), detail);
-          seen.add(placeKey);
-          appended = true;
-          if (seen.size >= 6) break;
-        }
-        if (!appended && suggestionsBox.querySelectorAll(".suggestion-item").length === 0) {
-          const none = document.createElement("div");
-          none.className = "suggestion-loading";
-          none.textContent = currentTranslations.suggestionNoResults;
-          suggestionsBox.appendChild(none);
-        }
-      } catch (err) {
-        loading.remove();
-        if (err.name === "AbortError") return;
-        debugValue("suggestion fetch error", err);
-        if (!suggestionsBox.querySelector(".suggestion-item")) {
-          const errDiv = document.createElement("div");
-          errDiv.className = "suggestion-loading";
-          errDiv.textContent = currentTranslations.suggestionError;
-          suggestionsBox.appendChild(errDiv);
-        }
-      }
-    }, 400);
-  });
-  if (gpsButton) {
-    gpsButton.addEventListener("click", () => {
-      requestGeolocation({ force: true });
-    });
-  }
-
-  document.addEventListener("click", (e) => {
-    if (!suggestionsBox.contains(e.target) && e.target !== locationInput) {
-      suggestionsBox.innerHTML = "";
-    }
-  });
 
   document.getElementById("astroForm").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -819,10 +520,16 @@ function initApp() {
       }
     } catch (_){}
 
+    const coords = getSelectedCoords();
+    const selectedLat = coords.lat;
+    const selectedLon = coords.lon;
     debugValue("[submit] datos", { datetime, selectedLat, selectedLon });
 
     if (!selectedLat || !selectedLon) {
-      output.innerHTML = "<p>" + t("selectLocationMessage", "Selecciona una ubicación válida o permite el acceso a tu ubicación.") + "</p>";
+      if (locationController && typeof locationController.requireCoords === "function") {
+        locationController.requireCoords();
+      }
+      output.innerHTML = "<p>" + t("selectLocationMessage", "Selecciona una ubicaci�n v�lida o permite el acceso a tu ubicaci�n.") + "</p>";
       return;
     }
 	let tz = 'UTC';
@@ -867,8 +574,6 @@ function initApp() {
     }
   });
 
-  attemptIpBootstrap();
-  setTimeout(attemptIpBootstrap, 800);
   revealApp();
 }
 
@@ -907,6 +612,7 @@ if (document.readyState === 'loading') {
           drawClassicWheel(data, cctx);
         }
       }
+      scheduleTreeMobileRender(data);
     } catch (e) { debugValue("rerenderVisuals error", e); }
   }
 try {
@@ -940,6 +646,7 @@ try {
     } catch (_){}
   });
 } catch (_){}
+
 
 
 

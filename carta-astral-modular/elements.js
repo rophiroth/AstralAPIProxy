@@ -69,7 +69,8 @@
     const titleAttr = title ? ` title="${title}"` : '';
     const color = spanSign ? getSignColorValue(spanSign) : '';
     const styleAttr = color ? ` style="color:${color};"` : '';
-    return `<span class="sign-token"${signAttr}${titleAttr}${styleAttr}>${content}</span>`;
+    const dot = color ? `<span class="sign-color-dot" style="background:${color};"></span>` : '';
+    return `<span class="sign-token"${signAttr}${titleAttr}${styleAttr}>${dot}<span class="sign-glyph">${content}</span></span>`;
   }
   function emptyElementCount() { return { Fuego: 0, Tierra: 0, Aire: 0, Agua: 0 }; }
 

@@ -86,22 +86,22 @@ function drawAscMc(ascendant, midheaven, ctx) {
       ctx.font = `bold ${15 * scale}px sans-serif`;
       ctx.fillStyle = textColor;
       ctx.fillText(`${label}:`, baseX, baseY - 18 * scale);
-      const lineY = baseY - 2 * scale;
+      const lineY = baseY - 6 * scale;
       const degreeTextCenter = `${degree}\u00B0`;
       ctx.font = emojiFont;
       const glyphWidth = ctx.measureText(glyph).width || (18 * scale);
       ctx.font = `bold ${15 * scale}px sans-serif`;
       const degreeWidth = ctx.measureText(degreeTextCenter).width;
-      const gap = 10 * scale;
-      const total = glyphWidth + gap + degreeWidth;
-      const start = baseX - total / 2;
+      const gap = 16 * scale;
+      const glyphX = baseX - (gap / 2);
+      const degreeX = baseX + (gap / 2);
       ctx.font = emojiFont;
       ctx.textAlign = 'center';
       ctx.fillStyle = signColor;
-      ctx.fillText(glyph, start + glyphWidth / 2, lineY);
+      ctx.fillText(glyph, glyphX, lineY);
       ctx.font = `bold ${15 * scale}px sans-serif`;
       ctx.fillStyle = textColor;
-      ctx.fillText(degreeTextCenter, start + glyphWidth + gap + degreeWidth / 2, lineY);
+      ctx.fillText(degreeTextCenter, degreeX, lineY);
     } else {
       ctx.textAlign = 'left';
       ctx.font = `bold ${15 * scale}px sans-serif`;
@@ -127,7 +127,7 @@ function drawAscMc(ascendant, midheaven, ctx) {
   const descDegree = (ascendant.degree + 180) % 360;
   drawAxis(descLabel, getZodiacSign(descDegree), decimals((descDegree % 30), 2), baseX, descY);
 
-  drawAxis(mcLabel, midheaven.sign, decimals(midheaven.position, 1), maljut[0], maljut[1] + 16 * scale, { center: true });
+  drawAxis(mcLabel, midheaven.sign, decimals(midheaven.position, 1), maljut[0], maljut[1] + 6 * scale, { center: true });
 }
 
 function drawHousesLines(houses, ctx) {

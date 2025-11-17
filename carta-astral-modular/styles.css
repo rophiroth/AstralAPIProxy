@@ -428,9 +428,23 @@ canvas {
 }
 .sign-iconic {
   font-weight: 700;
-  margin-right: 4px;
   display: inline-flex;
   align-items: center;
+  gap: 4px;
+  font-size: 1.15em;
+}
+.sign-iconic .sign-glyph {
+  line-height: 1;
+}
+.sign-color-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.sign-token .sign-color-dot {
+  width: 8px;
+  height: 8px;
 }
 .sign-badge[data-sign="Aries"] .sign-icon, .sign-iconic[data-sign="Aries"] { color: #ff4d4f; }
 .sign-badge[data-sign="Taurus"] .sign-icon, .sign-iconic[data-sign="Taurus"] { color: #ff9c2f; }
@@ -450,6 +464,10 @@ canvas {
   font-weight: 600;
   margin-right: 6px;
   color: var(--text);
+  gap: 4px;
+}
+.sign-token .sign-glyph {
+  line-height: 1;
 }
 .sign-token[data-sign="Aries"] { color: #ff4d4f; }
 .sign-token[data-sign="Taurus"] { color: #ff9c2f; }

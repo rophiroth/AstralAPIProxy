@@ -17,9 +17,9 @@ const hebrewHouseLetters = {
 };
 try { window.hebrewHouseLetters = hebrewHouseLetters; } catch(_) {}
 const localSignGlyphs = {
-  Aries:'\u2648', Taurus:'\u2649', Gemini:'\u264A', Cancer:'\u264B',
-  Leo:'\u264C', Virgo:'\u264D', Libra:'\u264E', Scorpio:'\u264F',
-  Sagittarius:'\u2650', Capricorn:'\u2651', Aquarius:'\u2652', Pisces:'\u2653'
+  Aries:'\u2648\uFE0E', Taurus:'\u2649\uFE0E', Gemini:'\u264A\uFE0E', Cancer:'\u264B\uFE0E',
+  Leo:'\u264C\uFE0E', Virgo:'\u264D\uFE0E', Libra:'\u264E\uFE0E', Scorpio:'\u264F\uFE0E',
+  Sagittarius:'\u2650\uFE0E', Capricorn:'\u2651\uFE0E', Aquarius:'\u2652\uFE0E', Pisces:'\u2653\uFE0E'
 };
 const RENDER_FALLBACK_SIGN_COLORS = {
   Aries: '#ff4d4f',

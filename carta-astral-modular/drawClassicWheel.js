@@ -13,6 +13,11 @@
     { key: 'Aquarius', glyph: '♒' },
     { key: 'Pisces', glyph: '♓' }
   ];
+  const FALLBACK_SIGN_GLYPHS = {
+    Aries: '♈\uFE0E', Taurus: '♉\uFE0E', Gemini: '♊\uFE0E', Cancer: '♋\uFE0E',
+    Leo: '♌\uFE0E', Virgo: '♍\uFE0E', Libra: '♎\uFE0E', Scorpio: '♏\uFE0E',
+    Sagittarius: '♐\uFE0E', Capricorn: '♑\uFE0E', Aquarius: '♒\uFE0E', Pisces: '♓\uFE0E'
+  };
 
   const aspectColors = {
     conjunction: '#ffd54f',
@@ -61,6 +66,28 @@
     return (globalPalette && globalPalette[sign]) || CLASSIC_FALLBACK_SIGN_COLORS[sign] || '#fff';
   }
 
+  function getWheelSignGlyph(sign) {
+    try {
+      const dictionary = (typeof window !== 'undefined' && window.SIGN_SYMBOL) || null;
+      if (dictionary && dictionary[sign]) return dictionary[sign];
+    } catch (_){}
+    return FALLBACK_SIGN_GLYPHS[sign] || sign.slice(0, 2);
+  }
+
+  function colorWithAlpha(hex, alpha) {
+    if (!hex) return `rgba(255,255,255,${alpha})`;
+    let normalized = hex.trim().replace('#', '');
+    if (normalized.length === 3) {
+      normalized = normalized.split('').map(ch => ch + ch).join('');
+    }
+    const value = parseInt(normalized, 16);
+    if (Number.isNaN(value)) return `rgba(255,255,255,${alpha})`;
+    const r = (value >> 16) & 255;
+    const g = (value >> 8) & 255;
+    const b = value & 255;
+    return `rgba(${r},${g},${b},${alpha})`;
+  }
+
   let rotationDeg = 0;
   function setRotation(deg) {
     rotationDeg = typeof deg === 'number' ? deg : 0;
@@ -88,6 +115,8 @@
   function drawSignRing(ctx, centerX, centerY, radiusOuter, radiusInner) {
     ctx.save();
     for (let i = 0; i < 12; i++) {
+      const info = zodiacOrder[i];
+      const signTint = colorWithAlpha(getSignColor(info.key), 0.18);
       const startDeg = i * 30;
       const endDeg = (i + 1) * 30;
       const start = toRadians(startDeg);
@@ -97,8 +126,11 @@
       ctx.arc(centerX, centerY, radiusOuter, start, end, true);
       ctx.arc(centerX, centerY, radiusInner, end, start, false);
       ctx.closePath();
-      ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.08)';
+      ctx.fillStyle = signTint;
       ctx.fill();
+      ctx.strokeStyle = colorWithAlpha(getSignColor(info.key), 0.35);
+      ctx.lineWidth = 1;
+      ctx.stroke();
     }
     ctx.restore();
   }
@@ -164,8 +196,13 @@
       const info = zodiacOrder[i];
       const angle = toRadians(i * 30 + 15);
       const { x, y } = project(cx, cy, angle, radius);
-      const display = (window.zodiacEmojis && window.zodiacEmojis[info.key]) || info.glyph || info.key.slice(0, 2);
-      ctx.fillStyle = getSignColor(info.key);
+      const display = getWheelSignGlyph(info.key);
+      const color = getSignColor(info.key);
+      ctx.beginPath();
+      ctx.fillStyle = colorWithAlpha(color, 0.3);
+      ctx.arc(x, y, 18, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = color;
       ctx.fillText(display, x, y);
     }
     ctx.restore();

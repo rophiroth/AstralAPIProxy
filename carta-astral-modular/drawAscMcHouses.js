@@ -17,9 +17,9 @@ const housePaths = {
 };
 
 const fallbackSignGlyphs = {
-  Aries:'\u2648', Taurus:'\u2649', Gemini:'\u264A', Cancer:'\u264B',
-  Leo:'\u264C', Virgo:'\u264D', Libra:'\u264E', Scorpio:'\u264F',
-  Sagittarius:'\u2650', Capricorn:'\u2651', Aquarius:'\u2652', Pisces:'\u2653'
+  Aries:'\u2648\uFE0E', Taurus:'\u2649\uFE0E', Gemini:'\u264A\uFE0E', Cancer:'\u264B\uFE0E',
+  Leo:'\u264C\uFE0E', Virgo:'\u264D\uFE0E', Libra:'\u264E\uFE0E', Scorpio:'\u264F\uFE0E',
+  Sagittarius:'\u2650\uFE0E', Capricorn:'\u2651\uFE0E', Aquarius:'\u2652\uFE0E', Pisces:'\u2653\uFE0E'
 };
 const ASC_FALLBACK_SIGN_COLORS = {
   Aries: '#ff4d4f',
@@ -85,25 +85,25 @@ function drawAscMc(ascendant, midheaven, ctx) {
       ctx.textAlign = 'center';
       ctx.font = `bold ${15 * scale}px sans-serif`;
       ctx.fillStyle = textColor;
-      ctx.fillText(`${label}:`, baseX, baseY - 18 * scale);
-      const lineY = baseY - 10 * scale;
-      const degreeTextCenter = `${degree}\u00B0`;
+      ctx.fillText(`${label}:`, baseX, baseY - 20 * scale);
+
       ctx.font = emojiFont;
       const glyphWidth = ctx.measureText(glyph).width || (18 * scale);
       ctx.font = `bold ${15 * scale}px sans-serif`;
-      const degreeWidth = ctx.measureText(degreeTextCenter).width;
+      const degreeWidth = ctx.measureText(degreeText).width;
       const gap = 12 * scale;
       const total = glyphWidth + gap + degreeWidth;
       const start = baseX - total / 2;
+      const lineY = baseY + 4 * scale;
 
-      ctx.font = emojiFont;
       ctx.textAlign = 'left';
+      ctx.font = emojiFont;
       ctx.fillStyle = signColor;
       ctx.fillText(glyph, start, lineY);
 
       ctx.font = `bold ${15 * scale}px sans-serif`;
       ctx.fillStyle = textColor;
-      ctx.fillText(degreeTextCenter, start + glyphWidth + gap, lineY);
+      ctx.fillText(degreeText, start + glyphWidth + gap, lineY);
     } else {
       ctx.textAlign = 'left';
       ctx.font = `bold ${15 * scale}px sans-serif`;

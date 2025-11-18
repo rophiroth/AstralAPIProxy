@@ -3,3 +3,4 @@ flask-cors
 pyswisseph
 astral
 pytz
+requests

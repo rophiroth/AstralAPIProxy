@@ -12,6 +12,7 @@
   </script>
   <meta name="api-url" content="./proxy.php" />
   <meta name="api-upstream-url" content="./proxy.php?upstream=render" />
+  <meta name="ai-summary-url" content="./proxy.php?upstream=ai-summary" />
   <link rel="icon" href="https://72.psyhackers.org/favicon.ico" type="image/x-icon">
   <style>html[data-css-loading="1"] body{visibility:hidden}</style>
   <script>
@@ -58,12 +59,12 @@
   <div id="loadingScreen" class="loading-screen">
     <div class="loading">
       <div class="spinner"></div>
-      <span data-l10n="loadingApp">Cargando módulo...</span>
+      <span data-l10n="loadingApp">Loading module...</span>
     </div>
   </div>
   <div class="page hidden" id="appShell">
   <div class="header-row">
-    <h1><a id="brandLink" href="https://sabiduriaholistica.org" target="_blank" rel="noopener"><span id="appTitle">Carta Astral del Árbol de la Vida</span></a></h1>
+    <h1><a id="brandLink" href="https://www.sabiduriaholistica.org" target="_blank" rel="noopener"><span id="appTitle">Carta Astral del Árbol de la Vida</span></a></h1>
     <div class="header-actions">
       <label for="langSelect" class="sr-only">Idioma</label>
       <select id="langSelect" aria-label="Idioma">
@@ -124,7 +125,9 @@
         'emojiFallback.js',
         // 'icons.js', // omit to avoid production parse error; emojiFallback provides maps
         'astroUtils.js',
-        'elements.js'
+        'elements.js',
+        'translations.js',
+        'location.js'
       ];
 
       Promise.all(coreScripts.map(function(src){ return loadScript(src, { defer: true }); }))

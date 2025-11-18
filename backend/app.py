@@ -20,6 +20,8 @@ from utils.lunar_calc import (
 
 import traceback
 
+from ai_summary import register_ai_summary_route
+
 app = Flask(__name__)
 
 # Flexible CORS: allow same-origin by default; enable cross-origin via env
@@ -34,6 +36,7 @@ else:
 
 # Broaden CORS to all routes so even error responses carry CORS headers for these origins
 CORS(app, resources={r"/*": {"origins": allowed_origins}}, supports_credentials=False)
+register_ai_summary_route(app)
 
 # --- Helpers to support extended ISO (including BCE) directly to JD ---
 import re
@@ -1118,6 +1121,8 @@ def calc_year():
         except Exception as e2:
             traceback.print_exc()
             return jsonify({'ok': False, 'error': str(e2)}), 500
+
+
 
 
 

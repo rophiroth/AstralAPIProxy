@@ -278,6 +278,12 @@ async function renderResultsView(data) {
     } else { debugValue("renderAspectsTable missing"); }
   } catch (aspErr) { debugValue("renderAspectsTable error", aspErr); }
 
+  try {
+    if (typeof window.renderAiSummary === "function") {
+      renderAiSummary(output, vizData);
+    } else { debugValue("renderAiSummary missing"); }
+  } catch (aiErr) { debugValue("renderAiSummary error", aiErr); }
+
   const drawVisuals = () => {
     if (treeCanvas && typeof window.drawTreeOfLife === "function") {
       try {

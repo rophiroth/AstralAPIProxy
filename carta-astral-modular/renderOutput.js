@@ -127,6 +127,7 @@ function renderEnochInfo(container, enoch, lastSunLongitude){
     const astroKavanah = (astroInfo && astroInfo.kavanah) || ((typeof getShemKavanah === 'function') ? getShemKavanah(shemAstron, lang) : '');
     const enochKavanah = (enochInfo && enochInfo.kavanah) || ((typeof getShemKavanah === 'function') ? getShemKavanah(shemEnoch, lang) : '');
     const kavLabel = chartTranslate('shemKavanahLabel', 'Kavaná');
+    const renderShemName = (text) => '<span class="shemHebrew">' + text + '</span>';
     const buildShemRow = (key, fallback, name, showKavanah, kavanahValue) => {
       if (!name) return '';
       const label = chartTranslate(key, fallback);
@@ -134,7 +135,7 @@ function renderEnochInfo(container, enoch, lastSunLongitude){
       const kavHtml = (showKavanah && kavanahValue)
         ? '<p class="shem-kavanah"><span class="shem-kavanah-label">' + kavLabel + ':</span> ' + escapeHtml(kavanahValue) + '</p>'
         : '';
-      return '    <li class="shem-info-item"><strong>' + label + ':</strong> <span class="shemHebrew metatron">' + safeName + '</span> <span class="shemHebrew stam">' + safeName + '</span>' + kavHtml + '</li>';
+      return '    <li class="shem-info-item"><strong>' + label + ':</strong> ' + renderShemName(safeName) + kavHtml + '</li>';
     };
     container.innerHTML = [
       '<div style="background:var(--card-bg);color:var(--text);border:1px solid var(--border);padding:10px;border-radius:8px;">',

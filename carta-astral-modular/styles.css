@@ -279,6 +279,7 @@ canvas {
 .shemHebrew {
   font-size: 24px;
   margin-left: 10px;
+  font-family: 'MetatronHebrew', 'StamHebrew', 'Times New Roman', serif;
 }
 .shem-info-item {
   margin-bottom: 6px;
@@ -293,12 +294,6 @@ canvas {
   font-weight: 600;
   margin-right: 4px;
   color: var(--text);
-}
-.stam {
-  font-family: 'StamHebrew';
-}
-.metatron {
-  font-family: 'MetatronHebrew';
 }
 /* Contenedor fijo para el Arbol de la Vida */
 .tree-wrapper {

@@ -396,7 +396,7 @@ function getAiBackendUrl() {
       }
     }
   } catch (_){}
-  return 'https://astralapiproxy.onrender.com/ai-summary';
+  return 'ai_summary.php';
 }
 
 function buildAiPrompt(vizData, lang) {

@@ -114,7 +114,7 @@
         square: "Cuadratura",
         trine: "Trígono",
         opposition: "Oposición"
-      }
+      },
       aiSummaryTitle: "Resumen con IA",
       aiSummaryHint: "MashIA resume la carta completa con un lenguaje claro y kabal\u00edstico.",
       aiSummaryButton: "Generar resumen kabal\u00edstico",
@@ -239,7 +239,7 @@
         square: "Square",
         trine: "Trine",
         opposition: "Opposition"
-      }
+      },
       aiSummaryTitle: "AI Summary",
       aiSummaryHint: "MashIA distills the whole chart into a clear Kabbalistic overview.",
       aiSummaryButton: "Generate Kabbalistic Summary",

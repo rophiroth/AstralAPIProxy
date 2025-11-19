@@ -201,6 +201,8 @@ canvas {
 .ai-summary-mount {
   width: 100%;
   margin-top: 20px;
+  display: flex;
+  justify-content: center;
 }
 .ai-summary-card {
   background: var(--card-bg);

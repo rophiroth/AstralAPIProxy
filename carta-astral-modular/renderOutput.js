@@ -485,6 +485,9 @@ function buildAiPrompt(vizData, lang) {
     '- ' + (langCode === 'en' ? 'Year' : 'A\u00f1o') + ': ' + (enoch.enoch_year || '?') + ', ' + (langCode === 'en' ? 'Month' : 'Mes') + ': ' + (enoch.enoch_month || '?') + ', ' + (langCode === 'en' ? 'Day' : 'D\u00eda') + ': ' + (enoch.enoch_day || '?'),
     enochLines.join('\n') || '- (sin nombres disponibles)',
     focusLine,
+    (langCode === 'en'
+      ? 'When you mention any balance or imbalance (e.g., Chesed vs Gevurah, masculine vs feminine), quote the actual counts or scores from the data to justify it. Never introduce traits that are not backed by the provided placements.'
+      : 'Cuando menciones equilibrio o desbalance (Jesed vs Guevur\u00e1, masculino vs femenino), cita los conteos o puntajes reales para justificarlo. No introduzcas rasgos que no est\u00e9n respaldados por los datos.'),
     '',
     outro
   ];

@@ -279,8 +279,6 @@ async function renderResultsView(data) {
   } catch (aspErr) { debugValue("renderAspectsTable error", aspErr); }
 
   try {
-    if (typeof window.renderAiSummary === "function") {
-  try {
     const summaryMount = document.getElementById('aiSummaryMount') || output;
     if (summaryMount && typeof window.renderAiSummary === "function") {
       summaryMount.innerHTML = '';

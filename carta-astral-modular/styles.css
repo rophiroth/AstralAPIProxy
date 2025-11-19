@@ -290,6 +290,11 @@ canvas {
   font-size: 0.92rem;
   color: var(--muted);
 }
+.shem-meta {
+  font-size: 0.9rem;
+  color: var(--muted);
+  margin-left: 6px;
+}
 .shem-kavanah-label {
   font-weight: 600;
   margin-right: 4px;

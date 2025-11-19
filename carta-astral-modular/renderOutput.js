@@ -124,18 +124,25 @@ function renderEnochInfo(container, enoch, lastSunLongitude){
     const shemAstron = (astroInfo && astroInfo.name) || ((typeof getShemAstronomico==='function') ? getShemAstronomico(lastSunLongitude) : '');
     const shemEnoch  = (enochInfo && enochInfo.name) || ((typeof getShemEnochiano==='function') ? getShemEnochiano(enoch.enoch_month, enoch.enoch_day, enoch.added_week) : '');
     const sameName = shemAstron && shemEnoch && shemAstron === shemEnoch;
-    const astroKavanah = (astroInfo && astroInfo.kavanah) || ((typeof getShemKavanah === 'function') ? getShemKavanah(shemAstron, lang) : '');
-    const enochKavanah = (enochInfo && enochInfo.kavanah) || ((typeof getShemKavanah === 'function') ? getShemKavanah(shemEnoch, lang) : '');
     const kavLabel = chartTranslate('shemKavanahLabel', 'Kavaná');
+    const gemLabel = chartTranslate('shemGematriaLabel', 'Gematría');
     const renderShemName = (text) => '<span class="shemHebrew">' + text + '</span>';
-    const buildShemRow = (key, fallback, name, showKavanah, kavanahValue) => {
-      if (!name) return '';
+    const buildShemRow = (key, fallback, info, fallbackName, showKavanah) => {
+      const effectiveName = (info && info.name) || fallbackName;
+      if (!effectiveName) return '';
       const label = chartTranslate(key, fallback);
-      const safeName = escapeHtml(name);
-      const kavHtml = (showKavanah && kavanahValue)
-        ? '<p class="shem-kavanah"><span class="shem-kavanah-label">' + kavLabel + ':</span> ' + escapeHtml(kavanahValue) + '</p>'
+      const safeName = escapeHtml(effectiveName);
+      const ordinal = (info && typeof info.index === 'number') ? (info.index + 1) : null;
+      const gematria = (info && typeof info.gematria === 'number') ? info.gematria : null;
+      const metaParts = [];
+      if (ordinal != null) metaParts.push('#' + ordinal);
+      if (gematria != null) metaParts.push(gemLabel + ': ' + gematria);
+      const metaHtml = metaParts.length ? ' <span class="shem-meta">(' + metaParts.join(' · ') + ')</span>' : '';
+      const kavSource = (info && info.kavanah) || ((typeof getShemKavanah === 'function') ? getShemKavanah(effectiveName, lang) : '');
+      const kavHtml = (showKavanah && kavSource)
+        ? '<p class="shem-kavanah"><span class="shem-kavanah-label">' + kavLabel + ':</span> ' + escapeHtml(kavSource) + '</p>'
         : '';
-      return '    <li class="shem-info-item"><strong>' + label + ':</strong> ' + renderShemName(safeName) + kavHtml + '</li>';
+      return '    <li class="shem-info-item"><strong>' + label + ':</strong> ' + renderShemName(safeName) + metaHtml + kavHtml + '</li>';
     };
     container.innerHTML = [
       '<div style="background:var(--card-bg);color:var(--text);border:1px solid var(--border);padding:10px;border-radius:8px;">',
@@ -146,8 +153,8 @@ function renderEnochInfo(container, enoch, lastSunLongitude){
       '    <li><strong>' + chartTranslate('enochDay', 'Día') + ':</strong> ' + enoch.enoch_day + '</li>',
       '    <li><strong>' + chartTranslate('enochDayOfYear', 'Día del año') + ':</strong> ' + enoch.enoch_day_of_year + '</li>',
       '    <li><strong>' + chartTranslate('enochAddedWeek', 'Semana adicional') + ':</strong> ' + (enoch.added_week ? chartTranslate('yesLabel', 'Sí') : chartTranslate('noLabel', 'No')) + '</li>',
-      buildShemRow('enochAstronomicalName', 'Nombre (Astronómico)', shemAstron, !sameName, astroKavanah),
-      buildShemRow('enochEnochName', 'Nombre (Enoch)', shemEnoch, true, enochKavanah),
+      buildShemRow('enochAstronomicalName', 'Nombre (Astronómico)', astroInfo, shemAstron, !sameName),
+      buildShemRow('enochEnochName', 'Nombre (Enoch)', enochInfo, shemEnoch, true),
       '  </ul>',
       '</div>',
       '<div id="treeMobileAnchor"></div>'

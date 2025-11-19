@@ -231,6 +231,13 @@ const HEB_FINALS = {
   "ץ": "צ"
 };
 
+const HEB_GEM_VALUES = {
+  "א": 1, "ב": 2, "ג": 3, "ד": 4, "ה": 5, "ו": 6, "ז": 7, "ח": 8, "ט": 9,
+  "י": 10, "כ": 20, "ך": 20, "ל": 30, "מ": 40, "ם": 40, "נ": 50, "ן": 50,
+  "ס": 60, "ע": 70, "פ": 80, "ף": 80, "צ": 90, "ץ": 90,
+  "ק": 100, "ר": 200, "ש": 300, "ת": 400
+};
+
 const shemotIndexByName = {};
 shemot72.forEach((name, index) => {
   const normalized = normalizeShemName(name);
@@ -238,6 +245,14 @@ shemot72.forEach((name, index) => {
     shemotIndexByName[normalized] = index;
   }
 });
+
+function computeGematria(name) {
+  if (!name) return 0;
+  return String(name)
+    .split("")
+    .map((ch) => HEB_GEM_VALUES[ch] || HEB_GEM_VALUES[HEB_FINALS[ch]] || 0)
+    .reduce((sum, val) => sum + val, 0);
+}
 
 function normalizeShemName(name) {
   if (!name) return "";
@@ -267,9 +282,11 @@ function getShemInfoByIndex(index, lang) {
   if (typeof index !== "number" || index < 0 || index >= shemot72.length) return null;
   const resolvedLang = resolveShemLang(lang);
   const list = getKavanahList(resolvedLang);
+  const name = shemot72[index];
   return {
     index,
-    name: shemot72[index],
+    name,
+    gematria: computeGematria(name),
     kavanah: list[index] || ""
   };
 }
@@ -337,4 +354,5 @@ try {
   window.getShemInfoByName = getShemInfoByName;
   window.getShemInfoFromLongitude = getShemInfoFromLongitude;
   window.getShemInfoFromEnoch = getShemInfoFromEnoch;
+  window.getShemGematria = computeGematria;
 } catch (_){ }

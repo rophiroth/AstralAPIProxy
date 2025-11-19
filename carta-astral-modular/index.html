@@ -90,18 +90,19 @@
     <div id="coords"></div>
     <button type="submit">Calcular Carta</button>
   </form>
-  <div class="layout">
-    <div id="output" class="hidden"></div>
-    <div class="visualizations">
-      <div class="tree-wrapper hidden">
-        <canvas id="treeOfLifeCanvas" width="960" height="740"></canvas>
+    <div class="layout">
+      <div id="output" class="hidden"></div>
+      <div class="visualizations">
+        <div class="tree-wrapper hidden">
+          <canvas id="treeOfLifeCanvas" width="960" height="740"></canvas>
+        </div>
+        <div class="classic-chart-wrapper hidden" id="classicChartWrapper">
+          <canvas id="classicChartCanvas" width="960" height="960"></canvas>
+          <div id="aspectsTableContainer" class="aspects-table hidden"></div>
+        </div>
       </div>
-      <div class="classic-chart-wrapper hidden" id="classicChartWrapper">
-        <canvas id="classicChartCanvas" width="960" height="960"></canvas>
-        <div id="aspectsTableContainer" class="aspects-table hidden"></div>
-      </div>
+      <div id="aiSummaryMount" class="ai-summary-mount"></div>
     </div>
-  </div>
   <script>
     (function() {
       var v = Date.now();

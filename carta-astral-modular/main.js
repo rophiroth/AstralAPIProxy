@@ -280,7 +280,11 @@ async function renderResultsView(data) {
 
   try {
     if (typeof window.renderAiSummary === "function") {
-      renderAiSummary(output, vizData);
+  try {
+    const summaryMount = document.getElementById('aiSummaryMount') || output;
+    if (summaryMount && typeof window.renderAiSummary === "function") {
+      summaryMount.innerHTML = '';
+      renderAiSummary(summaryMount, vizData);
     } else { debugValue("renderAiSummary missing"); }
   } catch (aiErr) { debugValue("renderAiSummary error", aiErr); }
 
@@ -374,7 +378,7 @@ function initApp() {
     if (!langSelect) return;
     const map = (langCompactQuery && langCompactQuery.matches)
       ? { es: 'Es', en: 'En' }
-      : { es: 'Español', en: 'English' };
+      : { es: 'Espaï¿½ol', en: 'English' };
     Array.from(langSelect.options || []).forEach((opt) => {
       const key = (opt.value || '').toLowerCase();
       if (map[key]) opt.textContent = map[key];
@@ -536,7 +540,7 @@ function initApp() {
       if (locationController && typeof locationController.requireCoords === "function") {
         locationController.requireCoords();
       }
-      output.innerHTML = "<p>" + t("selectLocationMessage", "Selecciona una ubicación válida o permite el acceso a tu ubicación.") + "</p>";
+      output.innerHTML = "<p>" + t("selectLocationMessage", "Selecciona una ubicaciï¿½n vï¿½lida o permite el acceso a tu ubicaciï¿½n.") + "</p>";
       return;
     }
 	let tz = 'UTC';

@@ -462,8 +462,14 @@ function buildAiPrompt(vizData, lang) {
   const focusLine = langCode === 'en'
     ? 'Highlight what the 72-Name influence reveals about destiny, life purpose, and karmic corrections.'
     : 'Destaca qu\u00e9 revelan los Nombres de Dios sobre destino, prop\u00f3sito y correcciones k\u00e1rmicas.';
+  const structureLine = langCode === 'en'
+    ? 'Structure the response in five sections with headings: (1) Divine Name insights, (2) Sun/Moon/Ascendant, (3) Tree of Life/Sefirot balance, (4) Element and polarity counts, (5) Key aspects and closing notes.'
+    : 'Estructura la respuesta en cinco secciones con encabezados: (1) Nombre divino, (2) Sol/Luna/Ascendente, (3) Balance del \u00c1rbol de la Vida/Sefirot, (4) Conteos elementales y polaridad, (5) Aspectos clave y conclusi\u00f3n.';
   const lines = [
     intro,
+    '',
+    structureLine,
+    'Do not transliterate the 72-Name into phonetic English; cite its letters exactly as provided (e.g., Mem-Yud-He).',
     '',
     (langCode === 'en' ? 'Key placements:' : 'Posiciones clave:'),
     ...placements,
@@ -529,23 +535,19 @@ function requestAiSummary(button, body, vizData, endpoint, autorun) {
     });
 }
 
-function renderAiSummary(container, vizData) {
+function renderAiSummary(host, vizData) {
+  const container = host || document.getElementById('aiSummaryMount') || document.getElementById('output');
   if (!container) return;
-  try {
-    const previous = document.getElementById('aiSummaryCard');
-    if (previous && previous.parentNode) previous.parentNode.removeChild(previous);
-  } catch (_){}
-  const card = document.createElement('div');
+  container.innerHTML = '';
+  const card = document.createElement('section');
   card.className = 'ai-summary-card';
-  card.id = 'aiSummaryCard';
   const title = chartTranslate('aiSummaryTitle', 'Resumen con IA');
   const hint = chartTranslate('aiSummaryHint', 'Usa MashIA para sintetizar toda la carta.');
   const placeholder = chartTranslate('aiSummaryPlaceholder', 'Pulsa el bot\u00f3n para recibir una lectura kabal\u00edstica generada por IA.');
   card.innerHTML = [
-    '<h3>' + title + '</h3>',
-    '<p class="ai-summary-hint">' + hint + '</p>',
+    '<header class="ai-summary-header"><div class="ai-summary-icon">✶</div><div><h3>' + title + '</h3><p class="ai-summary-hint">' + hint + '</p></div></header>',
     '<div class="ai-summary-body">' + placeholder + '</div>',
-    '<div class="ai-summary-actions"><button type="button">' + chartTranslate('aiSummaryButton', 'Generar resumen kabal\u00edstico') + '</button></div>'
+    '<div class="ai-summary-actions"><button type="button" class="ai-summary-btn">' + chartTranslate('aiSummaryButton', 'Generar resumen kabal\u00edstico') + '</button></div>'
   ].join('\n');
   container.appendChild(card);
   const button = card.querySelector('button');

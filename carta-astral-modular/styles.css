@@ -198,44 +198,76 @@ canvas {
 .hidden {
   display: none !important;
 }
-#aiSummaryCard {
+#aiSummaryMount {
   width: 100%;
+  margin-top: 20px;
 }
 .ai-summary-card {
   background: var(--card-bg);
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 18px;
   box-shadow: var(--shadow);
-  padding: 12px 14px;
-  margin: 12px auto;
-  max-width: 560px;
+  padding: 16px 18px;
+  margin: 0 auto 20px auto;
+  max-width: 960px;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ai-summary-header {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.ai-summary-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
   color: var(--text);
 }
 .ai-summary-card h3 {
-  margin: 0 0 4px 0;
+  margin: 0;
+  font-size: 1.2rem;
 }
 .ai-summary-hint {
   color: var(--muted);
-  font-size: 0.9rem;
-  margin: 0 0 10px 0;
+  font-size: 0.92rem;
+  margin: 4px 0 0 0;
 }
 .ai-summary-body {
   border: 1px dashed var(--border);
-  border-radius: 10px;
-  padding: 10px;
-  min-height: 80px;
+  border-radius: 12px;
+  padding: 14px;
+  min-height: 100px;
   white-space: pre-wrap;
-  line-height: 1.4;
+  line-height: 1.5;
   background: var(--bg);
+  font-size: 0.96rem;
 }
 .ai-summary-actions {
-  margin-top: 12px;
-  text-align: left;
+  display: flex;
+  justify-content: flex-end;
 }
-.ai-summary-card button {
+.ai-summary-btn {
   width: auto;
   margin-top: 0;
-  padding: 0.55rem 1.4rem;
+  padding: 0.6rem 1.6rem;
+  border-radius: 999px;
+  border: none;
+  background: linear-gradient(135deg, #8457cf, #a16bff);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ai-summary-btn:disabled {
+  opacity: 0.6;
+  cursor: progress;
 }
 #suggestions {
   border: 1px solid var(--border);

@@ -126,7 +126,7 @@ function renderEnochInfo(container, enoch, lastSunLongitude){
     const sameName = shemAstron && shemEnoch && shemAstron === shemEnoch;
     const kavLabel = chartTranslate('shemKavanahLabel', 'Kavaná');
     const gemLabel = chartTranslate('shemGematriaLabel', 'Gematría');
-    const renderShemName = (text) => '<span class="shemHebrew">' + text + '</span>';
+    const renderShemName = (text) => '<span class="shemHebrew metatron">' + text + '</span><span class="shemHebrew stam">' + text + '</span>';
     const buildShemRow = (key, fallback, info, fallbackName, showKavanah) => {
       const effectiveName = (info && info.name) || fallbackName;
       if (!effectiveName) return '';

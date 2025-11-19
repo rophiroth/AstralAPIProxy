@@ -281,6 +281,13 @@ canvas {
   margin-left: 10px;
   font-family: 'MetatronHebrew', 'StamHebrew', 'Times New Roman', serif;
 }
+.shemHebrew.stam {
+  font-family: 'StamHebrew', 'Times New Roman', serif;
+  margin-left: 6px;
+}
+.shemHebrew.metatron {
+  font-family: 'MetatronHebrew', 'Times New Roman', serif;
+}
 .shem-info-item {
   margin-bottom: 6px;
   line-height: 1.4;

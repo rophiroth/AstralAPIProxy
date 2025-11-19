@@ -151,7 +151,7 @@ function renderEnochInfo(container, enoch, lastSunLongitude){
       '  </ul>',
       '</div>',
       '<div id="treeMobileAnchor"></div>'
-    ].join('\\n');
+    ].join('\n');
   } catch(e) {
     try { container.innerHTML = '<em>Error mostrando Calendario</em>'; } catch(_) {}
   }

@@ -452,6 +452,9 @@ function buildAiPrompt(vizData, lang) {
   const outro = langCode === 'en'
     ? 'Write 2-3 short paragraphs in English, weaving sefirot, elements and any warnings.'
     : 'Escribe 2-3 p\u00e1rrafos breves en espa\u00f1ol, hilando sefirot, elementos y advertencias.';
+  const focusLine = langCode === 'en'
+    ? 'Highlight what the 72-Name influence reveals about destiny, life purpose, and karmic corrections.'
+    : 'Destaca qu\u00e9 revelan los Nombres de Dios sobre destino, prop\u00f3sito y correcciones k\u00e1rmicas.';
   const lines = [
     intro,
     '',
@@ -468,13 +471,15 @@ function buildAiPrompt(vizData, lang) {
     (langCode === 'en' ? 'Enoch calendar:' : 'Calendario de Enoj:'),
     '- ' + (langCode === 'en' ? 'Year' : 'A\u00f1o') + ': ' + (enoch.enoch_year || '?') + ', ' + (langCode === 'en' ? 'Month' : 'Mes') + ': ' + (enoch.enoch_month || '?') + ', ' + (langCode === 'en' ? 'Day' : 'D\u00eda') + ': ' + (enoch.enoch_day || '?'),
     enochLines.join('\n') || '- (sin nombres disponibles)',
+    focusLine,
     '',
     outro
   ];
   return lines.join('\n');
 }
 
-function requestAiSummary(button, body, vizData, endpoint) {
+function requestAiSummary(button, body, vizData, endpoint, autorun) {
+  autorun = !!autorun;
   if (!vizData) {
     body.textContent = chartTranslate('aiSummaryNoData', 'Calcula la carta primero.');
     return;
@@ -486,6 +491,7 @@ function requestAiSummary(button, body, vizData, endpoint) {
     body.textContent = chartTranslate('aiSummaryNoData', 'No hay datos suficientes para la IA.');
     return;
   }
+  const readyLabel = chartTranslate('aiSummaryButton', 'Generar resumen kabal\u00edstico');
   button.dataset.loading = '1';
   button.disabled = true;
   button.textContent = chartTranslate('aiSummaryWorking', 'Generando...');
@@ -512,7 +518,7 @@ function requestAiSummary(button, body, vizData, endpoint) {
     .finally(() => {
       button.dataset.loading = '0';
       button.disabled = false;
-      button.textContent = chartTranslate('aiSummaryButton', 'Generar resumen kabal\u00edstico');
+      button.textContent = readyLabel;
     });
 }
 
@@ -544,8 +550,12 @@ function renderAiSummary(container, vizData) {
     return;
   }
   button.addEventListener('click', () => {
-    requestAiSummary(button, body, vizData, endpoint);
+    requestAiSummary(button, body, vizData, endpoint, false);
   });
+  if (!card.dataset.autoRequested) {
+    card.dataset.autoRequested = '1';
+    requestAiSummary(button, body, vizData, endpoint, true);
+  }
 }
 
 // Expose

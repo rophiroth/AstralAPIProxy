@@ -198,9 +198,15 @@ canvas {
 .hidden {
   display: none !important;
 }
-#aiSummaryMount {
+.ai-summary-row {
   width: 100%;
+  display: flex;
+  justify-content: flex-end;
   margin-top: 20px;
+}
+.ai-summary-mount {
+  width: 100%;
+  max-width: 540px;
 }
 .ai-summary-card {
   background: var(--card-bg);
@@ -209,7 +215,7 @@ canvas {
   box-shadow: var(--shadow);
   padding: 16px 18px;
   margin: 0 auto 20px auto;
-  max-width: 960px;
+  width: 100%;
   color: var(--text);
   display: flex;
   flex-direction: column;

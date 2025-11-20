@@ -406,12 +406,14 @@ function getAiBackendUrl() {
   return 'ai_summary.php';
 }
 
-function buildAiPrompt(vizData, lang) {
+function buildAiBasePrompt(vizData, lang) {
   if (!vizData) return '';
   const placements = [];
   const planets = vizData.planets || {};
   const houses = vizData.houses_data || {};
   const aspects = Array.isArray(vizData.classicAspects) ? vizData.classicAspects : [];
+  const langCode = (lang && lang.toLowerCase().startsWith('en')) ? 'en' : 'es';
+  const isEnglish = langCode === 'en';
   const formatPlacement = (name) => {
     const planet = planets[name];
     if (!planet || typeof planet.longitude !== 'number') return '';
@@ -426,13 +428,16 @@ function buildAiPrompt(vizData, lang) {
     const line = formatPlacement(name);
     if (line) placements.push('- ' + line);
   });
-  const ascLine = (houses.ascendant && typeof houses.ascendant.position === 'number')
-    ? '- Asc: ' + chartTranslateSign(houses.ascendant.sign || '') + ' ' + decimals(houses.ascendant.position, 1) + '\u00B0'
-    : '';
-  const mcLine = (houses.midheaven && typeof houses.midheaven.position === 'number')
-    ? '- MC: ' + chartTranslateSign(houses.midheaven.sign || '') + ' ' + decimals(houses.midheaven.position, 1) + '\u00B0'
-    : '';
-  const aspectLines = aspects.slice(0, 6).map((asp) => {
+  const ascData = houses.ascendant || {};
+  const ascSign = ascData.sign || '';
+  const ascLine = (typeof ascData.position === 'number')
+    ? '- Asc: ' + chartTranslateSign(ascSign) + ' ' + decimals(ascData.position, 1) + '\u00B0'
+    : '- Asc: ' + (isEnglish ? 'Unavailable' : 'Sin datos');
+  const mcData = houses.midheaven || {};
+  const mcLine = (typeof mcData.position === 'number')
+    ? '- MC: ' + chartTranslateSign(mcData.sign || '') + ' ' + decimals(mcData.position, 1) + '\u00B0'
+    : '- MC: ' + (isEnglish ? 'Unavailable' : 'Sin datos');
+  const aspectLines = aspects.slice(0, 8).map((asp) => {
     const label = chartTranslateAspect(asp.type, asp.type);
     const a = chartTranslatePlanet(asp.planetA);
     const b = chartTranslatePlanet(asp.planetB);
@@ -440,102 +445,280 @@ function buildAiPrompt(vizData, lang) {
     return '- ' + label + ': ' + a + ' \u2194 ' + b + (orb ? ' (orb ' + orb + ')' : '');
   });
   const enoch = vizData.enoch || {};
-  const langCode = (lang && lang.toLowerCase().startsWith('en')) ? 'en' : 'es';
   const sunLon = planets.Sun && planets.Sun.longitude;
   const astroInfo = (typeof getShemInfoFromLongitude === 'function') ? getShemInfoFromLongitude(sunLon, langCode) : null;
   const enochInfo = (typeof getShemInfoFromEnoch === 'function') ? getShemInfoFromEnoch(enoch.enoch_month, enoch.enoch_day, enoch.added_week, langCode) : null;
-  const enochLines = [];
-  if (astroInfo && astroInfo.name) {
-    const label = langCode === 'en' ? 'Astronomical name' : 'Nombre astron\u00f3mico';
-    enochLines.push('- ' + label + ': ' + astroInfo.name + (astroInfo.kavanah ? ' — ' + astroInfo.kavanah : ''));
+  const seenShemNames = new Set();
+  const formatShemLine = (label, info) => {
+    if (!info || !info.name || seenShemNames.has(info.name)) return null;
+    seenShemNames.add(info.name);
+    const ordinal = (typeof info.index === 'number') ? '#' + (info.index + 1) : '';
+    const gem = (typeof info.gematria === 'number') ? (isEnglish ? 'Gematria ' : 'Gematr\u00eda ') + info.gematria : '';
+    const metaParts = [ordinal, gem].filter(Boolean).join(' | ');
+    const kav = info.kavanah ? (isEnglish ? 'Kavanah: ' : 'Kavanah: ') + info.kavanah : '';
+    return '- ' + label + ': ' + info.name + (metaParts ? ' (' + metaParts + ')' : '') + (kav ? ' — ' + kav : '');
+  };
+  const divineNameLines = [];
+  const enochLabel = isEnglish ? 'Enoch name' : 'Nombre de Enoj';
+  const astroLabel = isEnglish ? 'Astronomical name' : 'Nombre astron\u00f3mico';
+  const enochLineDetail = formatShemLine(enochLabel, enochInfo);
+  if (enochLineDetail) divineNameLines.push(enochLineDetail);
+  const astroLineDetail = formatShemLine(astroLabel, astroInfo);
+  if (astroLineDetail) divineNameLines.push(astroLineDetail);
+  const fmtCount = (value) => {
+    if (typeof value !== 'number' || !isFinite(value)) return '0';
+    const rounded = Math.round(value * 10) / 10;
+    return Math.abs(rounded - Math.round(rounded)) < 0.05 ? String(Math.round(rounded)) : String(rounded);
+  };
+  const elementLines = [];
+  const elementStats = (typeof window.computeWeightedElementsPolarity === 'function')
+    ? window.computeWeightedElementsPolarity(planets, ascSign)
+    : null;
+  if (elementStats && elementStats.elements) {
+    const e = elementStats.elements;
+    elementLines.push(
+      (isEnglish
+        ? 'Weighted elements (Sun/Moon/Asc x2, Pluto omitted): '
+        : 'Elementos ponderados (Sol/Luna/Asc x2, sin Plut\u00f3n): ')
+      + [
+        chartTranslateElement('Fuego', isEnglish ? 'Fire' : 'Fuego') + ' ' + fmtCount(e.Fuego || 0),
+        chartTranslateElement('Tierra', isEnglish ? 'Earth' : 'Tierra') + ' ' + fmtCount(e.Tierra || 0),
+        chartTranslateElement('Aire', isEnglish ? 'Air' : 'Aire') + ' ' + fmtCount(e.Aire || 0),
+        chartTranslateElement('Agua', isEnglish ? 'Water' : 'Agua') + ' ' + fmtCount(e.Agua || 0)
+      ].join(', ')
+    );
   }
-  if (enochInfo && enochInfo.name) {
-    const label = langCode === 'en' ? 'Enoch name' : 'Nombre de Enoj';
-    enochLines.push('- ' + label + ': ' + enochInfo.name + (enochInfo.kavanah ? ' — ' + enochInfo.kavanah : ''));
+  if (elementStats && elementStats.polarity) {
+    elementLines.push(
+      (isEnglish ? 'Polarities: Masculine ' : 'Polaridades: Masculino ') + fmtCount(elementStats.polarity.masc || 0) +
+      (isEnglish ? ' vs Feminine ' : ' vs Femenino ') + fmtCount(elementStats.polarity.fem || 0)
+    );
   }
-  const intro = langCode === 'en'
-    ? 'You are a compassionate Kabbalistic astrologer. Interpret the Tree of Life chart below with spiritual and practical guidance.'
-    : 'Eres un astr\u00f3logo kabalista compasivo. Interpreta la carta del \u00c1rbol de la Vida con gu\u00eda espiritual y pr\u00e1ctica.';
-  const outro = langCode === 'en'
-    ? 'Write 2-3 short paragraphs in English, weaving sefirot, elements and any warnings.'
-    : 'Escribe 2-3 p\u00e1rrafos breves en espa\u00f1ol, hilando sefirot, elementos y advertencias.';
-  const focusLine = langCode === 'en'
-    ? 'Highlight what the 72-Name influence reveals about destiny, life purpose, and karmic corrections.'
-    : 'Destaca qu\u00e9 revelan los Nombres de Dios sobre destino, prop\u00f3sito y correcciones k\u00e1rmicas.';
-  const structureLine = langCode === 'en'
-    ? 'Structure the response in five sections with headings: (1) Divine Name insights, (2) Sun/Moon/Ascendant, (3) Tree of Life/Sefirot balance, (4) Element and polarity counts, (5) Key aspects and closing notes.'
-    : 'Estructura la respuesta en cinco secciones con encabezados: (1) Nombre divino, (2) Sol/Luna/Ascendente, (3) Balance del \u00c1rbol de la Vida/Sefirot, (4) Conteos elementales y polaridad, (5) Aspectos clave y conclusi\u00f3n.';
+  const modCounts = (typeof window.computeWeightedModalityCounts === 'function')
+    ? window.computeWeightedModalityCounts(planets, ascSign)
+    : null;
+  const modLine = modCounts
+    ? '- ' + (isEnglish ? 'Weighted modalities: ' : 'Modalidades ponderadas: ') + [
+        chartTranslateModality('Cardinal', 'Cardinal') + ' ' + fmtCount(modCounts.Cardinal || 0),
+        chartTranslateModality('Fijo', 'Fixed') + ' ' + fmtCount(modCounts.Fijo || 0),
+        chartTranslateModality('Mutable', 'Mutable') + ' ' + fmtCount(modCounts.Mutable || 0)
+      ].join(', ')
+    : '';
+  const sefirotLines = [];
+  if (typeof window.mapPlanetsToSefirot === 'function') {
+    const sefMapping = window.mapPlanetsToSefirot(planets) || {};
+    const sefNames = (window.__chartTranslations && window.__chartTranslations.sefirotNames) || {};
+    Object.entries(sefMapping).forEach(([sefira, planetName]) => {
+      const planet = planets[planetName];
+      if (!planet || typeof planet.longitude !== 'number') return;
+      const sign = (typeof getZodiacSign === 'function') ? getZodiacSign(planet.longitude) : '';
+      const degLocal = decimals(((planet.longitude % 30) + 30) % 30, 1);
+      const sefName = (sefNames && sefNames[sefira]) || sefira;
+      sefirotLines.push('- ' + sefName + ': ' + chartTranslatePlanet(planetName) + ' ' + chartTranslateSign(sign) + ' ' + degLocal + '\u00B0');
+    });
+  }
+  const intro = isEnglish
+    ? 'You are a sober, detail-oriented Kabbalistic astrologer. Interpret the Tree of Life chart with spiritual and practical guidance.'
+    : 'Eres un astr\u00f3logo kabalista sobrio y minucioso. Interpreta la carta del \u00c1rbol de la Vida con gu\u00eda espiritual y pr\u00e1ctica.';
+  const ariLine = isEnglish
+    ? 'Follow the Tree of Life order taught by Rabbi Itzhak Luria (ARI): Name of God, luminaries/Ascendant, sefirot interplay, elements/polarity, and concluding aspects.'
+    : 'Sigue el orden del \u00c1rbol de la Vida seg\u00fan el ARI (Rab\u00ed Itzjak Luria): Nombre divino, luminarias/Ascendente, interacci\u00f3n de las sefirot, elementos/polaridad y aspectos finales.';
+  const dontTransliterateLine = isEnglish
+    ? 'Do not transliterate the 72-Name into phonetic words; cite the letters exactly as provided (ej. Mem-Yud-He).'
+    : 'No transliteres el Nombre de 72 letras a palabras fon\u00e9ticas; cita las letras exactamente como aparecen (ej. Mem-Yud-He).';
+  const focusLine = isEnglish
+    ? 'Highlight what the Name of God reveals about destiny, purpose, karma, and how far the native is from that vibration.'
+    : 'Destaca lo que el Nombre de Dios revela sobre destino, prop\u00f3sito, karma y qu\u00e9 tan alineada est\u00e1 la persona con esa vibraci\u00f3n.';
+  const quoteCountsLine = isEnglish
+    ? 'Any mention of balance or imbalance (Chesed vs Gevurah, masculine vs feminine, sefirot loads) must cite the numeric counts, degrees, or placements that justify it. Never invent traits.'
+    : 'Cada vez que menciones equilibrio o desbalance (Jesed vs Guevur\u00e1, masculino vs femenino, carga de sefirot) cita los conteos, grados o posiciones que lo respalden. Nunca inventes rasgos.';
+  const detailLine = isEnglish
+    ? 'Each of the five sections must contain at least four sentences packed with concrete data (degrees, houses, sefirot, ordinal/gematria of the Name). Avoid vagueness.'
+    : 'Cada secci\u00f3n debe tener al menos cuatro oraciones con datos concretos (grados, casas, sefirot, ordinal/gematr\u00eda del Nombre). Evita generalidades.';
+  const dataIntegrityLine = isEnglish
+    ? 'If the data does not provide something (e.g., missing house or aspect), explicitly state it is unavailable instead of speculating.'
+    : 'Si los datos no aportan algo (casas, aspectos, conteos), ind\u00edcalo como no disponible en vez de especular.';
+  const cautionLine = isEnglish
+    ? 'Close by reminding the reader that this automated overview may contain errors and that only a professional Kabbalistic astrologer can confirm the reading.'
+    : 'Cierra recordando que esta s\u00edntesis autom\u00e1tica puede contener errores y que solo un astr\u00f3logo kabalista profesional puede confirmar la lectura.';
   const lines = [
     intro,
-    '',
-    structureLine,
-    'Do not transliterate the 72-Name into phonetic English; cite its letters exactly as provided (e.g., Mem-Yud-He).',
-    '',
-    (langCode === 'en' ? 'Key placements:' : 'Posiciones clave:'),
-    ...placements,
-    '',
-    (langCode === 'en' ? 'Ascendant & Midheaven:' : 'Ascendente y Medio Cielo:'),
-    ascLine || '- (sin datos)',
-    mcLine || '',
-    '',
-    (langCode === 'en' ? 'Classical aspects:' : 'Aspectos cl\u00e1sicos:'),
-    aspectLines.length ? aspectLines.join('\n') : '- (ninguno)',
-    '',
-    (langCode === 'en' ? 'Enoch calendar:' : 'Calendario de Enoj:'),
-    '- ' + (langCode === 'en' ? 'Year' : 'A\u00f1o') + ': ' + (enoch.enoch_year || '?') + ', ' + (langCode === 'en' ? 'Month' : 'Mes') + ': ' + (enoch.enoch_month || '?') + ', ' + (langCode === 'en' ? 'Day' : 'D\u00eda') + ': ' + (enoch.enoch_day || '?'),
-    enochLines.join('\n') || '- (sin nombres disponibles)',
+    ariLine,
+    dontTransliterateLine,
     focusLine,
-    (langCode === 'en'
-      ? 'When you mention any balance or imbalance (e.g., Chesed vs Gevurah, masculine vs feminine), quote the actual counts or scores from the data to justify it. Never introduce traits that are not backed by the provided placements.'
-      : 'Cuando menciones equilibrio o desbalance (Jesed vs Guevur\u00e1, masculino vs femenino), cita los conteos o puntajes reales para justificarlo. No introduzcas rasgos que no est\u00e9n respaldados por los datos.'),
+    quoteCountsLine,
+    detailLine,
+    dataIntegrityLine,
+    cautionLine,
     '',
-    outro
+    (isEnglish ? 'Divine Names dataset:' : 'Datos del Nombre de Dios:'),
+    (divineNameLines.length ? divineNameLines.join('\n') : (isEnglish ? '- (no Divine Names available)' : '- (sin nombres disponibles)')),
+    '',
+    (isEnglish ? 'Sefirot placements (ARI mapping):' : 'Ubicaciones en las Sefirot (mapa del ARI):'),
+    (sefirotLines.length ? sefirotLines.join('\n') : (isEnglish ? '- (no sefirot data)' : '- (sin datos de sefirot)')),
+    '',
+    (isEnglish ? 'Element & polarity stats:' : 'Conteos de elementos y polaridad:'),
+    (elementLines.length ? elementLines.join('\n') : (isEnglish ? '- (no element counts)' : '- (sin conteos de elementos)')),
+    '',
+    (isEnglish ? 'Modality distribution:' : 'Distribuci\u00f3n por modalidades:'),
+    modLine || (isEnglish ? '- (no modality counts)' : '- (sin conteos de modalidades)'),
+    '',
+    (isEnglish ? 'Key placements:' : 'Posiciones clave:'),
+    ...(placements.length ? placements : ['- (sin posiciones planetarias)']),
+    '',
+    (isEnglish ? 'Ascendant & Midheaven:' : 'Ascendente y Medio Cielo:'),
+    ascLine,
+    mcLine,
+    '',
+    (isEnglish ? 'Classical aspects:' : 'Aspectos cl\u00e1sicos:'),
+    (aspectLines.length ? aspectLines.join('\n') : (isEnglish ? '- (none)' : '- (ninguno)')),
+    '',
+    (isEnglish ? 'Enoch calendar:' : 'Calendario de Enoj:'),
+    '- ' + (isEnglish ? 'Year' : 'A\u00f1o') + ': ' + ((enoch.enoch_year != null) ? enoch.enoch_year : '?'),
+    '- ' + (isEnglish ? 'Month' : 'Mes') + ': ' + ((enoch.enoch_month != null) ? enoch.enoch_month : '?'),
+    '- ' + (isEnglish ? 'Day' : 'D\u00eda') + ': ' + ((enoch.enoch_day != null) ? enoch.enoch_day : '?'),
+    '- ' + (isEnglish ? 'Day of year' : 'D\u00eda del a\u00f1o') + ': ' + ((enoch.enoch_day_of_year != null) ? enoch.enoch_day_of_year : '?'),
+    '- ' + (isEnglish ? 'Intercalary week' : 'Semana intercalaria') + ': ' + (enoch.added_week ? (isEnglish ? 'Yes' : 'S\u00ed') : (isEnglish ? 'No' : 'No'))
   ];
   return lines.join('\n');
 }
 
-function requestAiSummary(button, body, vizData, endpoint, autorun) {
+const AI_SECTION_META = [
+  {
+    key: 'divine',
+    icon: '\u2721',
+    title: { es: '1) Nombre divino', en: '1) Divine Name insights' },
+    prompt: {
+      es: 'Genera la Secci\u00f3n 1 (Nombre divino). Usa los datos de nombres astron\u00f3mico y enoj (letras, ordinal, gematr\u00eda, kavanah) para explicar destino, prop\u00f3sito y correcciones k\u00e1rmicas. Menciona los n\u00fameros ordinales y de gematr\u00eda expl\u00edcitamente, y aclara si alg\u00fan Nombre se repite o falta. Ofrece al menos cuatro oraciones.',
+      en: 'Write Section 1 (Divine Name). Use the astronomical and Enochian Names (letters, ordinal number, gematria, kavanah) to describe destiny, life purpose, and karmic corrections. State the ordinal and gematria numbers explicitly and mention whether any Name repeats or is missing. Provide at least four sentences.'
+    }
+  },
+  {
+    key: 'luminaries',
+    icon: '\u263C',
+    title: { es: '2) Sol, Luna y Ascendente', en: '2) Sun, Moon & Ascendant' },
+    prompt: {
+      es: 'Genera la Secci\u00f3n 2 (Sol, Luna y Ascendente). Cita los grados exactos, signos, casas y sefirot asociados a estos tres pilares, explicando c\u00f3mo se equilibran o chocan. Usa ejemplos concretos del dataset (ej. Sol en X\u00b0, Luna en Y\u00b0, Ascendente en Z\u00b0) y enlaza su impacto espiritual. M\u00ednimo cuatro oraciones.',
+      en: 'Write Section 2 (Sun, Moon and Ascendant). Quote the exact degrees, signs, houses or sefirot for these three pillars and explain how they balance or clash. Use concrete references from the dataset (e.g., Sun at X\u00b0, Moon at Y\u00b0, Ascendant at Z\u00b0) and tie them to spiritual impact. Minimum four sentences.'
+    }
+  },
+  {
+    key: 'sefirot',
+    icon: '\u269B',
+    title: { es: '3) \u00c1rbol de la Vida y sefirot', en: '3) Tree of Life & Sefirot' },
+    prompt: {
+      es: 'Genera la Secci\u00f3n 3 (\u00c1rbol de la Vida y sefirot). Usa el listado de planetas por sefirot y cualquier conteo disponible para explicar c\u00f3mo fluye la energ\u00eda entre los mundos (espiritual, mental, emocional, acci\u00f3n). Si hay sefirot sin planetas o con sobrecarga, menci\u00f3nalo con n\u00fameros. Relaciona esto con Jesed/Guevur\u00e1 y el estado del Yesod/Tiferet. Al menos cuatro oraciones.',
+      en: 'Write Section 3 (Tree of Life and Sefirot). Use the mapping of planets to sefirot and any counts provided to describe how energy flows through the worlds (spiritual, mental, emotional, action). Mention any sefirot without planets or overloaded ones, citing the numbers. Relate this to Chesed/Gevurah balance and the state of Yesod/Tiferet. At least four sentences.'
+    }
+  },
+  {
+    key: 'elements',
+    icon: '\u2694',
+    title: { es: '4) Elementos y polaridad', en: '4) Elements & polarity' },
+    prompt: {
+      es: 'Genera la Secci\u00f3n 4 (Elementos y polaridad). Cita los conteos elementales ponderados, la polaridad masculino/femenino y las modalidades para describir tendencias ps\u00edquicas. Explica cualquier desequilibrio num\u00e9rico y sus implicancias en el car\u00e1cter o karma. Incluye m\u00ednimo cuatro oraciones.',
+      en: 'Write Section 4 (Elements and polarity). Quote the weighted element counts, masculine/feminine polarity totals, and modality scores to describe psychological tendencies. Explain any numeric imbalance and its implications for character or karma. Include at least four sentences.'
+    }
+  },
+  {
+    key: 'aspects',
+    icon: '\u2605',
+    title: { es: '5) Aspectos y notas finales', en: '5) Aspects & closing notes' },
+    prompt: {
+      es: 'Genera la Secci\u00f3n 5 (Aspectos y cierre). Usa la lista de aspectos (tipo, planetas, orbes) para interpretar oportunidades o tensiones; menciona cifras espec\u00edficas de orbe. Cierra con una recomendaci\u00f3n prudente recordando que este informe es autom\u00e1tico. Al menos cuatro oraciones.',
+      en: 'Write Section 5 (Aspects and closing). Use the aspect list (type, planets, orbs) to interpret opportunities or tensions, citing the orb figures. End with a prudent recommendation reminding that this is an automated overview. Minimum four sentences.'
+    }
+  }
+];
+
+function getAiSectionMeta(lang) {
+  const locale = (lang && String(lang).toLowerCase().startsWith('en')) ? 'en' : 'es';
+  return AI_SECTION_META.map((meta) => ({
+    key: meta.key,
+    icon: meta.icon,
+    title: meta.title[locale],
+    prompt: meta.prompt[locale]
+  }));
+}
+
+function formatSectionHtml(text, lang) {
+  const trimmed = (text || '').trim();
+  if (!trimmed) return '';
+  const parts = trimmed.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+  const blocks = parts.length ? parts : [trimmed];
+  return blocks.map((p) => '<p>' + escapeHtml(p) + '</p>').join('');
+}
+
+function requestAiSummarySections(button, vizData, endpoint, autorun, sectionsMeta, sectionNodes) {
   autorun = !!autorun;
+  const readyLabel = chartTranslate('aiSummaryButton', 'Generar resumen kabal\u00edstico');
   if (!vizData) {
-    body.textContent = chartTranslate('aiSummaryNoData', 'Calcula la carta primero.');
+    const msg = chartTranslate('aiSummaryNoData', 'Calcula la carta primero.');
+    sectionsMeta.forEach((meta) => {
+      const target = sectionNodes[meta.key];
+      if (target) target.textContent = msg;
+    });
     return;
   }
   if (button.dataset.loading === '1') return;
   const lang = resolveChartLang();
-  const prompt = buildAiPrompt(vizData, lang);
-  if (!prompt) {
-    body.textContent = chartTranslate('aiSummaryNoData', 'No hay datos suficientes para la IA.');
+  const basePrompt = buildAiBasePrompt(vizData, lang);
+  if (!basePrompt) {
+    const msg = chartTranslate('aiSummaryNoData', 'No hay datos suficientes para la IA.');
+    sectionsMeta.forEach((meta) => {
+      const target = sectionNodes[meta.key];
+      if (target) target.textContent = msg;
+    });
     return;
   }
-  const readyLabel = chartTranslate('aiSummaryButton', 'Generar resumen kabal\u00edstico');
   button.dataset.loading = '1';
   button.disabled = true;
   button.textContent = chartTranslate('aiSummaryWorking', 'Generando...');
-  body.textContent = chartTranslate('aiSummaryLoading', 'Conectando con la IA...');
-  fetch(endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt, lang })
-  })
-    .then((resp) => {
-      if (!resp.ok) throw new Error('HTTP ' + resp.status);
-      const type = resp.headers.get('content-type') || '';
-      if (type.includes('application/json')) return resp.json();
-      return resp.text().then((txt) => ({ summary: txt }));
-    })
-    .then((payload) => {
-      const text = (payload && (payload.summary || payload.text || payload.message)) || '';
-      body.textContent = text.trim() || chartTranslate('aiSummaryEmpty', 'La IA no devolvi\u00f3 texto.');
-    })
-    .catch((err) => {
-      const msg = chartTranslate('aiSummaryError', 'No se pudo generar el resumen.');
-      body.textContent = msg + (err && err.message ? ' (' + err.message + ')' : '');
-    })
-    .finally(() => {
+  sectionsMeta.forEach((meta) => {
+    const target = sectionNodes[meta.key];
+    if (target) target.textContent = chartTranslate('aiSummaryLoading', 'Conectando con la IA...');
+  });
+  const caution = (lang === 'en'
+    ? 'Focus only on this section, do not restate other sections, and never invent data.'
+    : 'Conc\u00e9ntrate solo en esta secci\u00f3n, no repitas las dem\u00e1s y nunca inventes datos.');
+  function runSection(index) {
+    if (index >= sectionsMeta.length) {
       button.dataset.loading = '0';
       button.disabled = false;
       button.textContent = readyLabel;
-    });
+      return;
+    }
+    const meta = sectionsMeta[index];
+    const target = sectionNodes[meta.key];
+    const prompt = [basePrompt, '', meta.prompt, caution].join('\n');
+    fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, lang })
+    })
+      .then((resp) => {
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const type = resp.headers.get('content-type') || '';
+        if (type.includes('application/json')) return resp.json();
+        return resp.text().then((txt) => ({ summary: txt }));
+      })
+      .then((payload) => {
+        const text = (payload && (payload.summary || payload.text || payload.message)) || '';
+        const html = formatSectionHtml(text, lang);
+        if (target) {
+          if (html) target.innerHTML = html;
+          else target.textContent = text.trim() || chartTranslate('aiSummaryEmpty', 'La IA no devolvi\u00f3 texto.');
+        }
+      })
+      .catch((err) => {
+        if (target) {
+          const msg = chartTranslate('aiSummaryError', 'No se pudo generar el resumen.');
+          target.textContent = msg + (err && err.message ? ' (' + err.message + ')' : '');
+        }
+      })
+      .finally(() => runSection(index + 1));
+  }
+  runSection(0);
 }
 
 function renderAiSummary(host, vizData) {
@@ -547,26 +730,39 @@ function renderAiSummary(host, vizData) {
   const title = chartTranslate('aiSummaryTitle', 'Resumen con IA');
   const hint = chartTranslate('aiSummaryHint', 'Usa MashIA para sintetizar toda la carta.');
   const placeholder = chartTranslate('aiSummaryPlaceholder', 'Pulsa el bot\u00f3n para recibir una lectura kabal\u00edstica generada por IA.');
+  const disclaimer = chartTranslate('aiSummaryDisclaimer', 'Aviso: esta s\u00edntesis autom\u00e1tica puede contener errores; consulta a un profesional para una lectura formal.');
+  const langCode = resolveChartLang();
+  const sectionsMeta = getAiSectionMeta(langCode);
+  const sectionsHtml = sectionsMeta.map((meta) => (
+    '<section class="ai-section ai-section-' + meta.key + '"><div class="ai-section-title"><span class="ai-section-icon">' + meta.icon + '</span>' + escapeHtml(meta.title) + '</div><div class="ai-section-content" data-ai-section="' + meta.key + '">' + placeholder + '</div></section>'
+  )).join('');
   card.innerHTML = [
-    '<header class="ai-summary-header"><div class="ai-summary-icon">✶</div><div><h3>' + title + '</h3><p class="ai-summary-hint">' + hint + '</p></div></header>',
-    '<div class="ai-summary-body">' + placeholder + '</div>',
+    '<header class="ai-summary-header"><div class="ai-summary-icon">\u2736</div><div><h3>' + title + '</h3><p class="ai-summary-hint">' + hint + '</p></div></header>',
+    '<div class="ai-summary-body"><div class="ai-summary-sections">' + sectionsHtml + '</div></div>',
+    '<p class="ai-summary-disclaimer">' + disclaimer + '</p>',
     '<div class="ai-summary-actions"><button type="button" class="ai-summary-btn">' + chartTranslate('aiSummaryButton', 'Generar resumen kabal\u00edstico') + '</button></div>'
   ].join('\n');
   container.appendChild(card);
   const button = card.querySelector('button');
-  const body = card.querySelector('.ai-summary-body');
+  const sectionNodes = {};
+  sectionsMeta.forEach((meta) => {
+    sectionNodes[meta.key] = card.querySelector('[data-ai-section="' + meta.key + '"]');
+  });
   const endpoint = getAiBackendUrl();
   if (!endpoint) {
     button.disabled = true;
-    body.textContent = chartTranslate('aiSummaryNoBackend', 'Configura la URL de MashIA para usar esta secci\u00f3n.');
+    sectionsMeta.forEach((meta) => {
+      const target = sectionNodes[meta.key];
+      if (target) target.textContent = chartTranslate('aiSummaryNoBackend', 'Configura la URL de MashIA para usar esta secci\u00f3n.');
+    });
     return;
   }
   button.addEventListener('click', () => {
-    requestAiSummary(button, body, vizData, endpoint, false);
+    requestAiSummarySections(button, vizData, endpoint, false, sectionsMeta, sectionNodes);
   });
   if (!card.dataset.autoRequested) {
     card.dataset.autoRequested = '1';
-    requestAiSummary(button, body, vizData, endpoint, true);
+    requestAiSummarySections(button, vizData, endpoint, true, sectionsMeta, sectionNodes);
   }
 }
 

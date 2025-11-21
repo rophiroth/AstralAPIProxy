@@ -407,7 +407,7 @@ function getAiBackendUrl() {
 }
 
 function buildAiBasePrompt(vizData, lang) {
-  if (!vizData) return '';
+  if (!vizData) return null;
   const placements = [];
   const planets = vizData.planets || {};
   const houses = vizData.houses_data || {};
@@ -527,21 +527,21 @@ function buildAiBasePrompt(vizData, lang) {
     ? 'Do not transliterate the 72-Name into phonetic words; cite the letters exactly as provided (ej. Mem-Yud-He).'
     : 'No transliteres el Nombre de 72 letras a palabras fon\u00e9ticas; cita las letras exactamente como aparecen (ej. Mem-Yud-He).';
   const focusLine = isEnglish
-    ? 'Highlight what the Name of God reveals about destiny, purpose, karma, and how far the native is from that vibration.'
-    : 'Destaca lo que el Nombre de Dios revela sobre destino, prop\u00f3sito, karma y qu\u00e9 tan alineada est\u00e1 la persona con esa vibraci\u00f3n.';
+    ? 'Never invent anything: describe the Divine Name only with the provided letters, ordinal (1\u201372), gematria, and kavanah; in every section anchor claims in exact degrees, houses, sefirot, counts, or orbs.'
+    : 'No inventes nada: describe el Nombre divino solo con las letras dadas, ordinal (1\u201372), gematr\u00eda y kavanah; en cada secci\u00f3n ancla las afirmaciones en grados, casas, sefirot, conteos u orbes exactos.';
   const quoteCountsLine = isEnglish
-    ? 'Any mention of balance or imbalance (Chesed vs Gevurah, masculine vs feminine, sefirot loads) must cite the numeric counts, degrees, or placements that justify it. Never invent traits.'
-    : 'Cada vez que menciones equilibrio o desbalance (Jesed vs Guevur\u00e1, masculino vs femenino, carga de sefirot) cita los conteos, grados o posiciones que lo respalden. Nunca inventes rasgos.';
+    ? 'Any balance/imbalance (Chesed vs Gevurah, masculine vs feminine, sefirot loads) must quote the specific numbers, degrees, or placements that justify it.'
+    : 'Todo equilibrio/desbalance (Jesed vs Guevur\u00e1, masculino vs femenino, cargas de sefirot) debe citar los n\u00fameros, grados o posiciones que lo respalden.';
   const detailLine = isEnglish
-    ? 'Each of the five sections must contain at least four sentences packed with concrete data (degrees, houses, sefirot, ordinal/gematria of the Name). Avoid vagueness.'
-    : 'Cada secci\u00f3n debe tener al menos cuatro oraciones con datos concretos (grados, casas, sefirot, ordinal/gematr\u00eda del Nombre). Evita generalidades.';
+    ? 'Expand each answer to the maximum: use long, well-punctuated paragraphs (commas, semicolons, periods) with concrete data: degrees, houses, sefirot, ordinal/gematria, kavanah, and practical consequences.'
+    : 'Expande cada respuesta al m\u00e1ximo: usa p\u00e1rrafos largos y bien puntuados (comas, puntos y coma, puntos) con datos concretos: grados, casas, sefirot, ordinal/gematr\u00eda, kavanah y consecuencias pr\u00e1cticas.';
   const dataIntegrityLine = isEnglish
-    ? 'If the data does not provide something (e.g., missing house or aspect), explicitly state it is unavailable instead of speculating.'
-    : 'Si los datos no aportan algo (casas, aspectos, conteos), ind\u00edcalo como no disponible en vez de especular.';
+    ? 'If data is missing, state it as unavailable instead of speculating.'
+    : 'Si falta alg\u00fan dato, ind\u00edcalo como no disponible en vez de especular.';
   const cautionLine = isEnglish
-    ? 'Close by reminding the reader that this automated overview may contain errors and that only a professional Kabbalistic astrologer can confirm the reading.'
-    : 'Cierra recordando que esta s\u00edntesis autom\u00e1tica puede contener errores y que solo un astr\u00f3logo kabalista profesional puede confirmar la lectura.';
-  const lines = [
+    ? 'This is an automated report; it may have errors. Real interpretation requires a professional Kabbalistic astrologer.'
+    : 'Este es un informe autom\u00e1tico y puede tener errores. La interpretaci\u00f3n real requiere un astr\u00f3logo kabalista profesional.';
+  const instructions = [
     intro,
     ariLine,
     dontTransliterateLine,
@@ -549,48 +549,43 @@ function buildAiBasePrompt(vizData, lang) {
     quoteCountsLine,
     detailLine,
     dataIntegrityLine,
-    cautionLine,
-    '',
-    (isEnglish ? 'Divine Names dataset:' : 'Datos del Nombre de Dios:'),
-    (divineNameLines.length ? divineNameLines.join('\n') : (isEnglish ? '- (no Divine Names available)' : '- (sin nombres disponibles)')),
-    '',
-    (isEnglish ? 'Sefirot placements (ARI mapping):' : 'Ubicaciones en las Sefirot (mapa del ARI):'),
-    (sefirotLines.length ? sefirotLines.join('\n') : (isEnglish ? '- (no sefirot data)' : '- (sin datos de sefirot)')),
-    '',
-    (isEnglish ? 'Element & polarity stats:' : 'Conteos de elementos y polaridad:'),
-    (elementLines.length ? elementLines.join('\n') : (isEnglish ? '- (no element counts)' : '- (sin conteos de elementos)')),
-    '',
-    (isEnglish ? 'Modality distribution:' : 'Distribuci\u00f3n por modalidades:'),
-    modLine || (isEnglish ? '- (no modality counts)' : '- (sin conteos de modalidades)'),
-    '',
-    (isEnglish ? 'Key placements:' : 'Posiciones clave:'),
-    ...(placements.length ? placements : ['- (sin posiciones planetarias)']),
-    '',
-    (isEnglish ? 'Ascendant & Midheaven:' : 'Ascendente y Medio Cielo:'),
-    ascLine,
-    mcLine,
-    '',
-    (isEnglish ? 'Classical aspects:' : 'Aspectos cl\u00e1sicos:'),
-    (aspectLines.length ? aspectLines.join('\n') : (isEnglish ? '- (none)' : '- (ninguno)')),
-    '',
-    (isEnglish ? 'Enoch calendar:' : 'Calendario de Enoj:'),
-    '- ' + (isEnglish ? 'Year' : 'A\u00f1o') + ': ' + ((enoch.enoch_year != null) ? enoch.enoch_year : '?'),
-    '- ' + (isEnglish ? 'Month' : 'Mes') + ': ' + ((enoch.enoch_month != null) ? enoch.enoch_month : '?'),
-    '- ' + (isEnglish ? 'Day' : 'D\u00eda') + ': ' + ((enoch.enoch_day != null) ? enoch.enoch_day : '?'),
-    '- ' + (isEnglish ? 'Day of year' : 'D\u00eda del a\u00f1o') + ': ' + ((enoch.enoch_day_of_year != null) ? enoch.enoch_day_of_year : '?'),
-    '- ' + (isEnglish ? 'Intercalary week' : 'Semana intercalaria') + ': ' + (enoch.added_week ? (isEnglish ? 'Yes' : 'S\u00ed') : (isEnglish ? 'No' : 'No'))
+    cautionLine
   ];
-  return lines.join('\n');
+  const placementsMap = {};
+  placements.forEach((entry) => {
+    const clean = entry.replace(/^- /, '');
+    const key = clean.split(':')[0];
+    if (key) placementsMap[key.trim()] = entry;
+  });
+  const luminariesLines = ['Sun', 'Moon']
+    .map((name) => placementsMap[name])
+    .filter(Boolean);
+  const sectionData = {
+    divine: divineNameLines,
+    luminaries: luminariesLines.concat(ascLine ? [ascLine] : []),
+    sefirot: sefirotLines,
+    elements: elementLines,
+    modalities: modLine ? [modLine] : [],
+    aspects: aspectLines,
+    closing: [
+      '- ' + (isEnglish ? 'Year' : 'A\u00f1o') + ': ' + ((enoch.enoch_year != null) ? enoch.enoch_year : '?'),
+      '- ' + (isEnglish ? 'Month' : 'Mes') + ': ' + ((enoch.enoch_month != null) ? enoch.enoch_month : '?'),
+      '- ' + (isEnglish ? 'Day' : 'D\u00eda') + ': ' + ((enoch.enoch_day != null) ? enoch.enoch_day : '?'),
+      '- ' + (isEnglish ? 'Day of year' : 'D\u00eda del a\u00f1o') + ': ' + ((enoch.enoch_day_of_year != null) ? enoch.enoch_day_of_year : '?'),
+      '- ' + (isEnglish ? 'Intercalary week' : 'Semana intercalaria') + ': ' + (enoch.added_week ? (isEnglish ? 'Yes' : 'S\u00ed') : (isEnglish ? 'No' : 'No'))
+    ]
+  };
+  return { langCode, instructions, data: sectionData };
 }
 
 const AI_SECTION_META = [
   {
     key: 'divine',
     icon: '\u2721',
-    title: { es: '1) Nombre divino', en: '1) Divine Name insights' },
+    title: { es: '1) Nombre divino', en: '1) Divine Name' },
     prompt: {
-      es: 'Genera la Secci\u00f3n 1 (Nombre divino). Usa los datos de nombres astron\u00f3mico y enoj (letras, ordinal, gematr\u00eda, kavanah) para explicar destino, prop\u00f3sito y correcciones k\u00e1rmicas. Menciona los n\u00fameros ordinales y de gematr\u00eda expl\u00edcitamente, y aclara si alg\u00fan Nombre se repite o falta. Ofrece al menos cuatro oraciones.',
-      en: 'Write Section 1 (Divine Name). Use the astronomical and Enochian Names (letters, ordinal number, gematria, kavanah) to describe destiny, life purpose, and karmic corrections. State the ordinal and gematria numbers explicitly and mention whether any Name repeats or is missing. Provide at least four sentences.'
+      es: 'Contenido del Nombre divino sin encabezados ni numeraci\u00f3n. Usa los nombres astron\u00f3mico y de Enoj (letras exactas, ordinal 1-72, gematr\u00eda, kavanah provista) para explicar destino, prop\u00f3sito y correcciones k\u00e1rmicas al alinearse o desviarse. No inventes atributos ni bendiciones fuera de los datos; si falta algo, decl\u00e1ralo. Exp\u00e1ndete al m\u00e1ximo, m\u00ednimo ocho oraciones bien puntuadas.',
+      en: 'Divine Name content only, no headings or numbering. Use the astronomical and Enochian Names (exact letters, ordinal 1-72, gematria, provided kavanah) to explain destiny, purpose, and karmic corrections when aligned or misaligned. Do not invent attributes or blessings beyond the data; if something is missing, state it. Expand to the maximum, at least eight well-punctuated sentences.'
     }
   },
   {
@@ -598,8 +593,8 @@ const AI_SECTION_META = [
     icon: '\u263C',
     title: { es: '2) Sol, Luna y Ascendente', en: '2) Sun, Moon & Ascendant' },
     prompt: {
-      es: 'Genera la Secci\u00f3n 2 (Sol, Luna y Ascendente). Cita los grados exactos, signos, casas y sefirot asociados a estos tres pilares, explicando c\u00f3mo se equilibran o chocan. Usa ejemplos concretos del dataset (ej. Sol en X\u00b0, Luna en Y\u00b0, Ascendente en Z\u00b0) y enlaza su impacto espiritual. M\u00ednimo cuatro oraciones.',
-      en: 'Write Section 2 (Sun, Moon and Ascendant). Quote the exact degrees, signs, houses or sefirot for these three pillars and explain how they balance or clash. Use concrete references from the dataset (e.g., Sun at X\u00b0, Moon at Y\u00b0, Ascendant at Z\u00b0) and tie them to spiritual impact. Minimum four sentences.'
+      es: 'Describe Sol (conciencia/l\u00f3gica), Luna (imaginaci\u00f3n/emoci\u00f3n/sue\u00f1os) y Ascendente (orientaci\u00f3n/destino/percepci\u00f3n externa) sin t\u00edtulos. Cita grados y signos exactos, casas y sefirot de cada uno, c\u00f3mo se equilibran o chocan, y qu\u00e9 implican en la misi\u00f3n vital. Usa m\u00ednimo ocho oraciones detalladas.',
+      en: 'Describe Sun (consciousness/logic), Moon (imagination/emotion/dreams), and Ascendant (orientation/destiny/external perception) with no headings. Quote exact degrees and signs, houses, and sefirot for each, how they balance or clash, and what they imply for life purpose. Use at least eight detailed sentences.'
     }
   },
   {
@@ -607,8 +602,8 @@ const AI_SECTION_META = [
     icon: '\u269B',
     title: { es: '3) \u00c1rbol de la Vida y sefirot', en: '3) Tree of Life & Sefirot' },
     prompt: {
-      es: 'Genera la Secci\u00f3n 3 (\u00c1rbol de la Vida y sefirot). Usa el listado de planetas por sefirot y cualquier conteo disponible para explicar c\u00f3mo fluye la energ\u00eda entre los mundos (espiritual, mental, emocional, acci\u00f3n). Si hay sefirot sin planetas o con sobrecarga, menci\u00f3nalo con n\u00fameros. Relaciona esto con Jesed/Guevur\u00e1 y el estado del Yesod/Tiferet. Al menos cuatro oraciones.',
-      en: 'Write Section 3 (Tree of Life and Sefirot). Use the mapping of planets to sefirot and any counts provided to describe how energy flows through the worlds (spiritual, mental, emotional, action). Mention any sefirot without planets or overloaded ones, citing the numbers. Relate this to Chesed/Gevurah balance and the state of Yesod/Tiferet. At least four sentences.'
+      es: 'Usa el mapa planeta\u2192sefirot y conteos para mostrar flujos: Keter/Jojm\u00e1/Bin\u00e1 (espiritual), Jesed/Guevur\u00e1/Tiferet (mental), Netzaj/Hod/Yesod (emocional) y Maljut (concreto/MC). Destaca sefirot vac\u00edas o saturadas y signos que se repiten, con n\u00fameros y grados. Extiende al m\u00e1ximo con al menos ocho oraciones.',
+      en: 'Use the planet\u2192sefirot map and counts to show flows: Keter/Chokhmah/Binah (spiritual), Chesed/Gevurah/Tiferet (mental), Netzach/Hod/Yesod (emotional), and Malkhut (concrete/MC). Highlight empty or overloaded sefirot and repeated signs with numbers and degrees. Expand fully with at least eight sentences.'
     }
   },
   {
@@ -616,17 +611,26 @@ const AI_SECTION_META = [
     icon: '\u2694',
     title: { es: '4) Elementos y polaridad', en: '4) Elements & polarity' },
     prompt: {
-      es: 'Genera la Secci\u00f3n 4 (Elementos y polaridad). Cita los conteos elementales ponderados, la polaridad masculino/femenino y las modalidades para describir tendencias ps\u00edquicas. Explica cualquier desequilibrio num\u00e9rico y sus implicancias en el car\u00e1cter o karma. Incluye m\u00ednimo cuatro oraciones.',
-      en: 'Write Section 4 (Elements and polarity). Quote the weighted element counts, masculine/feminine polarity totals, and modality scores to describe psychological tendencies. Explain any numeric imbalance and its implications for character or karma. Include at least four sentences.'
+      es: 'Explica conteos ponderados de elementos, polaridad masculino/femenino y modalidades con n\u00fameros claros. Relaciona cualquier desbalance con car\u00e1cter o karma sin inventar nada. Usa m\u00ednimo ocho oraciones largas y bien puntuadas.',
+      en: 'Explain weighted element counts, masculine/feminine polarity, and modality totals with clear numbers. Tie any imbalance to character or karma without inventing anything. Use at least eight long, well-punctuated sentences.'
     }
   },
   {
     key: 'aspects',
     icon: '\u2605',
-    title: { es: '5) Aspectos y notas finales', en: '5) Aspects & closing notes' },
+    title: { es: '5) Aspectos cl\u00e1sicos', en: '5) Classical aspects' },
     prompt: {
-      es: 'Genera la Secci\u00f3n 5 (Aspectos y cierre). Usa la lista de aspectos (tipo, planetas, orbes) para interpretar oportunidades o tensiones; menciona cifras espec\u00edficas de orbe. Cierra con una recomendaci\u00f3n prudente recordando que este informe es autom\u00e1tico. Al menos cuatro oraciones.',
-      en: 'Write Section 5 (Aspects and closing). Use the aspect list (type, planets, orbs) to interpret opportunities or tensions, citing the orb figures. End with a prudent recommendation reminding that this is an automated overview. Minimum four sentences.'
+      es: 'Interpreta la lista de aspectos (tipo, planetas, orbes) sin encabezados ni notas de otras secciones. Cita cada orb num\u00e9rico al explicar tensiones u oportunidades. Al menos ocho oraciones detalladas.',
+      en: 'Interpret the aspect list (type, planets, orbs) without headings or references to other sections. Cite each numeric orb when explaining tensions or opportunities. Provide at least eight detailed sentences.'
+    }
+  },
+  {
+    key: 'closing',
+    icon: '\u23f3',
+    title: { es: '6) Cierre y calendario', en: '6) Closing & calendar' },
+    prompt: {
+      es: 'Usa los datos del calendario de Enoj (a\u00f1o, mes, d\u00eda, d\u00eda del a\u00f1o, semana intercalaria) para un cierre reflexivo. Incluye una advertencia de que es un informe autom\u00e1tico y que la lectura profesional es necesaria para certeza. Usa m\u00ednimo seis oraciones fluidas y bien puntuadas.',
+      en: 'Use the Enoch calendar data (year, month, day, day of year, intercalary week) for a reflective closing. Include a warning that this is automated and that a professional reading is needed for certainty. Use at least six fluid, well-punctuated sentences.'
     }
   }
 ];
@@ -652,6 +656,7 @@ function formatSectionHtml(text, lang) {
 function requestAiSummarySections(button, vizData, endpoint, autorun, sectionsMeta, sectionNodes) {
   autorun = !!autorun;
   const readyLabel = chartTranslate('aiSummaryButton', 'Generar resumen kabal\u00edstico');
+  const isBookingButton = button && button.dataset.booking === '1';
   if (!vizData) {
     const msg = chartTranslate('aiSummaryNoData', 'Calcula la carta primero.');
     sectionsMeta.forEach((meta) => {
@@ -660,10 +665,10 @@ function requestAiSummarySections(button, vizData, endpoint, autorun, sectionsMe
     });
     return;
   }
-  if (button.dataset.loading === '1') return;
+  if (!isBookingButton && button.dataset.loading === '1') return;
   const lang = resolveChartLang();
-  const basePrompt = buildAiBasePrompt(vizData, lang);
-  if (!basePrompt) {
+  const baseInfo = buildAiBasePrompt(vizData, lang);
+  if (!baseInfo) {
     const msg = chartTranslate('aiSummaryNoData', 'No hay datos suficientes para la IA.');
     sectionsMeta.forEach((meta) => {
       const target = sectionNodes[meta.key];
@@ -671,26 +676,39 @@ function requestAiSummarySections(button, vizData, endpoint, autorun, sectionsMe
     });
     return;
   }
-  button.dataset.loading = '1';
-  button.disabled = true;
-  button.textContent = chartTranslate('aiSummaryWorking', 'Generando...');
+  if (!isBookingButton) {
+    button.dataset.loading = '1';
+    button.disabled = true;
+    button.textContent = chartTranslate('aiSummaryWorking', 'Generando...');
+  }
   sectionsMeta.forEach((meta) => {
     const target = sectionNodes[meta.key];
     if (target) target.textContent = chartTranslate('aiSummaryLoading', 'Conectando con la IA...');
   });
-  const caution = (lang === 'en'
-    ? 'Focus only on this section, do not restate other sections, and never invent data.'
-    : 'Conc\u00e9ntrate solo en esta secci\u00f3n, no repitas las dem\u00e1s y nunca inventes datos.');
+    const caution = (lang === 'en'
+      ? 'Write in flowing prose (no bullets, no headings). Do not mention section numbers or that other prompts exist; focus only on this section and never invent data.'
+      : 'Escribe en prosa corrida (sin vi\u00f1etas ni t\u00edtulos). No menciones n\u00fameros de secci\u00f3n ni que hay otros prompts; c\u00e9ntrate solo en esta secci\u00f3n y nunca inventes datos.');
   function runSection(index) {
     if (index >= sectionsMeta.length) {
-      button.dataset.loading = '0';
-      button.disabled = false;
-      button.textContent = readyLabel;
+      if (!isBookingButton) {
+        button.dataset.loading = '0';
+        button.disabled = false;
+        button.textContent = readyLabel;
+      }
       return;
     }
     const meta = sectionsMeta[index];
     const target = sectionNodes[meta.key];
-    const prompt = [basePrompt, '', meta.prompt, caution].join('\n');
+    const sectionLines = baseInfo.data[meta.key] || [];
+    const prompt = [
+      ...baseInfo.instructions,
+      '',
+      meta.prompt,
+      '',
+      ...sectionLines,
+      '',
+      caution
+    ].join('\n');
     fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -740,26 +758,23 @@ function renderAiSummary(host, vizData) {
     '<header class="ai-summary-header"><div class="ai-summary-icon">\u2736</div><div><h3>' + title + '</h3><p class="ai-summary-hint">' + hint + '</p></div></header>',
     '<div class="ai-summary-body"><div class="ai-summary-sections">' + sectionsHtml + '</div></div>',
     '<p class="ai-summary-disclaimer">' + disclaimer + '</p>',
-    '<div class="ai-summary-actions"><button type="button" class="ai-summary-btn">' + chartTranslate('aiSummaryButton', 'Generar resumen kabal\u00edstico') + '</button></div>'
+    '<div class="ai-summary-actions"><a href="https://www.psyhackers.org/spiritual-guidance" target="_blank" rel="noopener" class="ai-summary-btn" data-booking="1">' + chartTranslate('aiSummaryButton', 'Agendar gu\u00eda espiritual') + '</a></div>'
   ].join('\n');
   container.appendChild(card);
-  const button = card.querySelector('button');
+  const button = card.querySelector('.ai-summary-btn');
   const sectionNodes = {};
   sectionsMeta.forEach((meta) => {
     sectionNodes[meta.key] = card.querySelector('[data-ai-section="' + meta.key + '"]');
   });
   const endpoint = getAiBackendUrl();
   if (!endpoint) {
-    button.disabled = true;
+    try { button.setAttribute('aria-disabled', 'true'); } catch(_){}
     sectionsMeta.forEach((meta) => {
       const target = sectionNodes[meta.key];
       if (target) target.textContent = chartTranslate('aiSummaryNoBackend', 'Configura la URL de MashIA para usar esta secci\u00f3n.');
     });
     return;
   }
-  button.addEventListener('click', () => {
-    requestAiSummarySections(button, vizData, endpoint, false, sectionsMeta, sectionNodes);
-  });
   if (!card.dataset.autoRequested) {
     card.dataset.autoRequested = '1';
     requestAiSummarySections(button, vizData, endpoint, true, sectionsMeta, sectionNodes);
@@ -774,4 +789,6 @@ try {
   window.renderAspectsTable = renderAspectsTable;
   window.renderAiSummary = renderAiSummary;
 } catch(_){}
+
+
 

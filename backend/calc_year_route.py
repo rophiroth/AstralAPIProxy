@@ -425,6 +425,16 @@ def calc_year():
                     enoch_year = fast_base.get("enoch_year")
                     use_fast_days = True
                     record_reason("Using fast_enoch_calendar days (reduced detail)")
+                    # If fast days lack start/end timestamps, fall back to full build
+                    try:
+                        fd = days[0] if days else {}
+                        if not fd.get("start_utc") or not fd.get("end_utc"):
+                            record_reason("Fast calendar missing start/end; reverting to full build")
+                            use_fast_days = False
+                            days = []
+                    except Exception:
+                        use_fast_days = False
+                        days = []
             except Exception:
                 use_fast_days = False
 
@@ -804,7 +814,8 @@ def calc_year():
                     span_start = _safe_iso(days[0]['start_utc'])
                     span_end = _safe_iso(days[-1]['end_utc'])
                     if span_start is None or span_end is None:
-                        raise ValueError(f"Unparseable ISO bounds for event scan: start={days[0]['start_utc']} end={days[-1]['end_utc']}")
+                        record_reason(f"Unparseable ISO bounds for event scan: start={days[0].get('start_utc')} end={days[-1].get('end_utc')}")
+                        raise ValueError(f"Unparseable ISO bounds for event scan: start={days[0].get('start_utc')} end={days[-1].get('end_utc')}")
                     phase_events = scan_phase_events(span_start, span_end, step_hours=6)
                     dist_events = scan_perigee_apogee(span_start, span_end, step_hours=6)
                 except Exception:

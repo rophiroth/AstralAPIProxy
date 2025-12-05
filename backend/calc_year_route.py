@@ -781,13 +781,13 @@ def calc_year():
                             if len(ymd) >= 3:
                                 y = ymd[0]
                                 if sign == "-" and y.startswith("-"):
-                                y = y[1:]
-                            y_padded = sign + y.zfill(4)
-                            date_norm = "-".join([y_padded, ymd[1], ymd[2]])
-                            return date_norm + rest_time
-                    except Exception:
-                        record_reason("Failed to normalize ISO year; using raw string", traceback.format_exc())
-                    return dt_str
+                                    y = y[1:]
+                                y_padded = sign + y.zfill(4)
+                                date_norm = "-".join([y_padded, ymd[1], ymd[2]])
+                                return date_norm + rest_time
+                        except Exception:
+                            record_reason("Failed to normalize ISO year; using raw string", traceback.format_exc())
+                        return dt_str
 
                     def _safe_iso(dt_str: str):
                         try:

@@ -348,6 +348,24 @@ def calc_year():
             if approx_mode:
                 approx_global = True
 
+            # Parse JD once (needed regardless of fast path)
+            jd = None
+            dt_utc = None
+            bce_mode = False
+            try:
+                dt_local = localize_datetime(date_str, tz_str)
+                dt_utc = dt_local.astimezone(pytz.utc)
+                jd = swe.julday(
+                    dt_utc.year, dt_utc.month, dt_utc.day,
+                    dt_utc.hour + dt_utc.minute / 60 + dt_utc.second / 3600 + dt_utc.microsecond / 3600000000
+                )
+            except Exception:
+                try:
+                    jd = _parse_iso_to_jd(date_str)
+                    bce_mode = True
+                except Exception:
+                    jd = None
+
             # Try fast base to avoid per-day calculate_enoch_date; we still enrich later
             use_fast_days = False
             days = []
@@ -369,19 +387,6 @@ def calc_year():
                 use_fast_days = False
 
             # Base date and Enoch mapping via existing util (needed for fallbacks/enrichment)
-            bce_mode = False
-            if not use_fast_days:
-                try:
-                    dt_local = localize_datetime(date_str, tz_str)
-                    dt_utc = dt_local.astimezone(pytz.utc)
-                    jd = swe.julday(
-                        dt_utc.year, dt_utc.month, dt_utc.day,
-                        dt_utc.hour + dt_utc.minute / 60 + dt_utc.second / 3600 + dt_utc.microsecond / 3600000000
-                    )
-                except Exception:
-                    # Extended ISO (BCE) → JD
-                    jd = _parse_iso_to_jd(date_str)
-                    bce_mode = True
             if approx_mode:
                 base_enoch = _approx_enoch_from_jd(jd, latitude, longitude)
                 approx_global = True

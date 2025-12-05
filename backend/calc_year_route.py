@@ -311,6 +311,9 @@ def build_enoch_table(start_jd: float, enoch_year: int, include_added_week: bool
 
 def calc_year():
         approx_reasons = []
+        def ensure_reason(msg: str):
+            if not approx_reasons:
+                approx_reasons.append(msg)
         def record_reason(msg: str, exc=None):
             """
             Track and log every approximation/fallback reason so it is visible in backend logs.
@@ -608,6 +611,7 @@ def calc_year():
                         phase, illum = _approx_lunar_for_jd(jd_mid)
                         dist_km = None
                         approx_global = True
+                        record_reason("BCE/JD path: using approximate lunar data (Swiss ephemeris unavailable)")
                         # Enoch day approx to avoid Swiss
                         e_day = enoch_for_index(i, jd_mid)
                         # Sunsets via Swiss Ephemeris
@@ -1152,6 +1156,12 @@ def calc_year():
                 resp['quality'] = 'approx'
             else:
                 resp['quality'] = 'full'
+            # If we marked approximate but have no specific reasons, synthesize one so it's visible
+            if resp['quality'] == 'approx' and not approx_reasons:
+                if any((d.get('moon_distance_km') is None for d in days)):
+                    record_reason("Moon distance unavailable for some days; used approximate lunar data")
+                else:
+                    record_reason("Approximate calendar generated (no specific error captured)")
             if approx_reasons:
                 resp['quality_reasons'] = approx_reasons
             return jsonify(resp)

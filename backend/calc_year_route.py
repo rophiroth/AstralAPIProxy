@@ -940,6 +940,18 @@ def calc_year():
                             if isinstance(val, (tuple, list)):
                                 return val[0]
                             return val
+                        def _call_sol_how(jd_val, lon, lat):
+                            try:
+                                return swe.sol_eclipse_how(float(jd_val), 2, (float(lon), float(lat), 0.0))
+                            except Exception as e:
+                                print(f"[calc_year] sol_eclipse_how failed jd={jd_val} type_jd={type(jd_val)} geopos={(lon,lat,0.0)} type_flag={type(2)} err={e}")
+                                raise
+                        def _call_lun_how(jd_val, lon, lat):
+                            try:
+                                return swe.lun_eclipse_how(float(jd_val), 2, (float(lon), float(lat), 0.0))
+                            except Exception as e:
+                                print(f"[calc_year] lun_eclipse_how failed jd={jd_val} type_jd={type(jd_val)} geopos={(lon,lat,0.0)} type_flag={type(2)} err={e}")
+                                raise
                         ec = scan_eclipses_global(span_start, span_end)
                         for ev in ec:
                             bi = bucket_index(ev['time'])
@@ -957,9 +969,8 @@ def calc_year():
                                     record_reason("Failed to tag solar eclipse subtype", traceback.format_exc())
                                 # Local magnitude/obscuration (if available)
                                 try:
-                                    geopos = (float(longitude), float(latitude), 0.0)
                                     jd_val = float(_jd_ut_val(ev['time']))
-                                    retflag, attr = swe.sol_eclipse_how(jd_val, 2, geopos)  # 2 == swe.FLG_SWIEPH
+                                    retflag, attr = _call_sol_how(jd_val, longitude, latitude)
                                     if isinstance(attr, (list, tuple)) and len(attr) > 0:
                                         # attr[0] = magnitude (fraction of diameter)
                                         # attr[1] = obscuration (fraction of solar disc area)
@@ -985,9 +996,8 @@ def calc_year():
                                 except Exception:
                                     record_reason("Failed to tag lunar eclipse subtype", traceback.format_exc())
                                 try:
-                                    geopos = (float(longitude), float(latitude), 0.0)
                                     jd_val = float(_jd_ut_val(ev['time']))
-                                    retflag, attr = swe.lun_eclipse_how(jd_val, 2, geopos)  # 2 == swe.FLG_SWIEPH
+                                    retflag, attr = _call_lun_how(jd_val, longitude, latitude)
                                     # attr[0]=umbral magnitude, attr[2]=penumbral
                                     if isinstance(attr, (list, tuple)) and len(attr) > 0:
                                         mag_umbral = None

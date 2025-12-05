@@ -30,14 +30,16 @@ def default_sunsets(day_dt_utc: datetime, latitude: float, longitude: float) -> 
     try:
         _, data_today = swe.rise_trans(jd0, swe.SUN, 2, geopos)
         jd_s_today = data_today[0]
-    except Exception:
+    except Exception as e:
+        print(f"[fast_enoch_calendar] rise_trans today failed for {day_dt_utc.date()}: {e}")
         jd_s_today = jd0 + 0.75
     jd_prev = jd0 - 1.0
     yb, mb, db, _ = swe.revjul(jd_prev)
     try:
         _, data_prev = swe.rise_trans(swe.julday(int(yb), int(mb), int(db), 0.0), swe.SUN, 2, geopos)
         jd_s_prev = data_prev[0]
-    except Exception:
+    except Exception as e:
+        print(f"[fast_enoch_calendar] rise_trans prev failed for {day_dt_utc.date()}: {e}")
         jd_s_prev = jd_prev + 0.75
     return _jd_to_iso_utc(jd_s_prev), _jd_to_iso_utc(jd_s_today)
 

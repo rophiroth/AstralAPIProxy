@@ -532,14 +532,13 @@ def calc_year():
                         # Midday sample for positions
                         midday = datetime(day_dt_utc.year, day_dt_utc.month, day_dt_utc.day, 12, 0, 0, tzinfo=timezone.utc)
                         jd_mid = swe.julday(midday.year, midday.month, midday.day, 12.0)
-                    try:
-                        lon_sun, lon_moon, phase, illum, dist_km = sun_moon_state(jd_mid)
-                    except Exception:
-                    lon_sun = None; lon_moon = None
-                    phase, illum = _approx_lunar_for_jd(jd_mid)
-                    approx_global = True
-                        dist_km = None
-                        approx_global = True
+                        try:
+                            lon_sun, lon_moon, phase, illum, dist_km = sun_moon_state(jd_mid)
+                        except Exception:
+                            lon_sun = None; lon_moon = None
+                            phase, illum = _approx_lunar_for_jd(jd_mid)
+                            dist_km = None
+                            approx_global = True
                         # Enoch day
                         e_day = enoch_for_index(i, jd_mid)
                         # Sunset bounds
@@ -576,6 +575,7 @@ def calc_year():
                         jd_mid = swe.julday(int(y), int(mo), int(d), 12.0)
                         lon_sun = None; lon_moon = None
                         phase, illum = _approx_lunar_for_jd(jd_mid)
+                        approx_global = True
                         # Enoch day approx to avoid Swiss
                         e_day = enoch_for_index(i, jd_mid)
                         # Sunsets via Swiss Ephemeris

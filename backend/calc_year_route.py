@@ -239,7 +239,10 @@ def day_bounds_utc(greg_date: datetime, latitude: float, longitude: float, tz_st
             s_prev = astral_sun(loc.observer, date=(local_day - timedelta(days=1)).date(), tzinfo=tz)["sunset"]
             return s_prev.astimezone(pytz.utc), s_today.astimezone(pytz.utc)
     except Exception:
-        pass
+        try:
+            print("[approx_reason] Astral sunset calc failed; using Swiss rise_trans fallback")
+        except Exception:
+            pass
     try:
         geopos = (longitude, latitude, 0)
         jd0 = swe.julday(greg_date.year, greg_date.month, greg_date.day, 0.0)
@@ -511,7 +514,7 @@ def calc_year():
                         day_dict['moon_sign_start'] = sign_start
                         day_dict['moon_sign_end'] = sign_end
                     except Exception:
-                        pass
+                        record_reason("Failed to derive moon sign start/end for day", traceback.format_exc())
                     # Fase e iluminación al inicio/fin del día enojeano
                     phase_start, illum_start = s_state[2], s_state[3]
                     phase_end, illum_end = e_state[2], e_state[3]
@@ -536,8 +539,8 @@ def calc_year():
                         day_dict['moon_illum_start'] = round(il_s, 6)
                         day_dict['moon_illum_end'] = round(il_e, 6)
                     except Exception:
-                        pass
-    
+                        record_reason("Failed to assign moon phase/illum for day", traceback.format_exc())
+
                 # Política: 100% sólo si no hubo cruce de signo; si hubo, reportar mezcla exacta.
                 segs = mix.get('segments') or []
                 crosses = sum(1 for s in segs if (s.get('share') or 0) > 0) > 1
@@ -557,7 +560,7 @@ def calc_year():
                             day_dict['moon_sign_cusp_utc'] = cusp_time.astimezone(timezone.utc).isoformat()
                             day_dict['moon_sign_cusp_deg'] = cusp_deg
                     except Exception:
-                        pass
+                        record_reason("Failed to compute moon sign cusp crossing", traceback.format_exc())
                 else:
                     # Día puro
                     day_dict.pop('moon_sign_secondary', None)
@@ -778,13 +781,13 @@ def calc_year():
                             if len(ymd) >= 3:
                                 y = ymd[0]
                                 if sign == "-" and y.startswith("-"):
-                                    y = y[1:]
-                                y_padded = sign + y.zfill(4)
-                                date_norm = "-".join([y_padded, ymd[1], ymd[2]])
-                                return date_norm + rest_time
-                        except Exception:
-                            pass
-                        return dt_str
+                                y = y[1:]
+                            y_padded = sign + y.zfill(4)
+                            date_norm = "-".join([y_padded, ymd[1], ymd[2]])
+                            return date_norm + rest_time
+                    except Exception:
+                        record_reason("Failed to normalize ISO year; using raw string", traceback.format_exc())
+                    return dt_str
 
                     def _safe_iso(dt_str: str):
                         try:
@@ -855,7 +858,7 @@ def calc_year():
                                 d['supermoon'] = True
                                 d['supermoon_utc'] = ft.astimezone(timezone.utc).isoformat()
                 except Exception:
-                    pass
+                    record_reason("Failed while marking supermoon events", traceback.format_exc())
     
                 # Equinoxes & solstices mapped into days
                 span_start = None; span_end = None
@@ -873,6 +876,7 @@ def calc_year():
                             span_end = _parse_iso(_d['end_utc'])
                 except Exception:
                     span_start = None; span_end = None
+                    record_reason("Failed to parse span for equinox/solstice mapping", traceback.format_exc())
                 try:
                     if span_start and span_end:
                         years = sorted(set([span_start.year, span_end.year]))
@@ -891,7 +895,7 @@ def calc_year():
                                 d['solstice'] = ev.get('season') or 'solstice'
                                 d['solstice_utc'] = ev['time'].astimezone(timezone.utc).isoformat()
                 except Exception:
-                    pass
+                    record_reason("Failed while mapping equinox/solstice events", traceback.format_exc())
     
                 # Global eclipses (best-effort) + local magnitude at user's position
                 try:
@@ -910,7 +914,7 @@ def calc_year():
                                     if kind:
                                         d['solar_eclipse_kind'] = str(kind)
                                 except Exception:
-                                    pass
+                                    record_reason("Failed to tag solar eclipse subtype", traceback.format_exc())
                                 # Local magnitude/obscuration (if available)
                                 try:
                                     geopos = (longitude, latitude, 0)
@@ -922,14 +926,14 @@ def calc_year():
                                             if attr[0] is not None:
                                                 d['solar_eclipse_mag'] = round(float(attr[0]), 3)
                                         except Exception:
-                                            pass
+                                            record_reason("Failed to set solar eclipse magnitude", traceback.format_exc())
                                         try:
                                             if len(attr) > 1 and attr[1] is not None:
                                                 d['solar_eclipse_obsc'] = round(float(attr[1]), 3)
                                         except Exception:
-                                            pass
+                                            record_reason("Failed to set solar eclipse obscuration", traceback.format_exc())
                                 except Exception:
-                                    pass
+                                    record_reason("Failed computing local solar eclipse attributes", traceback.format_exc())
                             elif ev.get('type') == 'lunar':
                                 d['lunar_eclipse'] = True
                                 d['lunar_eclipse_utc'] = ev['time'].astimezone(timezone.utc).isoformat()
@@ -938,7 +942,7 @@ def calc_year():
                                     if kind:
                                         d['lunar_eclipse_kind'] = str(kind)
                                 except Exception:
-                                    pass
+                                    record_reason("Failed to tag lunar eclipse subtype", traceback.format_exc())
                                 try:
                                     geopos = (longitude, latitude, 0)
                                     retflag, attr = swe.lun_eclipse_how(jd_utc(ev['time']), swe.FLG_SWIEPH, geopos)
@@ -965,9 +969,9 @@ def calc_year():
                                         if mag_penumbral is not None:
                                             d['lunar_eclipse_mag_penumbral'] = round(mag_penumbral, 3)
                                 except Exception:
-                                    pass
+                                    record_reason("Failed computing local lunar eclipse attributes", traceback.format_exc())
                 except Exception:
-                    pass
+                    record_reason("Failed during eclipse mapping", traceback.format_exc())
     
                 # Simple planetary alignments (add planets, span and score)
                 try:
@@ -996,13 +1000,13 @@ def calc_year():
                             name_map[swe.NEPTUNE] = 'Neptune'
                             name_map[swe.PLUTO] = 'Pluto'
                         except Exception:
-                            pass
+                            record_reason("Failed to map outer planet names for alignments", traceback.format_exc())
                         # Luminaries
                         try:
                             name_map[swe.SUN] = 'Sun'
                             name_map[swe.MOON] = 'Moon'
                         except Exception:
-                            pass
+                            record_reason("Failed to map luminary names for alignments", traceback.format_exc())
                         # Aggregate multiple alignments per day: dedupe by planet set, keep tightest and/or highest count
                         per_day = {}
                         for ev in al:
@@ -1113,7 +1117,7 @@ def calc_year():
                                             'offset': float(offset) if (offset is not None) else None,
                                         }
                         except Exception:
-                            pass
+                            record_reason("Failed while scanning pair aspects", traceback.format_exc())
                         # Flush aggregates into day dicts
                         for bi, recs in per_day.items():
                             d = days[bi]
@@ -1133,7 +1137,7 @@ def calc_year():
                                     if best.get('score') is not None:
                                         d['alignment_score'] = best['score']
                                 except Exception:
-                                    pass
+                                    record_reason("Failed while summarizing alignments", traceback.format_exc())
                             # detailed list of all distinct alignments for the day
                             try:
                                 items = []
@@ -1154,9 +1158,9 @@ def calc_year():
                                 if items:
                                     d['alignments'] = items
                             except Exception:
-                                pass
+                                record_reason("Failed while listing alignments", traceback.format_exc())
                 except Exception:
-                    pass
+                    record_reason("Failed during alignment scan", traceback.format_exc())
     
             resp = {
                 'ok': True,

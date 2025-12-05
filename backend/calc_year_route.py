@@ -563,9 +563,9 @@ def calc_year():
                             'day_of_year': i + 1,
                             'start_utc': (s_prev if isinstance(s_prev, str) else s_prev.isoformat()),
                             'end_utc': (s_today if isinstance(s_today, str) else s_today.isoformat()),
-                            'moon_phase_angle_deg': round(phase, 3),
-                            'moon_illum': round(illum, 6),
-                            'moon_distance_km': round(dist_km, 1),
+                            'moon_phase_angle_deg': round(phase, 3) if phase is not None else None,
+                            'moon_illum': round(illum, 6) if illum is not None else None,
+                            'moon_distance_km': round(dist_km, 1) if dist_km is not None else None,
                             'moon_sign': moon_sign,
                             'moon_zodiac_mode': zodiac_mode
                         }
@@ -580,6 +580,7 @@ def calc_year():
                         jd_mid = swe.julday(int(y), int(mo), int(d), 12.0)
                         lon_sun = None; lon_moon = None
                         phase, illum = _approx_lunar_for_jd(jd_mid)
+                        dist_km = None
                         approx_global = True
                         # Enoch day approx to avoid Swiss
                         e_day = enoch_for_index(i, jd_mid)
@@ -612,9 +613,9 @@ def calc_year():
                             'day_of_year': i + 1,
                             'start_utc': _jd_to_iso_utc(jd_s_prev),
                             'end_utc': _jd_to_iso_utc(jd_s_today),
-                            'moon_phase_angle_deg': round(phase, 3),
-                            'moon_illum': round(illum, 6),
-                            'moon_distance_km': round(dist_km, 1),
+                            'moon_phase_angle_deg': round(phase, 3) if phase is not None else None,
+                            'moon_illum': round(illum, 6) if illum is not None else None,
+                            'moon_distance_km': round(dist_km, 1) if dist_km is not None else None,
                             'moon_sign': moon_sign,
                             'moon_zodiac_mode': zodiac_mode
                         }

@@ -967,11 +967,13 @@ def calc_year():
                             try:
                                 jd_f = float(jd_val)
                                 flg = int(flag)
-                                geopos = (float(lon), float(lat), 0.0)
+                                geopos = [float(lon), float(lat), 0.0]
                                 return swe.sol_eclipse_how(jd_f, flg, geopos)
                             except Exception as e:
                                 try:
-                                    print(f"[calc_year] sol_eclipse_how failed jd={jd_val} type_jd={type(jd_val)} flag={flag} type_flag={type(flag)} geopos={(lon,lat,0.0)} err={e}")
+                                    msg = f"[calc_year] sol_eclipse_how failed jd={jd_val} type_jd={type(jd_val)} flag={flag} type_flag={type(flag)} geopos={(lon,lat,0.0)} err={e}"
+                                    print(msg)
+                                    record_reason(msg)
                                 except Exception:
                                     pass
                                 raise
@@ -979,11 +981,13 @@ def calc_year():
                             try:
                                 jd_f = float(jd_val)
                                 flg = int(flag)
-                                geopos = (float(lon), float(lat), 0.0)
+                                geopos = [float(lon), float(lat), 0.0]
                                 return swe.lun_eclipse_how(jd_f, flg, geopos)
                             except Exception as e:
                                 try:
-                                    print(f"[calc_year] lun_eclipse_how failed jd={jd_val} type_jd={type(jd_val)} flag={flag} type_flag={type(flag)} geopos={(lon,lat,0.0)} err={e}")
+                                    msg = f"[calc_year] lun_eclipse_how failed jd={jd_val} type_jd={type(jd_val)} flag={flag} type_flag={type(flag)} geopos={(lon,lat,0.0)} err={e}"
+                                    print(msg)
+                                    record_reason(msg)
                                 except Exception:
                                     pass
                                 raise

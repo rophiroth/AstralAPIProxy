@@ -900,6 +900,12 @@ def calc_year():
                 # Global eclipses (best-effort) + local magnitude at user's position
                 try:
                     if span_start and span_end:
+                        # Helper: jd_utc may return tuple; take the UT JD component
+                        def _jd_ut_val(t):
+                            val = jd_utc(t)
+                            if isinstance(val, (tuple, list)):
+                                return val[0]
+                            return val
                         ec = scan_eclipses_global(span_start, span_end)
                         for ev in ec:
                             bi = bucket_index(ev['time'])
@@ -918,7 +924,7 @@ def calc_year():
                                 # Local magnitude/obscuration (if available)
                                 try:
                                     geopos = (longitude, latitude, 0)
-                                    retflag, attr = swe.sol_eclipse_how(jd_utc(ev['time']), swe.FLG_SWIEPH, geopos)
+                                    retflag, attr = swe.sol_eclipse_how(_jd_ut_val(ev['time']), swe.FLG_SWIEPH, geopos)
                                     if isinstance(attr, (list, tuple)) and len(attr) > 0:
                                         # attr[0] = magnitude (fraction of diameter)
                                         # attr[1] = obscuration (fraction of solar disc area)
@@ -945,7 +951,7 @@ def calc_year():
                                     record_reason("Failed to tag lunar eclipse subtype", traceback.format_exc())
                                 try:
                                     geopos = (longitude, latitude, 0)
-                                    retflag, attr = swe.lun_eclipse_how(jd_utc(ev['time']), swe.FLG_SWIEPH, geopos)
+                                    retflag, attr = swe.lun_eclipse_how(_jd_ut_val(ev['time']), swe.FLG_SWIEPH, geopos)
                                     # attr[0]=umbral magnitude, attr[2]=penumbral
                                     if isinstance(attr, (list, tuple)) and len(attr) > 0:
                                         mag_umbral = None

@@ -1,5 +1,6 @@
 import traceback
 import re
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
 import pytz
@@ -357,6 +358,12 @@ def calc_year():
             tz_str = data.get("timezone", "UTC")
             zodiac_mode = (data.get("zodiac_mode") or "tropical").lower()
             approx_global = False
+            # Ensure Swiss Ephemeris uses bundled files (helps when Render resets working dir)
+            try:
+                ephe_root = Path(__file__).resolve().parent.parent / "sweph" / "ephe"
+                swe.set_ephe_path(str(ephe_root))
+            except Exception:
+                pass
             # Optional alignment tuning
             try:
                 align_min_count = int(data.get('align_min_count') if data.get('align_min_count') is not None else (data.get('align_count') if data.get('align_count') is not None else 4))

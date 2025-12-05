@@ -424,6 +424,7 @@ def calc_year():
                     days = fast_base["days"]
                     enoch_year = fast_base.get("enoch_year")
                     use_fast_days = True
+                    record_reason("Using fast_enoch_calendar days (reduced detail)")
             except Exception:
                 use_fast_days = False
 
@@ -868,6 +869,13 @@ def calc_year():
                         pass
                 except Exception:
                     record_reason("Failed while marking supermoon events", traceback.format_exc())
+
+                # If no eclipses were found at all, log that fact (so quality shows reason)
+                try:
+                    if not ec:
+                        record_reason("No eclipses found in span (global scan returned 0)")
+                except Exception:
+                    pass
     
                 # Equinoxes & solstices mapped into days
                 span_start = None; span_end = None
@@ -1176,8 +1184,24 @@ def calc_year():
                                     d['alignments'] = items
                             except Exception:
                                 record_reason("Failed while listing alignments", traceback.format_exc())
+                    else:
+                        record_reason("No alignments span computed (missing span_start/span_end)")
                 except Exception:
                     record_reason("Failed during alignment scan", traceback.format_exc())
+                # If alignments list ended empty, record reason to surface approximation
+                try:
+                    if not span_start or not span_end:
+                        pass
+                    else:
+                        has_align = False
+                        for d in days:
+                            if d.get('alignments') or d.get('alignment'):
+                                has_align = True
+                                break
+                        if not has_align:
+                            record_reason("No alignments detected for given thresholds")
+                except Exception:
+                    pass
     
             resp = {
                 'ok': True,

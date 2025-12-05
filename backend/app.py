@@ -259,17 +259,20 @@ def calculate():
             else:
                 raise
         # Planets (may fail if ephemeris files missing)
+        approx_flags = {'enoch': False, 'planets': False}
         try:
             results = calculate_planets(jd, latitude, longitude)
         except Exception as _e:
             traceback.print_exc()
             results = { 'error': 'ephemeris-missing' }
+            approx_flags['planets'] = True
         # Enoch mapping (fallback to approximate if precise fails)
         try:
             enoch_data = calculate_enoch_date(jd, latitude, longitude, tz_str)
         except Exception as _e:
             traceback.print_exc()
             enoch_data = _approx_enoch_from_jd(jd, latitude, longitude)
+            approx_flags['enoch'] = True
         # Houses (optional)
         try:
             houses_data = calculate_asc_mc_and_houses(jd, latitude, longitude)
@@ -279,7 +282,9 @@ def calculate():
             "julian_day": jd,
             "planets": results,
             "enoch": enoch_data,
-            "houses_data": houses_data
+            "houses_data": houses_data,
+            "quality": ("approx" if any(approx_flags.values()) else "full"),
+            "approx": approx_flags
         })
     except Exception as e:
         traceback.print_exc()

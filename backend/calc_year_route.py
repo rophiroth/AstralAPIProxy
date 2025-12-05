@@ -317,6 +317,7 @@ def calc_year():
             longitude = float(data.get("longitude"))
             tz_str = data.get("timezone", "UTC")
             zodiac_mode = (data.get("zodiac_mode") or "tropical").lower()
+            approx_global = False
             # Optional alignment tuning
             try:
                 align_min_count = int(data.get('align_min_count') if data.get('align_min_count') is not None else (data.get('align_count') if data.get('align_count') is not None else 4))
@@ -344,6 +345,8 @@ def calc_year():
             # Force approximate mode if requested (avoids any Swiss-dependent calls except julday/revjul)
             approx_flag_raw = str(data.get('approx') or data.get('mode') or '').strip().lower()
             approx_mode = approx_flag_raw in ('1','true','yes','on','approx')
+            if approx_mode:
+                approx_global = True
 
             # Try fast base to avoid per-day calculate_enoch_date; we still enrich later
             use_fast_days = False
@@ -379,14 +382,16 @@ def calc_year():
                     # Extended ISO (BCE) → JD
                     jd = _parse_iso_to_jd(date_str)
                     bce_mode = True
-                if approx_mode:
+            if approx_mode:
+                base_enoch = _approx_enoch_from_jd(jd, latitude, longitude)
+                approx_global = True
+            else:
+                try:
+                    base_enoch = calculate_enoch_date(jd, latitude, longitude, tz_str)
+                except Exception:
+                    traceback.print_exc()
                     base_enoch = _approx_enoch_from_jd(jd, latitude, longitude)
-                else:
-                    try:
-                        base_enoch = calculate_enoch_date(jd, latitude, longitude, tz_str)
-                    except Exception:
-                        traceback.print_exc()
-                        base_enoch = _approx_enoch_from_jd(jd, latitude, longitude)
+                    approx_global = True
                 enoch_year = base_enoch.get('enoch_year')
                 enoch_day_of_year = base_enoch.get('enoch_day_of_year')
                 # Precompute Enoch calendar to avoid recomputing per day
@@ -527,12 +532,14 @@ def calc_year():
                         # Midday sample for positions
                         midday = datetime(day_dt_utc.year, day_dt_utc.month, day_dt_utc.day, 12, 0, 0, tzinfo=timezone.utc)
                         jd_mid = swe.julday(midday.year, midday.month, midday.day, 12.0)
-                        try:
-                            lon_sun, lon_moon, phase, illum, dist_km = sun_moon_state(jd_mid)
-                        except Exception:
-                            lon_sun = None; lon_moon = None
-                            phase, illum = _approx_lunar_for_jd(jd_mid)
-                            dist_km = None
+                    try:
+                        lon_sun, lon_moon, phase, illum, dist_km = sun_moon_state(jd_mid)
+                    except Exception:
+                    lon_sun = None; lon_moon = None
+                    phase, illum = _approx_lunar_for_jd(jd_mid)
+                    approx_global = True
+                        dist_km = None
+                        approx_global = True
                         # Enoch day
                         e_day = enoch_for_index(i, jd_mid)
                         # Sunset bounds
@@ -1067,8 +1074,10 @@ def calc_year():
                 'days': days
             }
             # Signal quality when approximations were used
-            if approx_mode or any((d.get('moon_distance_km') is None for d in days)):
+            if approx_mode or approx_global or any((d.get('moon_distance_km') is None for d in days)):
                 resp['quality'] = 'approx'
+            else:
+                resp['quality'] = 'full'
             return jsonify(resp)
         except Exception as e:
             traceback.print_exc()

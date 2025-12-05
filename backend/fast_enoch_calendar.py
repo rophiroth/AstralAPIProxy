@@ -110,6 +110,16 @@ def build_fast_enoch_calendar(
             start_iso, end_iso = resolver(day_dt_utc, latitude, longitude)
         except Exception:
             start_iso, end_iso = None, None
+        # Fallback if resolver returned None values (should not propagate)
+        if not start_iso or not end_iso:
+            try:
+                jd0 = swe.julday(day_dt_utc.year, day_dt_utc.month, day_dt_utc.day, 0.0)
+                jd_prev = jd0 - 1.0
+                start_iso = _jd_to_iso_utc(jd_prev + 0.75)
+                end_iso = _jd_to_iso_utc(jd0 + 0.75)
+            except Exception:
+                start_iso = start_iso or None
+                end_iso = end_iso or None
         day_of_year = i + 1
         added_week_flag = include_added_week and day_of_year > 364
         days.append(

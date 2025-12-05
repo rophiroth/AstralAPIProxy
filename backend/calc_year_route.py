@@ -968,7 +968,8 @@ def calc_year():
                                 jd_f = float(jd_val)
                                 flg = int(flag)
                                 geopos = [float(lon), float(lat), 0.0]
-                                return swe.sol_eclipse_how(jd_f, flg, geopos)
+                                # SwissEphem expects order (jd, geopos, flags)
+                                return swe.sol_eclipse_how(jd_f, geopos, flg)
                             except Exception as e:
                                 try:
                                     msg = f"[calc_year] sol_eclipse_how failed jd={jd_val} type_jd={type(jd_val)} flag={flag} type_flag={type(flag)} geopos={(lon,lat,0.0)} err={e}"
@@ -982,7 +983,8 @@ def calc_year():
                                 jd_f = float(jd_val)
                                 flg = int(flag)
                                 geopos = [float(lon), float(lat), 0.0]
-                                return swe.lun_eclipse_how(jd_f, flg, geopos)
+                                # SwissEphem expects order (jd, geopos, flags)
+                                return swe.lun_eclipse_how(jd_f, geopos, flg)
                             except Exception as e:
                                 try:
                                     msg = f"[calc_year] lun_eclipse_how failed jd={jd_val} type_jd={type(jd_val)} flag={flag} type_flag={type(flag)} geopos={(lon,lat,0.0)} err={e}"
@@ -992,10 +994,9 @@ def calc_year():
                                     pass
                                 raise
                         ec = scan_eclipses_global(span_start, span_end)
-                        # Disable local magnitude calls by default to avoid SwissEphemeris bindings that reject geopos/flag combos
-                        solar_local_failed = True
-                        lunar_local_failed = True
-                        record_reason("Skipping local eclipse magnitude calls (known flag/geopos incompatibility)")
+                        # Allow local magnitude calls; if one fails, disable subsequent ones for that type
+                        solar_local_failed = False
+                        lunar_local_failed = False
                         for ev in ec:
                             bi = bucket_index(ev['time'])
                             if bi is None:

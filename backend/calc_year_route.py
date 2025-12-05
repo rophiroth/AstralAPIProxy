@@ -1174,6 +1174,11 @@ def calc_year():
                     record_reason("Approximate calendar generated (no specific error captured)")
             if approx_reasons:
                 resp['quality_reasons'] = approx_reasons
+            # Emit a one-line summary of quality so it is always visible in logs/stdout
+            try:
+                print(f"[calc_year] quality={resp['quality']} reasons={resp.get('quality_reasons', [])}")
+            except Exception:
+                pass
             return jsonify(resp)
         except Exception as e:
             traceback.print_exc()

@@ -789,8 +789,10 @@ def calc_year():
                 # Map events to containing day bucket
                 def bucket_index(t):
                     for idx, d in enumerate(days):
-                        st = datetime.fromisoformat(d['start_utc'].replace('Z','+00:00'))
-                        en = datetime.fromisoformat(d['end_utc'].replace('Z','+00:00'))
+                        st = _safe_iso(d['start_utc'])
+                        en = _safe_iso(d['end_utc'])
+                        if st is None or en is None:
+                            continue
                         if st <= t <= en:
                             return idx
                     return None

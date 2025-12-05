@@ -432,6 +432,9 @@ def calc_year():
                             record_reason("Fast calendar missing start/end; reverting to full build")
                             use_fast_days = False
                             days = []
+                        # Also treat fast path as approximate to avoid silent “full” label
+                        else:
+                            approx_global = True
                     except Exception:
                         use_fast_days = False
                         days = []
@@ -887,6 +890,12 @@ def calc_year():
                         record_reason("No eclipses found in span (global scan returned 0)")
                 except Exception:
                     pass
+                # If no distance events (perigee/apogee) were found, surface it too
+                try:
+                    if not dist_events:
+                        record_reason("No perigee/apogee events found in span")
+                except Exception:
+                    pass
     
                 # Equinoxes & solstices mapped into days
                 span_start = None; span_end = None
@@ -1201,14 +1210,8 @@ def calc_year():
                     record_reason("Failed during alignment scan", traceback.format_exc())
                 # If alignments list ended empty, record reason to surface approximation
                 try:
-                    if not span_start or not span_end:
-                        pass
-                    else:
-                        has_align = False
-                        for d in days:
-                            if d.get('alignments') or d.get('alignment'):
-                                has_align = True
-                                break
+                    if span_start and span_end:
+                        has_align = any((d.get('alignments') or d.get('alignment')) for d in days)
                         if not has_align:
                             record_reason("No alignments detected for given thresholds")
                 except Exception:

@@ -318,17 +318,27 @@ def calc_year():
             """
             Track and log every approximation/fallback reason so it is visible in backend logs.
             """
-            approx_reasons.append(msg if exc is None else f"{msg}: {exc}")
+            msg_text = msg if exc is None else f"{msg}: {exc}"
+            approx_reasons.append(msg_text)
             try:
                 if exc:
-                    current_app.logger.exception(msg)
+                    current_app.logger.exception(msg_text)
                 else:
-                    current_app.logger.warning(msg)
+                    current_app.logger.warning(msg_text)
             except Exception:
-                # Fallback to stdout to keep visibility in hosted logs
-                print(msg)
+                pass
+            # Always emit to stdout/stderr so it shows up in host logs
+            try:
+                print(f"[approx_reason] {msg_text}")
                 if exc:
+                    print(exc)
+            except Exception:
+                pass
+            if exc:
+                try:
                     traceback.print_exc()
+                except Exception:
+                    pass
         try:
             data = request.get_json() or {}
             date_str = data.get("datetime")

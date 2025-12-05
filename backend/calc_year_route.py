@@ -743,9 +743,37 @@ def calc_year():
             if days:
                 # Event scanning only when bounds are standard ISO parseable
                 try:
+                    def _pad_iso_year(dt_str: str) -> str:
+                        # Normalize year to at least 4 digits for fromisoformat; keep sign if present.
+                        try:
+                            if not dt_str:
+                                return dt_str
+                            # Split "Y-M-DThh:mm:ss"
+                            if dt_str[0] in "+-":
+                                sign = dt_str[0]
+                                rest = dt_str[1:]
+                            else:
+                                sign = ""
+                                rest = dt_str
+                            parts = rest.split("T", 1)
+                            date_part = parts[0]
+                            rest_time = "T" + parts[1] if len(parts) > 1 else ""
+                            ymd = date_part.split("-")
+                            if len(ymd) >= 3:
+                                y = ymd[0]
+                                if sign == "-" and y.startswith("-"):
+                                    y = y[1:]
+                                y_padded = sign + y.zfill(4)
+                                date_norm = "-".join([y_padded, ymd[1], ymd[2]])
+                                return date_norm + rest_time
+                        except Exception:
+                            pass
+                        return dt_str
+
                     def _safe_iso(dt_str: str):
                         try:
-                            return datetime.fromisoformat(dt_str.replace('Z','+00:00'))
+                            norm = _pad_iso_year(dt_str.replace('Z','+00:00'))
+                            return datetime.fromisoformat(norm)
                         except Exception:
                             return None
                     span_start = _safe_iso(days[0]['start_utc'])

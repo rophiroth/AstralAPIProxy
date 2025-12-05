@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 import math
+from functools import lru_cache
 import pytz
 import swisseph as swe
 
@@ -18,7 +19,14 @@ def _to_tt(jd_ut):
     # Approx: TT ~= UT + 69 seconds / 86400 (not critical for daily phase)
     return jd_ut + (69.0/86400.0)
 
-def sun_moon_state(jd_ut):
+def _round_jd(jd: float) -> float:
+    """Round JD to avoid exploding cache keys; 1e-6 days ~0.0864s."""
+    try:
+        return round(float(jd), 6)
+    except Exception:
+        return float(jd)
+
+def _sun_moon_state_raw(jd_ut):
     jd_tt = _to_tt(jd_ut)
     flags = swe.FLG_SWIEPH
     mres = swe.calc(jd_tt, swe.MOON, flags)[0]
@@ -29,6 +37,14 @@ def sun_moon_state(jd_ut):
     phase = _norm360(lon_moon - lon_sun)
     illum = 0.5*(1.0 - math.cos(math.radians(phase)))
     return lon_sun, lon_moon, phase, illum, dist_moon_km
+
+@lru_cache(maxsize=200_000)
+def _sun_moon_state_cached(jd_ut_rounded: float):
+    return _sun_moon_state_raw(jd_ut_rounded)
+
+def sun_moon_state(jd_ut):
+    """Cached Sun/Moon state keyed by rounded JD to cut Swiss calls."""
+    return _sun_moon_state_cached(_round_jd(jd_ut))
 
 def jd_utc(dt_utc: datetime) -> float:
     if dt_utc.tzinfo is None:
@@ -417,20 +433,25 @@ def scan_eclipses_global(start: datetime, end: datetime) -> list:
     return events
 
 # --- Simple planetary alignment detector ---
-def _planet_longitudes_deg(dt_utc: datetime, ids: list = None) -> dict:
-    jd = jd_utc(dt_utc)
-    jd_tt = _to_tt(jd)
+@lru_cache(maxsize=200_000)
+def _planet_longitudes_deg_jd_cached(jd_key: float, ids_key: tuple):
+    jd_tt = _to_tt(jd_key)
     flags = swe.FLG_SWIEPH
-    if ids is None:
-        ids = [swe.MERCURY, swe.VENUS, swe.MARS, swe.JUPITER, swe.SATURN]
     longs = {}
-    for pid in ids:
+    for pid in ids_key:
         try:
             lon = swe.calc(jd_tt, pid, flags)[0][0]
             longs[pid] = _norm360(lon)
         except Exception:
             pass
     return longs
+
+def _planet_longitudes_deg(dt_utc: datetime, ids: list = None) -> dict:
+    jd = jd_utc(dt_utc)
+    if ids is None:
+        ids = [swe.MERCURY, swe.VENUS, swe.MARS, swe.JUPITER, swe.SATURN]
+    ids_key = tuple(ids)
+    return _planet_longitudes_deg_jd_cached(_round_jd(jd), ids_key)
 
 def scan_alignments_simple(
     start: datetime,
@@ -730,3 +751,308 @@ def lunar_sign_from_longitude(lon_deg: float, mode='tropical') -> str:
     lon = _norm360(lon_deg)
     idx = int(lon // 30) % 12
     return ZODIAC_TROPICAL[idx]
+
+# --- JD-based scanners (avoid datetime range limits) ---
+
+def _jd_to_iso_utc(jd: float) -> str:
+    """Format a JD as an ISO-like UTC string supporting extended years (BCE)."""
+    y, mo, d, hour = swe.revjul(jd)
+    hh = int(hour)
+    mm_f = (hour - hh) * 60.0
+    mi = int(mm_f)
+    ss = int(round((mm_f - mi) * 60.0))
+    if ss == 60:
+        ss = 0; mi += 1
+    if mi == 60:
+        mi = 0; hh += 1
+    y_str = (f"{int(y):04d}" if int(y) >= 0 else f"{int(y)}")
+    return f"{y_str}-{int(mo):02d}-{int(d):02d}T{hh:02d}:{mi:02d}:{ss:02d}Z"
+
+def _refine_phase_root_jd(jd0: float, jd1: float, target_deg: float, max_iter: int = 30) -> float:
+    def f(jd):
+        return _wrap180(sun_moon_state(jd)[2] - target_deg)
+    a, b = jd0, jd1
+    fa, fb = f(a), f(b)
+    if fa == 0:
+        return a
+    if fb == 0:
+        return b
+    if fa*fb > 0:
+        return a if abs(fa) < abs(fb) else b
+    for _ in range(max_iter):
+        mid = 0.5*(a + b)
+        fm = f(mid)
+        if abs(fm) < 1e-4:
+            return mid
+        if fa*fm <= 0:
+            b, fb = mid, fm
+        else:
+            a, fa = mid, fm
+    return 0.5*(a + b)
+
+def scan_phase_events_jd(start_jd: float, end_jd: float, step_hours: float = 8.0):
+    """Return list of lunar phase events between two JDs."""
+    events = []
+    targets = [(0.0, 'new'), (90.0, 'first_quarter'), (180.0, 'full'), (270.0, 'last_quarter')]
+    step_days = max(1.0, float(step_hours)) / 24.0
+    jd = start_jd
+    prev_vals = {}
+    while jd <= end_jd + 1e-9:
+        phase = sun_moon_state(jd)[2]
+        for tgt, name in targets:
+            val = _wrap180(phase - tgt)
+            if name in prev_vals:
+                jd_prev, v_prev = prev_vals[name]
+                if v_prev == 0:
+                    events.append({'type': name, 'jd': jd_prev, 'iso': _jd_to_iso_utc(jd_prev)})
+                elif val == 0 or (v_prev < 0 and val > 0) or (v_prev > 0 and val < 0):
+                    root = _refine_phase_root_jd(jd_prev, jd, tgt)
+                    events.append({'type': name, 'jd': root, 'iso': _jd_to_iso_utc(root)})
+            prev_vals[name] = (jd, val)
+        jd += step_days
+    return events
+
+def _refine_extremum_jd(jd0: float, jd1: float, mode='min', iters: int = 20):
+    def dist_at(jd):
+        return sun_moon_state(jd)[4]
+    a, b = jd0, jd1
+    for _ in range(iters):
+        d = (b - a) / 3.0
+        m1 = a + d
+        m2 = b - d
+        f1 = dist_at(m1)
+        f2 = dist_at(m2)
+        if mode == 'min':
+            if f1 < f2:
+                b = m2
+            else:
+                a = m1
+        else:
+            if f1 > f2:
+                b = m2
+            else:
+                a = m1
+    mid = 0.5*(a + b)
+    return mid, dist_at(mid)
+
+def scan_perigee_apogee_jd(start_jd: float, end_jd: float, step_hours: float = 8.0):
+    step_days = max(1.0, float(step_hours)) / 24.0
+    samples = []
+    jd = start_jd
+    while jd <= end_jd + 1e-9:
+        d = sun_moon_state(jd)[4]
+        samples.append((jd, d))
+        jd += step_days
+    events = []
+    for i in range(1, len(samples)-1):
+        jd_prev, d_prev = samples[i-1]
+        jd_mid, d_mid = samples[i]
+        jd_next, d_next = samples[i+1]
+        if d_mid < d_prev and d_mid < d_next:
+            jb, db = _refine_extremum_jd(jd_prev, jd_next, mode='min')
+            events.append({'type': 'perigee', 'jd': jb, 'distance_km': db, 'iso': _jd_to_iso_utc(jb)})
+        if d_mid > d_prev and d_mid > d_next:
+            jb, db = _refine_extremum_jd(jd_prev, jd_next, mode='max')
+            events.append({'type': 'apogee', 'jd': jb, 'distance_km': db, 'iso': _jd_to_iso_utc(jb)})
+    return events
+
+def scan_eclipses_global_jd(start_jd: float, end_jd: float) -> list:
+    """Eclipse search using JDs; returns events with jd and iso."""
+    events = []
+    try:
+        jd = start_jd
+        # Solar
+        while jd < end_jd:
+            r = swe.sol_eclipse_when_glob(jd, swe.FLG_SWIEPH, 0)
+            if not (isinstance(r, tuple) and len(r) >= 2):
+                break
+            retflag = r[0] if len(r) > 0 else 0
+            tret = r[1]
+            if tret and len(tret) > 0 and tret[0] > 0:
+                t = tret[0]
+                kind = 'eclipse'
+                try:
+                    if retflag & swe.ECL_TOTAL:
+                        kind = 'total'
+                    elif retflag & swe.ECL_ANNULAR:
+                        kind = 'annular'
+                    elif retflag & swe.ECL_ANNULAR_TOTAL:
+                        kind = 'hybrid'
+                    elif retflag & swe.ECL_PARTIAL:
+                        kind = 'partial'
+                except Exception:
+                    pass
+                events.append({'type': 'solar', 'jd': t, 'iso': _jd_to_iso_utc(t), 'subtype': kind})
+                jd = t + 5
+            else:
+                jd += 20
+        # Lunar
+        jd = start_jd
+        while jd < end_jd:
+            r = swe.lun_eclipse_when(jd, swe.FLG_SWIEPH, 0)
+            if not (isinstance(r, tuple) and len(r) >= 2):
+                break
+            retflag = r[0] if len(r) > 0 else 0
+            tret = r[1]
+            if tret and len(tret) > 0 and tret[0] > 0:
+                t = tret[0]
+                kind = 'eclipse'
+                try:
+                    if retflag & swe.ECL_TOTAL:
+                        kind = 'total'
+                    elif retflag & swe.ECL_PARTIAL:
+                        kind = 'partial'
+                    elif retflag & swe.ECL_PENUMBRAL:
+                        kind = 'penumbral'
+                except Exception:
+                    pass
+                events.append({'type': 'lunar', 'jd': t, 'iso': _jd_to_iso_utc(t), 'subtype': kind})
+                jd = t + 5
+            else:
+                jd += 20
+    except Exception:
+        return []
+    events = [e for e in events if start_jd <= e['jd'] <= end_jd]
+    return events
+
+def _planet_longitudes_deg_jd(jd_ut: float, ids: list) -> dict:
+    jd_tt = _to_tt(jd_ut)
+    flags = swe.FLG_SWIEPH
+    longs = {}
+    for pid in ids:
+        try:
+            lon = swe.calc(jd_tt, pid, flags)[0][0]
+            longs[pid] = _norm360(lon)
+        except Exception:
+            pass
+    return longs
+
+def scan_alignments_simple_jd(start_jd: float, end_jd: float, max_span_deg: float = 30.0, min_count: int = 4, step_hours: float = 24.0, planet_mode: str = '', include_outer: bool = False, include_moon: bool = False, include_sun: bool = False) -> list:
+    events = []
+    mode = (planet_mode or '').strip().lower()
+    ids = [swe.MERCURY, swe.VENUS, swe.MARS, swe.JUPITER, swe.SATURN]
+    if mode in ('inner', 'inners'):
+        ids = [swe.MERCURY, swe.VENUS, swe.MARS]
+    elif mode in ('seven', '7'):
+        ids = [swe.SUN, swe.MOON, swe.MERCURY, swe.VENUS, swe.MARS, swe.JUPITER, swe.SATURN]
+    elif mode in ('all', 'nine', '8', '9'):
+        ids = [swe.SUN, swe.MOON, swe.MERCURY, swe.VENUS, swe.MARS, swe.JUPITER, swe.SATURN, swe.URANUS, swe.NEPTUNE]
+    if include_moon and swe.MOON not in ids:
+        ids = [swe.MOON] + ids
+    if include_sun and swe.SUN not in ids:
+        ids = [swe.SUN] + ids
+    if include_outer:
+        for pid in (getattr(swe, 'URANUS', None), getattr(swe, 'NEPTUNE', None)):
+            if pid is not None and pid not in ids:
+                ids.append(pid)
+    step = max(1.0, float(step_hours)) / 24.0
+    jd = start_jd
+    while jd <= end_jd + 1e-9:
+        longs_map = _planet_longitudes_deg_jd(jd, ids=ids)
+        items = sorted(longs_map.items(), key=lambda kv: kv[1])
+        n = len(items)
+        total = len(ids)
+        by_set = {}
+        for i in range(n):
+            base_lon = items[i][1]
+            for k in range(n):
+                j = (i + k) % n
+                lon_j = items[j][1] + (360.0 if j < i else 0.0)
+                span = lon_j - base_lon
+                if span < 0:
+                    continue
+                if span > max_span_deg:
+                    break
+                inside = []
+                for idx in range(n):
+                    pid, L = items[idx]
+                    Lf = L + (360.0 if idx < i else 0.0)
+                    dlon = Lf - base_lon
+                    if 0 <= dlon <= span:
+                        inside.append(pid)
+                cnt = len(inside)
+                if cnt >= min_count:
+                    key = tuple(sorted(inside))
+                    prev = by_set.get(key)
+                    if prev is None or span < prev['span'] - 1e-9:
+                        by_set[key] = {'type': 'alignment', 'jd': jd, 'count': cnt, 'pids': inside[:], 'span': float(span), 'total': total}
+        events.extend(by_set.values())
+        jd += step
+    return events
+
+def scan_pair_aspects_jd(start_jd: float, end_jd: float, step_hours: float = 6.0, planet_mode: str = '', include_outer: bool = False, include_moon: bool = False, include_sun: bool = False, include_oppositions: bool = True) -> list:
+    events = []
+    mode = (planet_mode or '').strip().lower()
+    ids = [swe.MERCURY, swe.VENUS, swe.MARS, swe.JUPITER, swe.SATURN]
+    if mode in ('inner', 'inners'):
+        ids = [swe.MERCURY, swe.VENUS, swe.MARS]
+    elif mode in ('seven', '7'):
+        ids = [swe.SUN, swe.MOON, swe.MERCURY, swe.VENUS, swe.MARS, swe.JUPITER, swe.SATURN]
+    elif mode in ('all', 'nine', '8', '9'):
+        ids = [swe.SUN, swe.MOON, swe.MERCURY, swe.VENUS, swe.MARS, swe.JUPITER, swe.SATURN, swe.URANUS, swe.NEPTUNE]
+    if include_moon and swe.MOON not in ids:
+        ids = [swe.MOON] + ids
+    if include_sun and swe.SUN not in ids:
+        ids = [swe.SUN] + ids
+    if include_outer:
+        for pid in (getattr(swe, 'URANUS', None), getattr(swe, 'NEPTUNE', None)):
+            if pid is not None and pid not in ids:
+                ids.append(pid)
+
+    def min_sep(a: float, b: float) -> float:
+        d = abs((a - b) % 360.0)
+        return d if d <= 180.0 else 360.0 - d
+
+    def best_aspect_match(sep: float):
+        candidates = [(0.0, 'conj'), (60.0, 'sex'), (90.0, 'sqr'), (120.0, 'tri')]
+        if include_oppositions:
+            candidates.append((180.0, 'opp'))
+        orbs = {
+            'conj': 8.0,
+            'opp': 8.0,
+            'sqr': 5.0,
+            'tri': 4.0,
+            'sex': 3.0,
+        }
+        best_tgt = None
+        best_delta = float('inf')
+        for tgt, code in candidates:
+            orb = orbs.get(code, 0.0)
+            delta = abs(sep - tgt)
+            if delta <= orb and delta < best_delta:
+                best_delta = delta
+                best_tgt = tgt
+        if best_tgt is None:
+            return None, None
+        return best_tgt, best_delta
+
+    step = max(1.0, float(step_hours)) / 24.0
+    jd = start_jd
+    total = len(ids)
+    while jd <= end_jd + 1e-9:
+        longs_map = _planet_longitudes_deg_jd(jd, ids=ids)
+        items = list(longs_map.items())
+        n = len(items)
+        seen = set()
+        for i in range(n):
+            pid_i, Li = items[i]
+            for j in range(i + 1, n):
+                pid_j, Lj = items[j]
+                key = (min(pid_i, pid_j), max(pid_i, pid_j))
+                if key in seen:
+                    continue
+                sep = min_sep(Li, Lj)
+                tgt, delta = best_aspect_match(sep)
+                if tgt is not None:
+                    events.append({
+                        'type': 'aspect',
+                        'jd': jd,
+                        'count': 2,
+                        'pids': [pid_i, pid_j],
+                        'span': float(sep),
+                        'offset': float(delta),
+                        'total': total,
+                    })
+                    seen.add(key)
+        jd += step
+    return events

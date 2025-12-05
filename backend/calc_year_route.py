@@ -10,10 +10,10 @@ from utils.enoch import calculate_enoch_date
 from utils.datetime_local import localize_datetime
 from utils.debug import *
 from utils.lunar_calc import (
-    jd_utc, sun_moon_state, scan_phase_events, scan_perigee_apogee,
+    jd_utc, sun_moon_state, scan_phase_events_jd, scan_perigee_apogee_jd,
     lunar_sign_from_longitude, lunar_sign_mix, refine_sign_cusp,
-    solar_cardinal_points_for_year, scan_eclipses_global, scan_alignments_simple,
-    scan_pair_aspects
+    solar_cardinal_points_for_year, scan_eclipses_global_jd, scan_alignments_simple_jd,
+    scan_pair_aspects_jd
 )
 try:
     from fast_enoch_calendar import build_fast_enoch_calendar
@@ -872,170 +872,94 @@ def calc_year():
                 except Exception:
                     pass
     
-                # Equinoxes & solstices mapped into days
-                span_start = None; span_end = None
+                # Equinoxes & solstices mapped into days using JD spans (no datetime limits)
+                span_start_jd = None; span_end_jd = None
+                jd_bounds = []
                 try:
-                    from datetime import datetime as _dt
-                    def _parse_iso(s):
-                        try:
-                            return _dt.fromisoformat(str(s).replace('Z','+00:00'))
-                        except Exception:
-                            return None
                     for _d in days:
-                        if _d.get('start_utc') and not span_start:
-                            span_start = _parse_iso(_d['start_utc'])
-                        if _d.get('end_utc'):
-                            span_end = _parse_iso(_d['end_utc'])
-                    if span_start is None or span_end is None:
+                        try:
+                            s_jd = _parse_iso_to_jd(_d.get('start_utc')) if _d.get('start_utc') else None
+                        except Exception:
+                            s_jd = None
+                        try:
+                            e_jd = _parse_iso_to_jd(_d.get('end_utc')) if _d.get('end_utc') else None
+                        except Exception:
+                            e_jd = None
+                        jd_bounds.append((s_jd, e_jd))
+                    for sjd, ejd in jd_bounds:
+                        if span_start_jd is None and sjd is not None:
+                            span_start_jd = sjd
+                        if ejd is not None:
+                            span_end_jd = ejd
+                    if span_start_jd is None or span_end_jd is None:
                         record_reason(f"Span parse returned None; first_start={days[0].get('start_utc')} last_end={days[-1].get('end_utc')}")
                 except Exception:
-                    span_start = None; span_end = None
+                    span_start_jd = None; span_end_jd = None
                     record_reason("Failed to parse span for equinox/solstice mapping", traceback.format_exc())
                 try:
-                    if span_start and span_end:
-                        years = sorted(set([span_start.year, span_end.year]))
+                    if span_start_jd and span_end_jd:
+                        years = sorted(set([int(swe.revjul(span_start_jd)[0]), int(swe.revjul(span_end_jd)[0])]))
                         sol = []
                         for y in years:
                             sol.extend(solar_cardinal_points_for_year(y))
+                        def bucket_index_jd(t_jd):
+                            for idx, (sjd, ejd) in enumerate(jd_bounds):
+                                if sjd is None or ejd is None:
+                                    continue
+                                if sjd <= t_jd <= ejd:
+                                    return idx
+                            return None
                         for ev in sol:
-                            bi = bucket_index(ev['time'])
+                            bi = bucket_index_jd(_parse_iso_to_jd(ev['time']) if isinstance(ev.get('time'), str) else jd_utc(ev['time']))
                             if bi is None:
                                 continue
                             d = days[bi]
                             if ev.get('type') == 'equinox':
                                 d['equinox'] = ev.get('season') or 'equinox'
-                                d['equinox_utc'] = ev['time'].astimezone(timezone.utc).isoformat()
+                                d['equinox_utc'] = ev['time'].isoformat() if hasattr(ev['time'], 'isoformat') else str(ev['time'])
                             elif ev.get('type') == 'solstice':
                                 d['solstice'] = ev.get('season') or 'solstice'
-                                d['solstice_utc'] = ev['time'].astimezone(timezone.utc).isoformat()
+                                d['solstice_utc'] = ev['time'].isoformat() if hasattr(ev['time'], 'isoformat') else str(ev['time'])
                 except Exception:
                     record_reason("Failed while mapping equinox/solstice events", traceback.format_exc())
-    
-                # Global eclipses (best-effort) + local magnitude at user's position
+
+                # Global eclipses (best-effort) + local magnitude at user's position (JD-based)
                 try:
-                    if span_start and span_end:
-                        # Helper: jd_utc may return tuple; take the UT JD component
-                        def _jd_ut_val(t):
-                            val = jd_utc(t)
-                            if isinstance(val, (tuple, list)):
-                                return float(val[0])
-                            return float(val)
-                        def _call_sol_how(jd_val, lon, lat, flag=2):
-                            try:
-                                jd_f = float(jd_val)
-                                flg = int(flag)
-                                geopos = [float(lon), float(lat), 0.0]
-                                # SwissEphem expects order (jd, geopos, flags)
-                                return swe.sol_eclipse_how(jd_f, geopos, flg)
-                            except Exception as e:
-                                try:
-                                    msg = f"[calc_year] sol_eclipse_how failed jd={jd_val} type_jd={type(jd_val)} flag={flag} type_flag={type(flag)} geopos={(lon,lat,0.0)} err={e}"
-                                    print(msg)
-                                    record_reason(msg)
-                                except Exception:
-                                    pass
-                                raise
-                        def _call_lun_how(jd_val, lon, lat, flag=2):
-                            try:
-                                jd_f = float(jd_val)
-                                flg = int(flag)
-                                geopos = [float(lon), float(lat), 0.0]
-                                # SwissEphem expects order (jd, geopos, flags)
-                                return swe.lun_eclipse_how(jd_f, geopos, flg)
-                            except Exception as e:
-                                try:
-                                    msg = f"[calc_year] lun_eclipse_how failed jd={jd_val} type_jd={type(jd_val)} flag={flag} type_flag={type(flag)} geopos={(lon,lat,0.0)} err={e}"
-                                    print(msg)
-                                    record_reason(msg)
-                                except Exception:
-                                    pass
-                                raise
-                        ec = scan_eclipses_global(span_start, span_end)
-                        # Allow local magnitude calls; if one fails, disable subsequent ones for that type
-                        solar_local_failed = False
-                        lunar_local_failed = False
+                    if span_start_jd and span_end_jd:
+                        ec = scan_eclipses_global_jd(span_start_jd, span_end_jd)
+                        def bucket_index_jd(t_jd):
+                            for idx, (sjd, ejd) in enumerate(jd_bounds):
+                                if sjd is None or ejd is None:
+                                    continue
+                                if sjd <= t_jd <= ejd:
+                                    return idx
+                            return None
                         for ev in ec:
-                            bi = bucket_index(ev['time'])
+                            bi = bucket_index_jd(ev.get('jd'))
                             if bi is None:
                                 continue
                             d = days[bi]
                             if ev.get('type') == 'solar':
                                 d['solar_eclipse'] = True
-                                d['solar_eclipse_utc'] = ev['time'].astimezone(timezone.utc).isoformat()
-                                try:
-                                    kind = ev.get('subtype') or ''
-                                    if kind:
-                                        d['solar_eclipse_kind'] = str(kind)
-                                except Exception:
-                                    record_reason("Failed to tag solar eclipse subtype", traceback.format_exc())
-                                # Local magnitude/obscuration (if available)
-                                if not solar_local_failed:
-                                    try:
-                                        jd_val = float(_jd_ut_val(ev['time']))
-                                        retflag, attr = _call_sol_how(jd_val, longitude, latitude)
-                                        if isinstance(attr, (list, tuple)) and len(attr) > 0:
-                                            # attr[0] = magnitude (fraction of diameter)
-                                            # attr[1] = obscuration (fraction of solar disc area)
-                                            try:
-                                                if attr[0] is not None:
-                                                    d['solar_eclipse_mag'] = round(float(attr[0]), 3)
-                                            except Exception:
-                                                record_reason("Failed to set solar eclipse magnitude", traceback.format_exc())
-                                            try:
-                                                if len(attr) > 1 and attr[1] is not None:
-                                                    d['solar_eclipse_obsc'] = round(float(attr[1]), 3)
-                                            except Exception:
-                                                record_reason("Failed to set solar eclipse obscuration", traceback.format_exc())
-                                    except Exception as e_local:
-                                        solar_local_failed = True
-                                        record_reason(f"Local solar eclipse attrs disabled after failure: {e_local}")
+                                if ev.get('iso'):
+                                    d['solar_eclipse_utc'] = ev['iso']
+                                if ev.get('subtype'):
+                                    d['solar_eclipse_kind'] = ev.get('subtype')
                             elif ev.get('type') == 'lunar':
                                 d['lunar_eclipse'] = True
-                                d['lunar_eclipse_utc'] = ev['time'].astimezone(timezone.utc).isoformat()
-                                try:
-                                    kind = ev.get('subtype') or ''
-                                    if kind:
-                                        d['lunar_eclipse_kind'] = str(kind)
-                                except Exception:
-                                    record_reason("Failed to tag lunar eclipse subtype", traceback.format_exc())
-                                if not lunar_local_failed:
-                                    try:
-                                        jd_val = float(_jd_ut_val(ev['time']))
-                                        retflag, attr = _call_lun_how(jd_val, longitude, latitude)
-                                        # attr[0]=umbral magnitude, attr[2]=penumbral
-                                        if isinstance(attr, (list, tuple)) and len(attr) > 0:
-                                            mag_umbral = None
-                                            mag_penumbral = None
-                                            try:
-                                                if attr[0] is not None:
-                                                    mag_umbral = float(attr[0])
-                                            except Exception:
-                                                mag_umbral = None
-                                            try:
-                                                if len(attr) > 2 and attr[2] is not None:
-                                                    mag_penumbral = float(attr[2])
-                                            except Exception:
-                                                mag_penumbral = None
-                                            # Preferred display magnitude
-                                            mag = mag_umbral if mag_umbral is not None else mag_penumbral
-                                            if mag is not None:
-                                                d['lunar_eclipse_mag'] = round(mag, 3)
-                                            if mag_umbral is not None:
-                                                d['lunar_eclipse_mag_umbral'] = round(mag_umbral, 3)
-                                            if mag_penumbral is not None:
-                                                d['lunar_eclipse_mag_penumbral'] = round(mag_penumbral, 3)
-                                    except Exception as e_local:
-                                        lunar_local_failed = True
-                                        record_reason(f"Local lunar eclipse attrs disabled after failure: {e_local}")
+                                if ev.get('iso'):
+                                    d['lunar_eclipse_utc'] = ev['iso']
+                                if ev.get('subtype'):
+                                    d['lunar_eclipse_kind'] = ev.get('subtype')
                 except Exception:
                     record_reason("Failed during eclipse mapping", traceback.format_exc())
-    
-                # Simple planetary alignments (add planets, span and score)
+
+                # Simple planetary alignments (add planets, span and score) using JD spans
                 try:
-                    if span_start and span_end:
-                        al = scan_alignments_simple(
-                            span_start,
-                            span_end,
+                    if span_start_jd and span_end_jd:
+                        al = scan_alignments_simple_jd(
+                            span_start_jd,
+                            span_end_jd,
                             max_span_deg=max(1.0, min(60.0, align_span_deg)),
                             min_count=max(0, min(10, align_min_count)),
                             step_hours=max(1.0, min(24.0, align_step_hours)),

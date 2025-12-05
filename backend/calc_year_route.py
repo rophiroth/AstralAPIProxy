@@ -318,6 +318,8 @@ def calc_year():
             """
             Track and log every approximation/fallback reason so it is visible in backend logs.
             """
+            nonlocal approx_global
+            approx_global = True
             msg_text = msg if exc is None else f"{msg}: {exc}"
             approx_reasons.append(msg_text)
             try:

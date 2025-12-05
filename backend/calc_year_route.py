@@ -432,6 +432,13 @@ def calc_year():
                             record_reason("Fast calendar missing start/end; reverting to full build")
                             use_fast_days = False
                             days = []
+                        else:
+                            missing_bounds = [i for i, d in enumerate(days) if not d.get("start_utc") or not d.get("end_utc")]
+                            if missing_bounds:
+                                sample = missing_bounds[:3]
+                                record_reason(f"Fast calendar missing start/end on {len(missing_bounds)} day(s); sample idx={sample}")
+                                use_fast_days = False
+                                days = []
                     except Exception:
                         use_fast_days = False
                         days = []
@@ -811,8 +818,12 @@ def calc_year():
                             return datetime.fromisoformat(norm)
                         except Exception:
                             return None
-                    span_start = _safe_iso(days[0]['start_utc'])
-                    span_end = _safe_iso(days[-1]['end_utc'])
+                    missing_start = [i for i, d in enumerate(days) if not d.get('start_utc')]
+                    missing_end = [i for i, d in enumerate(days) if not d.get('end_utc')]
+                    if missing_start or missing_end:
+                        record_reason(f"Missing day bounds before event scan: start_missing={missing_start[:5]} end_missing={missing_end[:5]}")
+                    span_start = _safe_iso(days[0].get('start_utc'))
+                    span_end = _safe_iso(days[-1].get('end_utc'))
                     if span_start is None or span_end is None:
                         record_reason(f"Unparseable ISO bounds for event scan: start={days[0].get('start_utc')} end={days[-1].get('end_utc')}")
                         raise ValueError(f"Unparseable ISO bounds for event scan: start={days[0].get('start_utc')} end={days[-1].get('end_utc')}")
@@ -938,19 +949,31 @@ def calc_year():
                         def _jd_ut_val(t):
                             val = jd_utc(t)
                             if isinstance(val, (tuple, list)):
-                                return val[0]
-                            return val
-                        def _call_sol_how(jd_val, lon, lat):
+                                return float(val[0])
+                            return float(val)
+                        def _call_sol_how(jd_val, lon, lat, flag=2):
                             try:
-                                return swe.sol_eclipse_how(float(jd_val), 2, (float(lon), float(lat), 0.0))
+                                jd_f = float(jd_val)
+                                flg = int(flag)
+                                geopos = (float(lon), float(lat), 0.0)
+                                return swe.sol_eclipse_how(jd_f, flg, geopos)
                             except Exception as e:
-                                print(f"[calc_year] sol_eclipse_how failed jd={jd_val} type_jd={type(jd_val)} geopos={(lon,lat,0.0)} type_flag={type(2)} err={e}")
+                                try:
+                                    print(f"[calc_year] sol_eclipse_how failed jd={jd_val} type_jd={type(jd_val)} flag={flag} type_flag={type(flag)} geopos={(lon,lat,0.0)} err={e}")
+                                except Exception:
+                                    pass
                                 raise
-                        def _call_lun_how(jd_val, lon, lat):
+                        def _call_lun_how(jd_val, lon, lat, flag=2):
                             try:
-                                return swe.lun_eclipse_how(float(jd_val), 2, (float(lon), float(lat), 0.0))
+                                jd_f = float(jd_val)
+                                flg = int(flag)
+                                geopos = (float(lon), float(lat), 0.0)
+                                return swe.lun_eclipse_how(jd_f, flg, geopos)
                             except Exception as e:
-                                print(f"[calc_year] lun_eclipse_how failed jd={jd_val} type_jd={type(jd_val)} geopos={(lon,lat,0.0)} type_flag={type(2)} err={e}")
+                                try:
+                                    print(f"[calc_year] lun_eclipse_how failed jd={jd_val} type_jd={type(jd_val)} flag={flag} type_flag={type(flag)} geopos={(lon,lat,0.0)} err={e}")
+                                except Exception:
+                                    pass
                                 raise
                         ec = scan_eclipses_global(span_start, span_end)
                         for ev in ec:

@@ -748,84 +748,97 @@ def calc_year():
                         }
                         days.append(day_record)
     
-            # Compute exact lunar events across the full span (from first start to last end)
+            # Compute lunar/solar events across the full span using JD-only helpers
             if days:
-                # Event scanning only when bounds are standard ISO parseable
+                jd_bounds = []
+                span_start_jd = None
+                span_end_jd = None
                 try:
-                    def _pad_iso_year(dt_str: str) -> str:
-                        # Normalize year to at least 4 digits for fromisoformat; keep sign if present.
+                    for _d in days:
                         try:
-                            if not dt_str:
-                                return dt_str
-                            # Split "Y-M-DThh:mm:ss"
-                            if dt_str[0] in "+-":
-                                sign = dt_str[0]
-                                rest = dt_str[1:]
-                            else:
-                                sign = ""
-                                rest = dt_str
-                            parts = rest.split("T", 1)
-                            date_part = parts[0]
-                            rest_time = "T" + parts[1] if len(parts) > 1 else ""
-                            ymd = date_part.split("-")
-                            if len(ymd) >= 3:
-                                y = ymd[0]
-                                if sign == "-" and y.startswith("-"):
-                                    y = y[1:]
-                                y_padded = sign + y.zfill(4)
-                                date_norm = "-".join([y_padded, ymd[1], ymd[2]])
-                                return date_norm + rest_time
+                            s_jd = _parse_iso_to_jd(_d.get('start_utc')) if _d.get('start_utc') else None
                         except Exception:
-                            record_reason("Failed to normalize ISO year; using raw string", traceback.format_exc())
-                        return dt_str
+                            s_jd = None
+                        try:
+                            e_jd = _parse_iso_to_jd(_d.get('end_utc')) if _d.get('end_utc') else None
+                        except Exception:
+                            e_jd = None
+                        jd_bounds.append((s_jd, e_jd))
+                    for sjd, ejd in jd_bounds:
+                        if span_start_jd is None and sjd is not None:
+                            span_start_jd = sjd
+                        if ejd is not None:
+                            span_end_jd = ejd
+                    if span_start_jd is None or span_end_jd is None:
+                        record_reason(f"Span parse returned None; first_start={days[0].get('start_utc')} last_end={days[-1].get('end_utc')}")
+                except Exception:
+                    span_start_jd = None
+                    span_end_jd = None
+                    record_reason("Failed to parse span for event mapping", traceback.format_exc())
 
-                    def _safe_iso(dt_str: str):
-                        try:
-                            norm = _pad_iso_year(dt_str.replace('Z','+00:00'))
-                            return datetime.fromisoformat(norm)
-                        except Exception:
-                            return None
-                    missing_start = [i for i, d in enumerate(days) if not d.get('start_utc')]
-                    missing_end = [i for i, d in enumerate(days) if not d.get('end_utc')]
-                    if missing_start or missing_end:
-                        record_reason(f"Missing day bounds before event scan: start_missing={missing_start[:5]} end_missing={missing_end[:5]}")
-                    span_start = jd_bounds[0][0] if jd_bounds else None
-                    span_end = jd_bounds[-1][1] if jd_bounds else None
+                def bucket_index_jd(t_jd: float):
+                    for idx, (sjd, ejd) in enumerate(jd_bounds):
+                        if sjd is None or ejd is None:
+                            continue
+                        if sjd <= t_jd <= ejd:
+                            return idx
+                    return None
+
+                def _iso_from_jd(jd_val: float) -> str:
+                    try:
+                        y, mo, d, hour = swe.revjul(jd_val)
+                        hh = int(hour)
+                        mm_f = (hour - hh) * 60.0
+                        mi = int(mm_f)
+                        ss = int(round((mm_f - mi) * 60.0))
+                        if ss == 60:
+                            ss = 0; mi += 1
+                        if mi == 60:
+                            mi = 0; hh += 1
+                        y_str = (f"{int(y):04d}" if int(y) >= 0 else f"{int(y)}")
+                        return f"{y_str}-{int(mo):02d}-{int(d):02d}T{hh:02d}:{mi:02d}:{ss:02d}Z"
+                    except Exception:
+                        return str(jd_val)
+
+                try:
                     phase_events = scan_phase_events_jd(span_start_jd, span_end_jd, step_hours=8) if span_start_jd and span_end_jd else []
                     dist_events = scan_perigee_apogee_jd(span_start_jd, span_end_jd, step_hours=8) if span_start_jd and span_end_jd else []
                 except Exception:
                     phase_events = []
                     dist_events = []
                     record_reason("Phase/perigee scan failed; skipping event enrichment", traceback.format_exc())
-                # Map events to containing day bucket (JD-based)
+
                 for ev in phase_events:
                     bi = bucket_index_jd(ev.get('jd'))
-                    if bi is not None:
-                        d = days[bi]
-                        icon = ''
-                        if ev['type'] == 'new':
-                            icon = '🌚'
-                        elif ev['type'] == 'full':
-                            icon = '🌝'
-                        elif ev['type'] == 'first_quarter':
-                            icon = '🌓'
-                        elif ev['type'] == 'last_quarter':
-                            icon = '🌗'
-                        d['moon_event'] = ev['type']
-                        d['moon_event_utc'] = ev.get('iso') or _iso_from_jd(ev.get('jd'))
+                    if bi is None:
+                        continue
+                    d = days[bi]
+                    icon = ''
+                    if ev.get('type') == 'new':
+                        icon = 'new'
+                    elif ev.get('type') == 'full':
+                        icon = 'full'
+                    elif ev.get('type') == 'first_quarter':
+                        icon = '1q'
+                    elif ev.get('type') == 'last_quarter':
+                        icon = '3q'
+                    d['moon_event'] = ev.get('type')
+                    d['moon_event_utc'] = ev.get('iso') or _iso_from_jd(ev.get('jd'))
+                    if icon:
                         d['moon_icon'] = icon
+
                 for ev in dist_events:
                     bi = bucket_index_jd(ev.get('jd'))
-                    if bi is not None:
-                        d = days[bi]
-                        if ev['type'] == 'perigee':
-                            d['perigee'] = True
-                            d['perigee_utc'] = ev.get('iso') or _iso_from_jd(ev.get('jd'))
-                        if ev['type'] == 'apogee':
-                            d['apogee'] = True
-                            d['apogee_utc'] = ev.get('iso') or _iso_from_jd(ev.get('jd'))
+                    if bi is None:
+                        continue
+                    d = days[bi]
+                    if ev.get('type') == 'perigee':
+                        d['perigee'] = True
+                        d['perigee_utc'] = ev.get('iso') or _iso_from_jd(ev.get('jd'))
+                    if ev.get('type') == 'apogee':
+                        d['apogee'] = True
+                        d['apogee_utc'] = ev.get('iso') or _iso_from_jd(ev.get('jd'))
 
-                # Supermoon: full moon within 24h of perigee
                 try:
                     full_times = [ev['jd'] for ev in phase_events if ev.get('type') == 'full' and ev.get('jd') is not None]
                     perigee_times = [ev['jd'] for ev in dist_events if ev.get('type') == 'perigee' and ev.get('jd') is not None]
@@ -846,67 +859,6 @@ def calc_year():
                 except Exception:
                     record_reason("Failed while marking supermoon events", traceback.format_exc())
 
-                # If no eclipses were found at all, log that fact (so quality shows reason)
-                try:
-                    if not ec:
-                        record_reason("No eclipses found in span (global scan returned 0)")
-                except Exception:
-                    pass
-                # If no distance events (perigee/apogee) were found, surface it too
-                try:
-                    if not dist_events:
-                        record_reason("No perigee/apogee events found in span")
-                except Exception:
-                    pass
-    
-                # Helper for JD → ISO
-                def _iso_from_jd(jd_val: float) -> str:
-                    try:
-                        y, mo, d, hour = swe.revjul(jd_val)
-                        hh = int(hour)
-                        mm_f = (hour - hh) * 60.0
-                        mi = int(mm_f)
-                        ss = int(round((mm_f - mi) * 60.0))
-                        if ss == 60:
-                            ss = 0; mi += 1
-                        if mi == 60:
-                            mi = 0; hh += 1
-                        y_str = (f"{int(y):04d}" if int(y) >= 0 else f"{int(y)}")
-                        return f"{y_str}-{int(mo):02d}-{int(d):02d}T{hh:02d}:{mi:02d}:{ss:02d}Z"
-                    except Exception:
-                        return str(jd_val)
-
-                # Equinoxes & solstices mapped into days using JD spans (no datetime limits)
-                span_start_jd = None; span_end_jd = None
-                jd_bounds = []
-                try:
-                    for _d in days:
-                        try:
-                            s_jd = _parse_iso_to_jd(_d.get('start_utc')) if _d.get('start_utc') else None
-                        except Exception:
-                            s_jd = None
-                        try:
-                            e_jd = _parse_iso_to_jd(_d.get('end_utc')) if _d.get('end_utc') else None
-                        except Exception:
-                            e_jd = None
-                        jd_bounds.append((s_jd, e_jd))
-                    for sjd, ejd in jd_bounds:
-                        if span_start_jd is None and sjd is not None:
-                            span_start_jd = sjd
-                        if ejd is not None:
-                            span_end_jd = ejd
-                    if span_start_jd is None or span_end_jd is None:
-                        record_reason(f"Span parse returned None; first_start={days[0].get('start_utc')} last_end={days[-1].get('end_utc')}")
-                except Exception:
-                    span_start_jd = None; span_end_jd = None
-                    record_reason("Failed to parse span for equinox/solstice mapping", traceback.format_exc())
-                def bucket_index_jd(t_jd: float):
-                    for idx, (sjd, ejd) in enumerate(jd_bounds):
-                        if sjd is None or ejd is None:
-                            continue
-                        if sjd <= t_jd <= ejd:
-                            return idx
-                    return None
                 try:
                     if span_start_jd and span_end_jd:
                         years = sorted(set([int(swe.revjul(span_start_jd)[0]), int(swe.revjul(span_end_jd)[0])]))
@@ -914,20 +866,25 @@ def calc_year():
                         for y in years:
                             sol.extend(solar_cardinal_points_for_year(y))
                         for ev in sol:
-                            bi = bucket_index_jd(_parse_iso_to_jd(ev['time']) if isinstance(ev.get('time'), str) else jd_utc(ev['time']))
+                            try:
+                                ev_jd = jd_utc(ev['time'])
+                            except Exception:
+                                ev_jd = None
+                            if ev_jd is None:
+                                continue
+                            bi = bucket_index_jd(ev_jd)
                             if bi is None:
                                 continue
                             d = days[bi]
                             if ev.get('type') == 'equinox':
                                 d['equinox'] = ev.get('season') or 'equinox'
-                                d['equinox_utc'] = ev['time'].isoformat() if hasattr(ev['time'], 'isoformat') else str(ev['time'])
+                                d['equinox_utc'] = _iso_from_jd(ev_jd)
                             elif ev.get('type') == 'solstice':
                                 d['solstice'] = ev.get('season') or 'solstice'
-                                d['solstice_utc'] = ev['time'].isoformat() if hasattr(ev['time'], 'isoformat') else str(ev['time'])
+                                d['solstice_utc'] = _iso_from_jd(ev_jd)
                 except Exception:
                     record_reason("Failed while mapping equinox/solstice events", traceback.format_exc())
 
-                # Global eclipses (best-effort) + local magnitude at user's position (JD-based)
                 try:
                     if span_start_jd and span_end_jd:
                         ec = scan_eclipses_global_jd(span_start_jd, span_end_jd)
@@ -951,7 +908,6 @@ def calc_year():
                 except Exception:
                     record_reason("Failed during eclipse mapping", traceback.format_exc())
 
-                # Simple planetary alignments (add planets, span and score) using JD spans
                 try:
                     if span_start_jd and span_end_jd:
                         al = scan_alignments_simple_jd(
@@ -972,62 +928,44 @@ def calc_year():
                             swe.JUPITER: 'Jupiter',
                             swe.SATURN: 'Saturn',
                         }
-                        # Optional outer planets if present in Swiss
                         try:
                             name_map[swe.URANUS] = 'Uranus'
                             name_map[swe.NEPTUNE] = 'Neptune'
                             name_map[swe.PLUTO] = 'Pluto'
                         except Exception:
                             record_reason("Failed to map outer planet names for alignments", traceback.format_exc())
-                        # Luminaries
                         try:
                             name_map[swe.SUN] = 'Sun'
                             name_map[swe.MOON] = 'Moon'
                         except Exception:
                             record_reason("Failed to map luminary names for alignments", traceback.format_exc())
-                        # Aggregate multiple alignments per day: dedupe by planet set, keep tightest and/or highest count
+
                         per_day = {}
                         for ev in al:
                             bi = bucket_index_jd(ev.get('jd'))
                             if bi is None:
                                 continue
                             recs = per_day.setdefault(bi, {})
-                            key = tuple(sorted(ev.get('pids') or [])) or (('t', ev['time'].isoformat()),)
+                            key = tuple(sorted(ev.get('pids') or [])) or (('t', ev.get('jd')),)
                             prev = recs.get(key)
                             cnt = int(ev.get('count') or 0)
                             span = float(ev.get('span') or 1e9)
                             total = int(ev.get('total') or 0) or max(len(key), 1)
-                            # Score components with small bonuses:
-                            # - Fraction term uses a capped denominator (<=7) so large planet sets don’t overly penalize 3-body alignments.
-                            # - Compactness rewards smaller angular spans as before.
-                            # - Luminary bonus: slight boost if Sun/Moon participate.
-                            # - Count bonus: small bump for more bodies beyond pairs.
                             try:
-                                # Fraction with capped denominator
-                                denom_cap = 7  # classic seven (Sun+Moon+Mercury..Saturn)
+                                denom_cap = 7
                                 denom = float(max(1, min(denom_cap, int(total or 0))))
                                 frac = max(0.0, min(1.0, cnt / denom))
-                                # Compactness term
                                 comp = max(0.0, min(1.0, 1.0 - span / float(max(1.0, align_span_deg))))
-                                # Bonuses
                                 pids = ev.get('pids') or []
                                 try:
-                                    # Use module-level Swiss Ephemeris constants; avoid local import
                                     has_sun = (swe.SUN in pids)
                                     has_moon = (swe.MOON in pids)
                                 except Exception:
                                     has_sun = False; has_moon = False
                                 lum_bonus = (0.06 if has_sun else 0.0) + (0.04 if has_moon else 0.0)
-                                # +0.02 per body over 2, capped at +0.08
                                 count_bonus = max(0.0, min(0.08, 0.02 * max(0, cnt - 2)))
-                                # Blend
                                 score = 0.5 * frac + 0.5 * comp + lum_bonus + count_bonus
-                                # Clamp and round
-                                if score < 0.0:
-                                    score = 0.0
-                                if score > 1.0:
-                                    score = 1.0
-                                score = round(score, 3)
+                                score = max(0.0, min(1.0, round(score, 3)))
                             except Exception:
                                 score = None
                             better = (prev is None)
@@ -1036,7 +974,7 @@ def calc_year():
                                     better = True
                                 elif cnt == prev['count'] and span < prev['span']:
                                     better = True
-                                elif cnt == prev['count'] and abs(span - prev['span']) < 1e-9 and ev['time'] < prev['time']:
+                                elif cnt == prev['count'] and abs(span - prev['span']) < 1e-9 and (ev.get('jd') or 0) < (prev.get('jd') or 0):
                                     better = True
                             if better:
                                 planets_label = None
@@ -1053,12 +991,11 @@ def calc_year():
                                     'span': span,
                                     'score': score,
                                 }
-                        # Optional: add 2-body classical aspects irrespective of span (conj/sqr/tri/sex and optionally opp)
                         try:
                             if align_detect_aspects:
-                                asp = scan_pair_aspects(
-                                    span_start,
-                                    span_end,
+                                asp = scan_pair_aspects_jd(
+                                    span_start_jd,
+                                    span_end_jd,
                                     step_hours=max(1.0, min(24.0, align_step_hours)),
                                     planet_mode=align_planets,
                                     include_outer=align_include_outer,
@@ -1067,7 +1004,7 @@ def calc_year():
                                     include_oppositions=align_include_oppositions,
                                 )
                                 for ev in asp:
-                                    bi = bucket_index(ev['time'])
+                                    bi = bucket_index_jd(ev.get('jd'))
                                     if bi is None:
                                         continue
                                     recs = per_day.setdefault(bi, {})
@@ -1082,7 +1019,6 @@ def calc_year():
                                         planets_label = ','.join([name_map.get(pid, str(pid)) for pid in ev.get('pids') or []])
                                     except Exception:
                                         planets_label = None
-                                    # For pure aspects we don't compute our blended score; leave None
                                     better = (prev is None) or (cnt > prev['count']) or (cnt == prev['count'] and span < prev['span'])
                                     if better:
                                         recs[key] = {
@@ -1096,10 +1032,9 @@ def calc_year():
                                         }
                         except Exception:
                             record_reason("Failed while scanning pair aspects", traceback.format_exc())
-                        # Flush aggregates into day dicts
+
                         for bi, recs in per_day.items():
                             d = days[bi]
-                            # summary from the best item
                             best = None
                             for r in recs.values():
                                 if best is None or r['count'] > best['count'] or (r['count'] == best['count'] and r['span'] < best['span']):
@@ -1117,7 +1052,6 @@ def calc_year():
                                         d['alignment_score'] = best['score']
                                 except Exception:
                                     record_reason("Failed while summarizing alignments", traceback.format_exc())
-                            # detailed list of all distinct alignments for the day
                             try:
                                 items = []
                                 for r in sorted(recs.values(), key=lambda x: (-(x['count']), x['span'], x.get('jd') or 0)):
@@ -1139,10 +1073,10 @@ def calc_year():
                             except Exception:
                                 record_reason("Failed while listing alignments", traceback.format_exc())
                     else:
-                        record_reason("No alignments span computed (missing span_start/span_end)")
+                        record_reason("No alignments span computed (missing JD bounds)")
                 except Exception:
                     record_reason("Failed during alignment scan", traceback.format_exc())
-                # If alignments list ended empty, record reason to surface approximation
+
                 try:
                     if span_start_jd and span_end_jd:
                         has_align = any((d.get('alignments') or d.get('alignment')) for d in days)
@@ -1150,7 +1084,6 @@ def calc_year():
                             record_reason("No alignments detected for given thresholds")
                 except Exception:
                     pass
-    
             resp = {
                 'ok': True,
                 'enoch_year': enoch_year,

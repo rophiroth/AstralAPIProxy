@@ -344,6 +344,11 @@ def calc_year():
                     traceback.print_exc()
                 except Exception:
                     pass
+        # Trace entry so we know requests are hitting this handler
+        try:
+            print("[calc_year] start request")
+        except Exception:
+            pass
         try:
             data = request.get_json() or {}
             date_str = data.get("datetime")
@@ -857,6 +862,10 @@ def calc_year():
                                 d = days[bi]
                                 d['supermoon'] = True
                                 d['supermoon_utc'] = ft.astimezone(timezone.utc).isoformat()
+                    try:
+                        print(f"[calc_year] phase_events={len(phase_events)} dist_events={len(dist_events)} full={len(full_times)} perigee={len(perigee_times)}")
+                    except Exception:
+                        pass
                 except Exception:
                     record_reason("Failed while marking supermoon events", traceback.format_exc())
     
@@ -1188,7 +1197,7 @@ def calc_year():
                 resp['quality_reasons'] = approx_reasons
             # Emit a one-line summary of quality so it is always visible in logs/stdout
             try:
-                print(f"[calc_year] quality={resp['quality']} reasons={resp.get('quality_reasons', [])}")
+                print(f"[calc_year] quality={resp['quality']} reasons={resp.get('quality_reasons', [])} days={len(days)} approx_mode={approx_mode} approx_global={approx_global}")
             except Exception:
                 pass
             return jsonify(resp)

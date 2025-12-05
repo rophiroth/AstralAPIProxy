@@ -992,8 +992,10 @@ def calc_year():
                                     pass
                                 raise
                         ec = scan_eclipses_global(span_start, span_end)
-                        solar_local_failed = False
-                        lunar_local_failed = False
+                        # Disable local magnitude calls by default to avoid SwissEphemeris bindings that reject geopos/flag combos
+                        solar_local_failed = True
+                        lunar_local_failed = True
+                        record_reason("Skipping local eclipse magnitude calls (known flag/geopos incompatibility)")
                         for ev in ec:
                             bi = bucket_index(ev['time'])
                             if bi is None:

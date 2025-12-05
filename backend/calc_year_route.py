@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytz
 import swisseph as swe
-from flask import jsonify, request
+from flask import jsonify, request, current_app
 
 from utils.enoch import calculate_enoch_date
 from utils.datetime_local import localize_datetime
@@ -310,6 +310,22 @@ def build_enoch_table(start_jd: float, enoch_year: int, include_added_week: bool
 
 
 def calc_year():
+        approx_reasons = []
+        def record_reason(msg: str, exc=None):
+            """
+            Track and log every approximation/fallback reason so it is visible in backend logs.
+            """
+            approx_reasons.append(msg if exc is None else f"{msg}: {exc}")
+            try:
+                if exc:
+                    current_app.logger.exception(msg)
+                else:
+                    current_app.logger.warning(msg)
+            except Exception:
+                # Fallback to stdout to keep visibility in hosted logs
+                print(msg)
+                if exc:
+                    traceback.print_exc()
         try:
             data = request.get_json() or {}
             date_str = data.get("datetime")
@@ -347,6 +363,7 @@ def calc_year():
             approx_mode = approx_flag_raw in ('1','true','yes','on','approx')
             if approx_mode:
                 approx_global = True
+                record_reason("Approx mode requested by client")
 
             # Parse JD once (needed regardless of fast path)
             jd = None
@@ -365,6 +382,7 @@ def calc_year():
                     bce_mode = True
                 except Exception:
                     jd = None
+                    record_reason("Failed to parse datetime to JD; using approx later", traceback.format_exc())
 
             # Try fast base to avoid per-day calculate_enoch_date; we still enrich later
             use_fast_days = False
@@ -394,7 +412,7 @@ def calc_year():
                 try:
                     base_enoch = calculate_enoch_date(jd, latitude, longitude, tz_str)
                 except Exception:
-                    traceback.print_exc()
+                    record_reason("calculate_enoch_date failed; switching to approximate base", traceback.format_exc())
                     base_enoch = _approx_enoch_from_jd(jd, latitude, longitude)
                     approx_global = True
                 enoch_year = base_enoch.get('enoch_year')
@@ -423,6 +441,7 @@ def calc_year():
                         # datetime overflow for BCE/very early years → fall back to JD path
                         start_jd = jd - (int(enoch_day_of_year) - 1)
                         use_jd_path = True
+                        record_reason("Failed to derive start_utc (likely BCE/overflow); switching to JD path", traceback.format_exc())
                 else:
                     start_jd = jd - (int(enoch_day_of_year) - 1)
                     use_jd_path = True
@@ -548,7 +567,9 @@ def calc_year():
                             lon_sun = None; lon_moon = None
                             phase, illum = _approx_lunar_for_jd(jd_mid)
                             dist_km = None
+                            record_reason(f"sun_moon_state failed (added week) day {i+1}; using approximate lunar data", traceback.format_exc())
                             approx_global = True
+                            record_reason(f"sun_moon_state failed at day {i+1}; using approximate lunar data", traceback.format_exc())
                         # Enoch day
                         e_day = enoch_for_index(i, jd_mid)
                         # Sunset bounds
@@ -597,6 +618,7 @@ def calc_year():
                             jd_s_today = data_today[0]
                         except Exception:
                             jd_s_today = jd0 + 0.75
+                            record_reason(f"rise_trans (today) failed for {greg}; approximating sunset", traceback.format_exc())
                         jd_prev_day = jd0 - 1.0
                         yb, mb, db, _h = swe.revjul(jd_prev_day)
                         try:
@@ -604,6 +626,7 @@ def calc_year():
                             jd_s_prev = data_prev[0]
                         except Exception:
                             jd_s_prev = jd_prev_day + 0.75
+                            record_reason(f"rise_trans (prev) failed for {greg}; approximating sunset", traceback.format_exc())
                         try:
                             moon_sign = lunar_sign_from_longitude(lon_moon, zodiac_mode) if lon_moon is not None else ''
                         except Exception:
@@ -685,6 +708,7 @@ def calc_year():
                             jd_s_today = data_today[0]
                         except Exception:
                             jd_s_today = jd0 + 0.75
+                            record_reason(f"rise_trans (today, added week) failed for {greg}; approximating sunset", traceback.format_exc())
                         jd_prev_day = jd0 - 1.0
                         yb, mb, db, _h = swe.revjul(jd_prev_day)
                         try:
@@ -692,6 +716,7 @@ def calc_year():
                             jd_s_prev = data_prev[0]
                         except Exception:
                             jd_s_prev = jd_prev_day + 0.75
+                            record_reason(f"rise_trans (prev, added week) failed for {greg}; approximating sunset", traceback.format_exc())
                         try:
                             moon_sign = lunar_sign_from_longitude(lon_moon, zodiac_mode) if lon_moon is not None else ''
                         except Exception:
@@ -725,6 +750,7 @@ def calc_year():
                 except Exception:
                     phase_events = []
                     dist_events = []
+                    record_reason("Phase/perigee scan failed; skipping event enrichment", traceback.format_exc())
                 # Map events to containing day bucket
                 def bucket_index(t):
                     for idx, d in enumerate(days):
@@ -1089,9 +1115,12 @@ def calc_year():
                 resp['quality'] = 'approx'
             else:
                 resp['quality'] = 'full'
+            if approx_reasons:
+                resp['quality_reasons'] = approx_reasons
             return jsonify(resp)
         except Exception as e:
             traceback.print_exc()
+            record_reason("calc_year outer exception; entering full approximate fallback", traceback.format_exc())
             # Ultimate fallback: build an approximate year without any Swiss-dependent calls (except julday/revjul)
             try:
                 data = request.get_json() or {}
@@ -1148,10 +1177,11 @@ def calc_year():
                         'moon_zodiac_mode': (data.get('zodiac_mode') or 'tropical').lower()
                     }
                     days.append(day_record)
-                return jsonify({'ok': True, 'enoch_year': enoch_year, 'days': days, 'quality': 'approx'}), 200
+                return jsonify({'ok': True, 'enoch_year': enoch_year, 'days': days, 'quality': 'approx', 'quality_reasons': approx_reasons}), 200
             except Exception as e2:
                 traceback.print_exc()
-                return jsonify({'ok': False, 'error': str(e2)}), 500
+                record_reason("approx_fallback_failed", traceback.format_exc())
+                return jsonify({'ok': False, 'error': str(e2), 'quality_reasons': approx_reasons}), 500
     
     
     

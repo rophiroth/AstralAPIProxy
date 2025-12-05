@@ -122,7 +122,13 @@ try { console.log('[i18n] file requested'); } catch(_){ }
       const key = el.getAttribute('data-i18n-aria');
       if (dict[key]) el.setAttribute('aria-label', dict[key]);
     });
-    // Title\n    if (dict.title) document.title = dict.title;\n    // Localized title attributes\n    document.querySelectorAll('[data-i18n-title]').forEach(el => {\n      const key = el.getAttribute('data-i18n-title');\n      if (dict[key]) el.setAttribute('title', dict[key]);\n    });
+    // Title
+    if (dict.title) document.title = dict.title;
+    // Localized title attributes
+    document.querySelectorAll('[data-i18n-title]').forEach(el => {
+      const key = el.getAttribute('data-i18n-title');
+      if (dict[key]) el.setAttribute('title', dict[key]);
+    });
     document.documentElement.lang = window.lang || 'es';
     // no UI badge
   }
@@ -164,7 +170,9 @@ try { console.log('[i18n] file requested'); } catch(_){ }
       window.lang = sel.value;
       try { localStorage.setItem('lang', window.lang); } catch(_){ }
       try { console.log('[i18n] lang change ->', window.lang); } catch(_){}
-      applyTranslations();\n      try { document.dispatchEvent(new Event('langchange')); } catch(_) {}\n      // Optional: sync external brand link/icon if present
+      applyTranslations();
+      try { document.dispatchEvent(new Event('langchange')); } catch(_) {}
+      // Optional: sync external brand link/icon if present
       try { if (typeof window.syncBrandLink === 'function') window.syncBrandLink(); } catch(_){ }
       // Try to re-render current year label in selected language if we have state
       try {
@@ -189,7 +197,9 @@ try { console.log('[i18n] file requested'); } catch(_){ }
   }
   function boot(){
     try { console.log('[i18n] boot'); } catch(_){ }
-    applyTranslations();\n      try { document.dispatchEvent(new Event('langchange')); } catch(_) {}\n      // Optional: sync external brand link/icon if present
+    applyTranslations();
+    try { document.dispatchEvent(new Event('langchange')); } catch(_) {}
+    // Optional: sync external brand link/icon if present
     try { if (typeof window.syncBrandLink === 'function') window.syncBrandLink(); } catch(_){ }
     initLangSelector();
   }

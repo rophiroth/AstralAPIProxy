@@ -128,9 +128,6 @@
       ctx.closePath();
       ctx.fillStyle = signTint;
       ctx.fill();
-      ctx.strokeStyle = colorWithAlpha(getSignColor(info.key), 0.35);
-      ctx.lineWidth = 1;
-      ctx.stroke();
     }
     ctx.restore();
   }

@@ -6,13 +6,15 @@ function computeTreeScale() {
   if (typeof window === 'undefined') return 1;
   const width = window.innerWidth || document.documentElement.clientWidth || 1200;
   if (width >= 1800) return 1.08;
-  if (width >= 1500) return 1.02;
-  if (width >= 1200) return 0.98;
-  if (width <= 420) return 1.85;
-  if (width <= 520) return 1.65;
-  if (width <= 640) return 1.45;
-  if (width <= 900) return 1.18;
-  return 1.05;
+  if (width >= 1500) return 1.04;
+  if (width >= 1200) return 1.0;
+  if (width >= 900) return 1.08;
+  if (width >= 720) return 1.16;
+  if (width >= 620) return 1.22;
+  if (width >= 520) return 1.28;
+  if (width >= 440) return 1.32;
+  if (width >= 380) return 1.36;
+  return 1.38;
 }
 
 const TREE_SCALE = computeTreeScale();

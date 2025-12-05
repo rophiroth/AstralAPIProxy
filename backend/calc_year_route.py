@@ -439,6 +439,16 @@ def calc_year():
                                 record_reason(f"Fast calendar missing start/end on {len(missing_bounds)} day(s); sample idx={sample}")
                                 use_fast_days = False
                                 days = []
+                            else:
+                                # Validate first/last bounds are ISO-parseable; if not, fall back to full build
+                                try:
+                                    import datetime as _dt
+                                    _ = _dt.datetime.fromisoformat(str(days[0]["start_utc"]).replace("Z", "+00:00"))
+                                    _ = _dt.datetime.fromisoformat(str(days[-1]["end_utc"]).replace("Z", "+00:00"))
+                                except Exception:
+                                    record_reason("Fast calendar bounds not ISO-parseable; reverting to full build")
+                                    use_fast_days = False
+                                    days = []
                     except Exception:
                         use_fast_days = False
                         days = []
@@ -919,6 +929,8 @@ def calc_year():
                             span_start = _parse_iso(_d['start_utc'])
                         if _d.get('end_utc'):
                             span_end = _parse_iso(_d['end_utc'])
+                    if span_start is None or span_end is None:
+                        record_reason(f"Span parse returned None; first_start={days[0].get('start_utc')} last_end={days[-1].get('end_utc')}")
                 except Exception:
                     span_start = None; span_end = None
                     record_reason("Failed to parse span for equinox/solstice mapping", traceback.format_exc())

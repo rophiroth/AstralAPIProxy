@@ -992,6 +992,8 @@ def calc_year():
                                     pass
                                 raise
                         ec = scan_eclipses_global(span_start, span_end)
+                        solar_local_failed = False
+                        lunar_local_failed = False
                         for ev in ec:
                             bi = bucket_index(ev['time'])
                             if bi is None:
@@ -1007,24 +1009,26 @@ def calc_year():
                                 except Exception:
                                     record_reason("Failed to tag solar eclipse subtype", traceback.format_exc())
                                 # Local magnitude/obscuration (if available)
-                                try:
-                                    jd_val = float(_jd_ut_val(ev['time']))
-                                    retflag, attr = _call_sol_how(jd_val, longitude, latitude)
-                                    if isinstance(attr, (list, tuple)) and len(attr) > 0:
-                                        # attr[0] = magnitude (fraction of diameter)
-                                        # attr[1] = obscuration (fraction of solar disc area)
-                                        try:
-                                            if attr[0] is not None:
-                                                d['solar_eclipse_mag'] = round(float(attr[0]), 3)
-                                        except Exception:
-                                            record_reason("Failed to set solar eclipse magnitude", traceback.format_exc())
-                                        try:
-                                            if len(attr) > 1 and attr[1] is not None:
-                                                d['solar_eclipse_obsc'] = round(float(attr[1]), 3)
-                                        except Exception:
-                                            record_reason("Failed to set solar eclipse obscuration", traceback.format_exc())
-                                except Exception:
-                                    record_reason("Failed computing local solar eclipse attributes", traceback.format_exc())
+                                if not solar_local_failed:
+                                    try:
+                                        jd_val = float(_jd_ut_val(ev['time']))
+                                        retflag, attr = _call_sol_how(jd_val, longitude, latitude)
+                                        if isinstance(attr, (list, tuple)) and len(attr) > 0:
+                                            # attr[0] = magnitude (fraction of diameter)
+                                            # attr[1] = obscuration (fraction of solar disc area)
+                                            try:
+                                                if attr[0] is not None:
+                                                    d['solar_eclipse_mag'] = round(float(attr[0]), 3)
+                                            except Exception:
+                                                record_reason("Failed to set solar eclipse magnitude", traceback.format_exc())
+                                            try:
+                                                if len(attr) > 1 and attr[1] is not None:
+                                                    d['solar_eclipse_obsc'] = round(float(attr[1]), 3)
+                                            except Exception:
+                                                record_reason("Failed to set solar eclipse obscuration", traceback.format_exc())
+                                    except Exception as e_local:
+                                        solar_local_failed = True
+                                        record_reason(f"Local solar eclipse attrs disabled after failure: {e_local}")
                             elif ev.get('type') == 'lunar':
                                 d['lunar_eclipse'] = True
                                 d['lunar_eclipse_utc'] = ev['time'].astimezone(timezone.utc).isoformat()
@@ -1034,33 +1038,35 @@ def calc_year():
                                         d['lunar_eclipse_kind'] = str(kind)
                                 except Exception:
                                     record_reason("Failed to tag lunar eclipse subtype", traceback.format_exc())
-                                try:
-                                    jd_val = float(_jd_ut_val(ev['time']))
-                                    retflag, attr = _call_lun_how(jd_val, longitude, latitude)
-                                    # attr[0]=umbral magnitude, attr[2]=penumbral
-                                    if isinstance(attr, (list, tuple)) and len(attr) > 0:
-                                        mag_umbral = None
-                                        mag_penumbral = None
-                                        try:
-                                            if attr[0] is not None:
-                                                mag_umbral = float(attr[0])
-                                        except Exception:
+                                if not lunar_local_failed:
+                                    try:
+                                        jd_val = float(_jd_ut_val(ev['time']))
+                                        retflag, attr = _call_lun_how(jd_val, longitude, latitude)
+                                        # attr[0]=umbral magnitude, attr[2]=penumbral
+                                        if isinstance(attr, (list, tuple)) and len(attr) > 0:
                                             mag_umbral = None
-                                        try:
-                                            if len(attr) > 2 and attr[2] is not None:
-                                                mag_penumbral = float(attr[2])
-                                        except Exception:
                                             mag_penumbral = None
-                                        # Preferred display magnitude
-                                        mag = mag_umbral if mag_umbral is not None else mag_penumbral
-                                        if mag is not None:
-                                            d['lunar_eclipse_mag'] = round(mag, 3)
-                                        if mag_umbral is not None:
-                                            d['lunar_eclipse_mag_umbral'] = round(mag_umbral, 3)
-                                        if mag_penumbral is not None:
-                                            d['lunar_eclipse_mag_penumbral'] = round(mag_penumbral, 3)
-                                except Exception:
-                                    record_reason("Failed computing local lunar eclipse attributes", traceback.format_exc())
+                                            try:
+                                                if attr[0] is not None:
+                                                    mag_umbral = float(attr[0])
+                                            except Exception:
+                                                mag_umbral = None
+                                            try:
+                                                if len(attr) > 2 and attr[2] is not None:
+                                                    mag_penumbral = float(attr[2])
+                                            except Exception:
+                                                mag_penumbral = None
+                                            # Preferred display magnitude
+                                            mag = mag_umbral if mag_umbral is not None else mag_penumbral
+                                            if mag is not None:
+                                                d['lunar_eclipse_mag'] = round(mag, 3)
+                                            if mag_umbral is not None:
+                                                d['lunar_eclipse_mag_umbral'] = round(mag_umbral, 3)
+                                            if mag_penumbral is not None:
+                                                d['lunar_eclipse_mag_penumbral'] = round(mag_penumbral, 3)
+                                    except Exception as e_local:
+                                        lunar_local_failed = True
+                                        record_reason(f"Local lunar eclipse attrs disabled after failure: {e_local}")
                 except Exception:
                     record_reason("Failed during eclipse mapping", traceback.format_exc())
     

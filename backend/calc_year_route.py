@@ -743,8 +743,15 @@ def calc_year():
             if days:
                 # Event scanning only when bounds are standard ISO parseable
                 try:
-                    span_start = datetime.fromisoformat(days[0]['start_utc'].replace('Z','+00:00'))
-                    span_end = datetime.fromisoformat(days[-1]['end_utc'].replace('Z','+00:00'))
+                    def _safe_iso(dt_str: str):
+                        try:
+                            return datetime.fromisoformat(dt_str.replace('Z','+00:00'))
+                        except Exception:
+                            return None
+                    span_start = _safe_iso(days[0]['start_utc'])
+                    span_end = _safe_iso(days[-1]['end_utc'])
+                    if span_start is None or span_end is None:
+                        raise ValueError(f"Unparseable ISO bounds for event scan: start={days[0]['start_utc']} end={days[-1]['end_utc']}")
                     phase_events = scan_phase_events(span_start, span_end, step_hours=6)
                     dist_events = scan_perigee_apogee(span_start, span_end, step_hours=6)
                 except Exception:

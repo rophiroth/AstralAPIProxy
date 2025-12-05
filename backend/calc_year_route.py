@@ -346,7 +346,7 @@ def calc_year():
                     pass
         # Trace entry so we know requests are hitting this handler
         try:
-            print("[calc_year] start request")
+            print("[calc_year] start request", flush=True)
         except Exception:
             pass
         try:
@@ -863,7 +863,7 @@ def calc_year():
                                 d['supermoon'] = True
                                 d['supermoon_utc'] = ft.astimezone(timezone.utc).isoformat()
                     try:
-                        print(f"[calc_year] phase_events={len(phase_events)} dist_events={len(dist_events)} full={len(full_times)} perigee={len(perigee_times)}")
+                        print(f"[calc_year] phase_events={len(phase_events)} dist_events={len(dist_events)} full={len(full_times)} perigee={len(perigee_times)}", flush=True)
                     except Exception:
                         pass
                 except Exception:
@@ -1197,7 +1197,7 @@ def calc_year():
                 resp['quality_reasons'] = approx_reasons
             # Emit a one-line summary of quality so it is always visible in logs/stdout
             try:
-                print(f"[calc_year] quality={resp['quality']} reasons={resp.get('quality_reasons', [])} days={len(days)} approx_mode={approx_mode} approx_global={approx_global}")
+                print(f"[calc_year] quality={resp['quality']} reasons={resp.get('quality_reasons', [])} days={len(days)} approx_mode={approx_mode} approx_global={approx_global}", flush=True)
             except Exception:
                 pass
             return jsonify(resp)

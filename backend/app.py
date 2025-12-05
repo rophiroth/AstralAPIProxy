@@ -3,6 +3,7 @@ from flask_cors import CORS
 import swisseph as swe
 from datetime import datetime, timedelta, timezone
 import os
+from pathlib import Path
 import pytz
 from astral import LocationInfo
 from astral.sun import sun as astral_sun
@@ -27,6 +28,14 @@ import traceback
 from ai_summary import register_ai_summary_route
 
 app = Flask(__name__)
+
+# Ensure Swiss Ephemeris finds the bundled data (sweph/ephe)
+EPHE_PATH = Path(__file__).resolve().parent.parent / "sweph" / "ephe"
+try:
+    swe.set_ephe_path(str(EPHE_PATH))
+except Exception:
+    # Fallback: attempt relative string path; errors will still surface in logs
+    swe.set_ephe_path("sweph/ephe")
 
 # Flexible CORS: allow same-origin by default; enable cross-origin via env
 origins_env = os.environ.get("CORS_ORIGINS", "").strip()

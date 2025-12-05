@@ -403,19 +403,24 @@ def calc_year():
                     except Exception:
                         enoch_table = None
                 # Determine start anchor
-                use_jd_path = False
-                start_utc = None
-                start_jd = None
-                if approx_mode:
-                    # For approximate years, build from TUESDAY sunset (start boundary) nearest equinox (at user lat/lon)
-                    start_jd = _approx_start_jd_for_enoch_year(jd, latitude, longitude)
-                    use_jd_path = True
-                else:
-                    if not bce_mode:
+            use_jd_path = False
+            start_utc = None
+            start_jd = None
+            if approx_mode:
+                # For approximate years, build from TUESDAY sunset (start boundary) nearest equinox (at user lat/lon)
+                start_jd = _approx_start_jd_for_enoch_year(jd, latitude, longitude)
+                use_jd_path = True
+            else:
+                if not bce_mode:
+                    try:
                         start_utc = dt_utc - timedelta(days=int(enoch_day_of_year) - 1)
-                    else:
+                    except Exception:
+                        # datetime overflow for BCE/very early years → fall back to JD path
                         start_jd = jd - (int(enoch_day_of_year) - 1)
                         use_jd_path = True
+                else:
+                    start_jd = jd - (int(enoch_day_of_year) - 1)
+                    use_jd_path = True
     
             def enoch_for_index(index: int, jd_mid_val: float):
                 """Fast lookup of Enoch date for a given day index, fallback to precise calculation."""

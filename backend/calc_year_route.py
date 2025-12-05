@@ -407,39 +407,10 @@ def calc_year():
                     jd = None
                     record_reason("Failed to parse datetime to JD; using approx later", traceback.format_exc())
 
-            # Try fast base to avoid per-day calculate_enoch_date; we still enrich later
+            # Disable fast base to ensure full-detail calendar; always use full build
             use_fast_days = False
             days = []
             enoch_year = None
-            try:
-                fast_base = build_fast_enoch_calendar(
-                    date_str=date_str,
-                    latitude=latitude,
-                    longitude=longitude,
-                    tz_str=tz_str,
-                    zodiac_mode=zodiac_mode,
-                    include_added_week=True
-                )
-                if fast_base and fast_base.get("ok") and fast_base.get("days"):
-                    days = fast_base["days"]
-                    enoch_year = fast_base.get("enoch_year")
-                    use_fast_days = True
-                    record_reason("Using fast_enoch_calendar days (reduced detail)")
-                    # If fast days lack start/end timestamps, fall back to full build
-                    try:
-                        fd = days[0] if days else {}
-                        if not fd.get("start_utc") or not fd.get("end_utc"):
-                            record_reason("Fast calendar missing start/end; reverting to full build")
-                            use_fast_days = False
-                            days = []
-                        # Also treat fast path as approximate to avoid silent “full” label
-                        else:
-                            approx_global = True
-                    except Exception:
-                        use_fast_days = False
-                        days = []
-            except Exception:
-                use_fast_days = False
 
             # Base date and Enoch mapping via existing util (needed for fallbacks/enrichment)
             if approx_mode:

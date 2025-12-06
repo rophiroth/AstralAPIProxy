@@ -576,9 +576,9 @@ def calc_year():
                 # First compute a baseline 364 days; we will extend by 7 if added week is flagged on last day
                 total_days = 364
                 for i in range(total_days):
-                if not use_jd_path:
-                    day_dt_utc = start_utc + timedelta(days=i)
-                    greg = day_dt_utc.date().isoformat()
+                    if not use_jd_path:
+                        day_dt_utc = start_utc + timedelta(days=i)
+                        greg = day_dt_utc.date().isoformat()
                         # Midday sample for positions
                         midday = datetime(day_dt_utc.year, day_dt_utc.month, day_dt_utc.day, 12, 0, 0, tzinfo=timezone.utc)
                         jd_mid = swe.julday(midday.year, midday.month, midday.day, 12.0)

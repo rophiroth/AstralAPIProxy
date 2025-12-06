@@ -31,6 +31,8 @@ app = Flask(__name__)
 
 # Ensure Swiss Ephemeris finds the bundled data (sweph/ephe)
 EPHE_PATH = Path(__file__).resolve().parent.parent / "sweph" / "ephe"
+# Force Swiss Ephemeris to use the bundled data directory (Render default PATH ignores it otherwise).
+os.environ["SE_EPHE_PATH"] = str(EPHE_PATH)
 try:
     swe.set_ephe_path(str(EPHE_PATH))
 except Exception:

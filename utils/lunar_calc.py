@@ -352,8 +352,8 @@ def solar_cardinal_points_for_year(year: int) -> list:
                 ss = 0; mi += 1
             if mi == 60:
                 mi = 0; hh += 1
-            y_str = (f\"{int(y):04d}\" if int(y) >= 0 else f\"{int(y)}\")
-            return f\"{y_str}-{int(mo):02d}-{int(d):02d}T{hh:02d}:{mi:02d}:{ss:02d}Z\"
+            y_str = (f"{int(y):04d}" if int(y) >= 0 else f"{int(y)}")
+            return f"{y_str}-{int(mo):02d}-{int(d):02d}T{hh:02d}:{mi:02d}:{ss:02d}Z"
         except Exception:
             return str(jd_val)
 

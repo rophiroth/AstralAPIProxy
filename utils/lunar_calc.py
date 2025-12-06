@@ -310,46 +310,88 @@ def _refine_longitude_crossing(t0_utc: datetime, t1_utc: datetime, target_deg: f
 
 def solar_cardinal_points_for_year(year: int) -> list:
     """
-    Return list of {'type': 'equinox'|'solstice', 'season': 'march'|'june'|'september'|'december', 'time': datetime_utc}
-    for the given Gregorian year using Swiss Ephemeris.
+    Return list of {'type': 'equinox'|'solstice', 'season': 'march'|'june'|'september'|'december', 'jd': float, 'iso': str}
+    for the given proleptic Gregorian year using Swiss Ephemeris. Works for BCE years by avoiding datetime().
     """
-    # Rough anchors to bracket events
-    anchors = [
-        (3, 18, 0.0, 0.0, 'equinox', 'march'),      # around Mar 20
-        (6, 20, 0.0, 90.0, 'solstice', 'june'),      # around Jun 21
-        (9, 20, 0.0, 180.0, 'equinox', 'september'), # around Sep 22/23
-        (12, 20, 0.0, 270.0, 'solstice', 'december') # around Dec 21/22
-    ]
-    out = []
-    for mo, d, hh, tgt, kind, name in anchors:
+    def _sun_lon_deg_ut(jd_ut: float) -> float:
         try:
-            # bracket +/- 5 days
-            t0 = datetime(year, mo, d, int(hh), 0, 0, tzinfo=timezone.utc) - timedelta(days=5)
-            t1 = t0 + timedelta(days=10)
-            # Coarse scan to find sign change
-            step = timedelta(hours=12)
-            prev_t = t0
-            prev_v = _wrap180(_sun_ecliptic_longitude_deg(jd_utc(prev_t)) - tgt)
-            found = None
-            t = t0 + step
-            while t <= t1:
-                v = _wrap180(_sun_ecliptic_longitude_deg(jd_utc(t)) - tgt)
-                if v == 0 or (prev_v < 0 and v > 0) or (prev_v > 0 and v < 0):
-                    found = (prev_t, t)
-                    break
-                prev_t, prev_v = t, v
-                t += step
-            if found is None:
-                # fallback: pick endpoint
-                cand = t0 + timedelta(days=5)
-                out.append({'type': kind, 'season': name, 'time': cand})
-            else:
-                t_best = _refine_longitude_crossing(found[0], found[1], tgt)
-                out.append({'type': kind, 'season': name, 'time': t_best})
+            jd_tt = _to_tt_jd(jd_ut)
+            return _norm360(swe.calc(jd_tt, swe.SUN, swe.FLG_SWIEPH)[0][0])
         except Exception:
-            # fallback approximate
-            approx = datetime(year, mo, d, 12, 0, 0, tzinfo=timezone.utc)
-            out.append({'type': kind, 'season': name, 'time': approx})
+            return 0.0
+
+    def _wrap180(x: float) -> float:
+        return ((x + 180.0) % 360.0) - 180.0
+
+    def _refine_jd(a: float, b: float, target_deg: float, iters: int = 40) -> float:
+        fa = _wrap180(_sun_lon_deg_ut(a) - target_deg)
+        fb = _wrap180(_sun_lon_deg_ut(b) - target_deg)
+        if fa * fb > 0:
+            return a if abs(fa) < abs(fb) else b
+        lo, hi = a, b
+        vlo, vhi = fa, fb
+        for _ in range(iters):
+            mid = 0.5 * (lo + hi)
+            vmid = _wrap180(_sun_lon_deg_ut(mid) - target_deg)
+            if abs(vmid) < 1e-6 or abs(hi - lo) < 1e-7:
+                return mid
+            if vlo * vmid <= 0:
+                hi, vhi = mid, vmid
+            else:
+                lo, vlo = mid, vmid
+        return 0.5 * (lo + hi)
+
+    def _iso_from_jd(jd_val: float) -> str:
+        try:
+            y, mo, d, hour = swe.revjul(jd_val)
+            hh = int(hour)
+            mm_f = (hour - hh) * 60.0
+            mi = int(mm_f)
+            ss = int(round((mm_f - mi) * 60.0))
+            if ss == 60:
+                ss = 0; mi += 1
+            if mi == 60:
+                mi = 0; hh += 1
+            y_str = (f\"{int(y):04d}\" if int(y) >= 0 else f\"{int(y)}\")
+            return f\"{y_str}-{int(mo):02d}-{int(d):02d}T{hh:02d}:{mi:02d}:{ss:02d}Z\"
+        except Exception:
+            return str(jd_val)
+
+    # approximate day-of-year anchors (Julian day offsets from Jan 1 UT noon)
+    anchors = [
+        (79.0, 0.0, 'equinox', 'march'),
+        (171.0, 90.0, 'solstice', 'june'),
+        (263.0, 180.0, 'equinox', 'september'),
+        (355.0, 270.0, 'solstice', 'december'),
+    ]
+
+    jd_year0 = swe.julday(year, 1, 1, 0.0)
+    out = []
+    for day_est, target_deg, kind, name in anchors:
+        try:
+            start = jd_year0 + day_est - 5.0
+            end = start + 25.0
+            step = 0.5  # days
+            prev_jd = start
+            prev_v = _wrap180(_sun_lon_deg_ut(prev_jd) - target_deg)
+            bracket = None
+            jd = start + step
+            while jd <= end:
+                v = _wrap180(_sun_lon_deg_ut(jd) - target_deg)
+                if v == 0 or (prev_v < 0 and v > 0) or (prev_v > 0 and v < 0):
+                    bracket = (prev_jd, jd)
+                    break
+                prev_jd, prev_v = jd, v
+                jd += step
+            if bracket is None:
+                # fallback: midpoint of scan
+                jd_best = start + 12.0
+            else:
+                jd_best = _refine_jd(bracket[0], bracket[1], target_deg)
+            out.append({'type': kind, 'season': name, 'jd': jd_best, 'iso': _iso_from_jd(jd_best)})
+        except Exception:
+            jd_fallback = jd_year0 + day_est
+            out.append({'type': kind, 'season': name, 'jd': jd_fallback, 'iso': _iso_from_jd(jd_fallback)})
     return out
 
 # --- Eclipses (best-effort; guarded if functions unavailable) ---

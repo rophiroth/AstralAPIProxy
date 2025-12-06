@@ -873,10 +873,12 @@ def calc_year():
                         for y in years:
                             sol.extend(solar_cardinal_points_for_year(y))
                         for ev in sol:
-                            try:
-                                ev_jd = jd_utc(ev['time'])
-                            except Exception:
-                                ev_jd = None
+                            ev_jd = ev.get('jd')
+                            if ev_jd is None:
+                                try:
+                                    ev_jd = jd_utc(ev.get('time'))
+                                except Exception:
+                                    ev_jd = None
                             if ev_jd is None:
                                 continue
                             bi = bucket_index_jd(ev_jd)

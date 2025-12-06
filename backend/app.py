@@ -38,6 +38,11 @@ try:
 except Exception:
     # Fallback: attempt relative string path; errors will still surface in logs
     swe.set_ephe_path("sweph/ephe")
+# Log effective ephemeris path at startup to confirm Render sees the bundled files
+try:
+    print(f"[ephe_path] {swe.get_ephe_path()}", flush=True)
+except Exception:
+    pass
 
 # Flexible CORS: allow same-origin by default; enable cross-origin via env
 origins_env = os.environ.get("CORS_ORIGINS", "").strip()

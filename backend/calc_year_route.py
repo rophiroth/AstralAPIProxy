@@ -314,6 +314,12 @@ def build_enoch_table(start_jd: float, enoch_year: int, include_added_week: bool
 
 
 def calc_year():
+        # Ensure Swiss Ephemeris uses bundled path on every request (Render sometimes ignores env)
+        try:
+            ephe_root = Path(__file__).resolve().parent.parent / "sweph" / "ephe"
+            swe.set_ephe_path(str(ephe_root))
+        except Exception:
+            pass
         approx_reasons = []
         def ensure_reason(msg: str):
             if not approx_reasons:
@@ -570,9 +576,9 @@ def calc_year():
                 # First compute a baseline 364 days; we will extend by 7 if added week is flagged on last day
                 total_days = 364
                 for i in range(total_days):
-                    if not use_jd_path:
-                        day_dt_utc = start_utc + timedelta(days=i)
-                        greg = day_dt_utc.date().isoformat()
+                if not use_jd_path:
+                    day_dt_utc = start_utc + timedelta(days=i)
+                    greg = day_dt_utc.date().isoformat()
                         # Midday sample for positions
                         midday = datetime(day_dt_utc.year, day_dt_utc.month, day_dt_utc.day, 12, 0, 0, tzinfo=timezone.utc)
                         jd_mid = swe.julday(midday.year, midday.month, midday.day, 12.0)
@@ -619,9 +625,10 @@ def calc_year():
                         y, mo, d, _ = swe.revjul(day_jd0)
                         greg = f"{int(y)}-{int(mo):02d}-{int(d):02d}"
                         jd_mid = swe.julday(int(y), int(mo), int(d), 12.0)
-                        lon_sun = None; lon_moon = None
-                        phase, illum = _approx_lunar_for_jd(jd_mid)
-                        dist_km = None
+                    lon_sun = None; lon_moon = None
+                    phase, illum = _approx_lunar_for_jd(jd_mid)
+                    dist_km = None
+                    if not approx_global:
                         approx_global = True
                         record_reason("BCE/JD path: using approximate lunar data (Swiss ephemeris unavailable)")
                         # Enoch day approx to avoid Swiss
